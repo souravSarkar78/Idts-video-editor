@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #0D0E11;
+  color: #F0F3F8;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+}
+
+/* Tabular figures for timecode precision */
+.timecode-display {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* Custom Sleek Dark Studio Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #14161B;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #242833;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #2E3442;
+}
+
+/* Studio custom slider styling */
+input[type="range"] {
+  accent-color: #00F0FF;
+}
+
+/* Timeline grid pattern */
+.timeline-grid {
+  background-size: 50px 100%;
+  background-image: linear-gradient(to right, rgba(34, 38, 48, 0.4) 1px, transparent 1px);
+}
