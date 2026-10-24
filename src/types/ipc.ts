@@ -58,6 +58,38 @@ export interface Clip {
   // Phase 6: Proxy workflow support
   proxyPath?: string;
   hasProxy?: boolean;
+
+  // Phase 8: Motion Transform Controls, Keyframing, Speed Ramping, Lens Effects
+  scale?: number;
+  positionX?: number;
+  positionY?: number;
+  rotation?: number;
+  opacity?: number;
+  keyframeTracks?: KeyframeTrack[];
+  speedProfile?: SpeedProfile;
+  lensEffects?: LensEffects;
+}
+
+export interface KeyframePoint {
+  time: number; // in seconds relative to clip start
+  value: number;
+  easing: 'linear' | 'ease_in_out' | string;
+}
+
+export interface KeyframeTrack {
+  property: 'scale' | 'position_x' | 'position_y' | 'rotation' | 'opacity' | string;
+  keyframes: KeyframePoint[];
+}
+
+export interface SpeedProfile {
+  speedMultiplier: number; // 0.1 to 16.0, default 1.0
+  pitchCorrection: boolean; // default true
+}
+
+export interface LensEffects {
+  defishEnabled: boolean;
+  defishStrength: number; // -1.0 to 1.0
+  gaussianBlur: number; // 0.0 to 50.0
 }
 
 export interface ColorCorrection {

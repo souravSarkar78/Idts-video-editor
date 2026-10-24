@@ -6,7 +6,9 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-use crate::models::ipc::ColorCorrection;
+use crate::models::ipc::{
+    ColorCorrection, KeyframeTrack, LensEffects, SpeedProfile,
+};
 
 /// Builds video filter expression tokens for color correction, temperature, and 3D LUT.
 ///
@@ -55,6 +57,269 @@ pub fn build_color_filter_chain(color: &ColorCorrection) -> Vec<String> {
     }
 
     filters
+}
+
+/// Builds video speed adjustment filters (PTS retiming and optical flow interpolation for slow motion).
+pub fn build_speed_video_filters(speed_profile: Option<&SpeedProfile>) -> Vec<String> {
+    let mut filters = Vec::new();
+    if let Some(sp) = speed_profile {
+        let speed = sp.speed_multiplier.clamp(0.05, 32.0);
+        if (speed - 1.0).abs() > 0.005 {
+            filters.push(format!("setpts=(1.0/{:.4})*PTS", speed));
+            if speed < 0.999 {
+                filters.push("minterpolate=fps=60:mi_mode=mci".to_string());
+            }
+        }
+    }
+    filters
+}
+
+/// Builds audio tempo filters using cascading atempo filters (0.5 to 2.0 per step) to preserve pitch,
+/// or mutes audio if pitch correction is disabled.
+pub fn build_speed_audio_filters(speed_profile: Option<&SpeedProfile>) -> Vec<String> {
+    let mut filters = Vec::new();
+    if let Some(sp) = speed_profile {
+        if !sp.pitch_correction {
+            // Mute audio if pitch correction is disabled for non-1.0 speeds
+            if (sp.speed_multiplier - 1.0).abs() > 0.005 {
+                filters.push("volume=0".to_string());
+                return filters;
+            }
+        }
+        let speed = sp.speed_multiplier.clamp(0.05, 32.0);
+        if (speed - 1.0).abs() > 0.005 {
+            let mut rem = speed;
+            while rem > 2.0 {
+                filters.push("atempo=2.0".to_string());
+                rem /= 2.0;
+            }
+            while rem < 0.5 {
+                filters.push("atempo=0.5".to_string());
+                rem /= 0.5;
+            }
+            if (rem - 1.0).abs() > 0.005 {
+                filters.push(format!("atempo={:.3}", rem));
+            }
+        }
+    }
+    filters
+}
+
+/// Builds lens distortion correction (defish) and gaussian blur filter chain.
+pub fn build_lens_effects_filter_chain(lens: Option<&LensEffects>) -> Vec<String> {
+    let mut filters = Vec::new();
+    if let Some(effects) = lens {
+        if effects.defish_enabled && effects.defish_strength.abs() > 0.005 {
+            let k1 = (effects.defish_strength * -0.25).clamp(-0.99, 0.99);
+            let k2 = (effects.defish_strength * -0.10).clamp(-0.99, 0.99);
+            filters.push(format!("lenscorrection=cx=0.5:cy=0.5:k1={:.3}:k2={:.3}", k1, k2));
+        }
+        if effects.gaussian_blur > 0.05 {
+            let sigma = effects.gaussian_blur.clamp(0.1, 50.0);
+            filters.push(format!("gblur=sigma={:.1}", sigma));
+        }
+    }
+    filters
+}
+
+/// Helper to interpolate a property value at time t from a keyframe track.
+pub fn interpolate_keyframe_property(
+    track: Option<&KeyframeTrack>,
+    default_val: f32,
+    time_sec: f64,
+) -> f32 {
+    let track = match track {
+        Some(t) if !t.keyframes.is_empty() => t,
+        _ => return default_val,
+    };
+
+    let kfs = &track.keyframes;
+    if time_sec <= kfs[0].time {
+        return kfs[0].value;
+    }
+    if time_sec >= kfs[kfs.len() - 1].time {
+        return kfs[kfs.len() - 1].value;
+    }
+
+    // Find bounding pair
+    for i in 0..kfs.len() - 1 {
+        let k0 = &kfs[i];
+        let k1 = &kfs[i + 1];
+        if time_sec >= k0.time && time_sec <= k1.time {
+            let span = k1.time - k0.time;
+            if span <= 0.0001 {
+                return k0.value;
+            }
+            let mut ratio = ((time_sec - k0.time) / span) as f32;
+            if k0.easing == "ease_in_out" {
+                ratio = ratio * ratio * (3.0 - 2.0 * ratio);
+            }
+            return k0.value + (k1.value - k0.value) * ratio;
+        }
+    }
+
+    default_val
+}
+
+/// Builds dynamic FFmpeg transform and motion filter chain:
+/// - scale
+/// - rotation (rotate)
+/// - opacity (colorchannelmixer)
+/// Returns (v_filter_tokens, overlay_x_expr, overlay_y_expr)
+pub fn build_motion_transform_filters(
+    scale: Option<f32>,
+    position_x: Option<f32>,
+    position_y: Option<f32>,
+    rotation: Option<f32>,
+    opacity: Option<f32>,
+    keyframe_tracks: Option<&[KeyframeTrack]>,
+    _width: u32,
+    _height: u32,
+) -> (Vec<String>, String, String) {
+    let mut filters = Vec::new();
+
+    // Find keyframe tracks if any
+    let kf_scale = keyframe_tracks.and_then(|ts| ts.iter().find(|t| t.property == "scale"));
+    let kf_rot = keyframe_tracks.and_then(|ts| ts.iter().find(|t| t.property == "rotation"));
+    let kf_opacity = keyframe_tracks.and_then(|ts| ts.iter().find(|t| t.property == "opacity"));
+    let kf_pos_x = keyframe_tracks.and_then(|ts| ts.iter().find(|t| t.property == "position_x"));
+    let kf_pos_y = keyframe_tracks.and_then(|ts| ts.iter().find(|t| t.property == "position_y"));
+
+    let has_scale_kf = kf_scale.map_or(false, |t| t.keyframes.len() > 1);
+    let has_rot_kf = kf_rot.map_or(false, |t| t.keyframes.len() > 1);
+    let has_op_kf = kf_opacity.map_or(false, |t| t.keyframes.len() > 1);
+    let has_pos_kf = kf_pos_x.map_or(false, |t| t.keyframes.len() > 1) || kf_pos_y.map_or(false, |t| t.keyframes.len() > 1);
+
+    // 1. Scale
+    let base_scale = scale.unwrap_or(1.0).clamp(0.05, 10.0);
+    if has_scale_kf {
+        if let Some(track) = kf_scale {
+            let mut expr_pieces = Vec::new();
+            for i in 0..track.keyframes.len() - 1 {
+                let k0 = &track.keyframes[i];
+                let k1 = &track.keyframes[i + 1];
+                let cond = format!("between(t,{:.3},{:.3})", k0.time, k1.time);
+                let interp = format!("({:.3}+({:.3}-{:.3})*(t-{:.3})/{:.3})", k0.value, k1.value, k0.value, k0.time, (k1.time - k0.time).max(0.001));
+                expr_pieces.push(format!("if({},{},", cond, interp));
+            }
+            let last_val = track.keyframes.last().map(|k| k.value).unwrap_or(base_scale);
+            let mut full_expr = format!("{:.3}", last_val);
+            for _ in 0..expr_pieces.len() {
+                full_expr.push(')');
+            }
+            let chained = expr_pieces.join("") + &full_expr;
+            filters.push(format!("scale=w='iw*({})':h='ih*({})':eval=frame", chained, chained));
+        }
+    } else if (base_scale - 1.0).abs() > 0.01 {
+        filters.push(format!(
+            "scale=w='trunc(iw*{:.3}/2)*2':h='trunc(ih*{:.3}/2)*2'",
+            base_scale, base_scale
+        ));
+    }
+
+    // 2. Rotation
+    let base_rot = rotation.unwrap_or(0.0);
+    if has_rot_kf {
+        if let Some(track) = kf_rot {
+            let mut expr_pieces = Vec::new();
+            for i in 0..track.keyframes.len() - 1 {
+                let k0 = &track.keyframes[i];
+                let k1 = &track.keyframes[i + 1];
+                let cond = format!("between(t,{:.3},{:.3})", k0.time, k1.time);
+                let interp = format!("({:.3}+({:.3}-{:.3})*(t-{:.3})/{:.3})", k0.value, k1.value, k0.value, k0.time, (k1.time - k0.time).max(0.001));
+                expr_pieces.push(format!("if({},{},", cond, interp));
+            }
+            let last_val = track.keyframes.last().map(|k| k.value).unwrap_or(base_rot);
+            let mut full_expr = format!("{:.3}", last_val);
+            for _ in 0..expr_pieces.len() {
+                full_expr.push(')');
+            }
+            let chained = expr_pieces.join("") + &full_expr;
+            filters.push(format!("rotate='({})*PI/180':c=none:ow='rotw(({})*PI/180)':oh='roth(({})*PI/180)'", chained, chained, chained));
+        }
+    } else if base_rot.abs() > 0.05 {
+        let rad = base_rot * std::f32::consts::PI / 180.0;
+        filters.push(format!(
+            "rotate={:.4}:c=none:ow=rotw({:.4}):oh=roth({:.4})",
+            rad, rad, rad
+        ));
+    }
+
+    // 3. Opacity
+    let base_opacity = opacity.unwrap_or(1.0).clamp(0.0, 1.0);
+    if has_op_kf {
+        if let Some(track) = kf_opacity {
+            let mut expr_pieces = Vec::new();
+            for i in 0..track.keyframes.len() - 1 {
+                let k0 = &track.keyframes[i];
+                let k1 = &track.keyframes[i + 1];
+                let cond = format!("between(t,{:.3},{:.3})", k0.time, k1.time);
+                let interp = format!("({:.3}+({:.3}-{:.3})*(t-{:.3})/{:.3})", k0.value, k1.value, k0.value, k0.time, (k1.time - k0.time).max(0.001));
+                expr_pieces.push(format!("if({},{},", cond, interp));
+            }
+            let last_val = track.keyframes.last().map(|k| k.value).unwrap_or(base_opacity);
+            let mut full_expr = format!("{:.3}", last_val);
+            for _ in 0..expr_pieces.len() {
+                full_expr.push(')');
+            }
+            let chained = expr_pieces.join("") + &full_expr;
+            filters.push(format!("format=yuva420p,colorchannelmixer=aa='{}'", chained));
+        }
+    } else if base_opacity < 0.999 {
+        filters.push(format!("format=yuva420p,colorchannelmixer=aa={:.3}", base_opacity));
+    }
+
+    // 4. Overlay coordinates (x, y)
+    let px = position_x.unwrap_or(0.0);
+    let py = position_y.unwrap_or(0.0);
+
+    let overlay_x = if has_pos_kf && kf_pos_x.is_some() {
+        let track = kf_pos_x.unwrap();
+        let mut expr_pieces = Vec::new();
+        for i in 0..track.keyframes.len() - 1 {
+            let k0 = &track.keyframes[i];
+            let k1 = &track.keyframes[i + 1];
+            let cond = format!("between(t,{:.3},{:.3})", k0.time, k1.time);
+            let interp = format!("({:.1}+({:.1}-{:.1})*(t-{:.3})/{:.3})", k0.value, k1.value, k0.value, k0.time, (k1.time - k0.time).max(0.001));
+            expr_pieces.push(format!("if({},{},", cond, interp));
+        }
+        let last_val = track.keyframes.last().map(|k| k.value).unwrap_or(px);
+        let mut full_expr = format!("{:.1}", last_val);
+        for _ in 0..expr_pieces.len() {
+            full_expr.push(')');
+        }
+        let chained = expr_pieces.join("") + &full_expr;
+        format!("(W-w)/2+({})", chained)
+    } else if px.abs() > 0.1 {
+        format!("(W-w)/2+{:.1}", px)
+    } else {
+        "(W-w)/2".to_string()
+    };
+
+    let overlay_y = if has_pos_kf && kf_pos_y.is_some() {
+        let track = kf_pos_y.unwrap();
+        let mut expr_pieces = Vec::new();
+        for i in 0..track.keyframes.len() - 1 {
+            let k0 = &track.keyframes[i];
+            let k1 = &track.keyframes[i + 1];
+            let cond = format!("between(t,{:.3},{:.3})", k0.time, k1.time);
+            let interp = format!("({:.1}+({:.1}-{:.1})*(t-{:.3})/{:.3})", k0.value, k1.value, k0.value, k0.time, (k1.time - k0.time).max(0.001));
+            expr_pieces.push(format!("if({},{},", cond, interp));
+        }
+        let last_val = track.keyframes.last().map(|k| k.value).unwrap_or(py);
+        let mut full_expr = format!("{:.1}", last_val);
+        for _ in 0..expr_pieces.len() {
+            full_expr.push(')');
+        }
+        let chained = expr_pieces.join("") + &full_expr;
+        format!("(H-h)/2+({})", chained)
+    } else if py.abs() > 0.1 {
+        format!("(H-h)/2+{:.1}", py)
+    } else {
+        "(H-h)/2".to_string()
+    };
+
+    (filters, overlay_x, overlay_y)
 }
 
 /// Builds an FFmpeg `xfade` filter string for two intersecting video segments.
@@ -930,5 +1195,70 @@ Encoders:
             VideoEncoder::detect_best_encoder_from_output(cpu_output),
             VideoEncoder::Libx264
         );
+    }
+
+    #[test]
+    fn test_phase8_speed_filters() {
+        // Fast forward 4x
+        let sp_fast = SpeedProfile {
+            speed_multiplier: 4.0,
+            pitch_correction: true,
+        };
+        let v_fast = build_speed_video_filters(Some(&sp_fast));
+        assert!(v_fast[0].contains("setpts="));
+        let a_fast = build_speed_audio_filters(Some(&sp_fast));
+        assert_eq!(a_fast, vec!["atempo=2.0", "atempo=2.0"]);
+
+        // Slow motion 0.5x with minterpolate optical flow
+        let sp_slow = SpeedProfile {
+            speed_multiplier: 0.5,
+            pitch_correction: true,
+        };
+        let v_slow = build_speed_video_filters(Some(&sp_slow));
+        assert_eq!(v_slow.len(), 2);
+        assert!(v_slow[1].contains("minterpolate"));
+        let a_slow = build_speed_audio_filters(Some(&sp_slow));
+        assert_eq!(a_slow, vec!["atempo=0.5"]);
+
+        // Pitch correction disabled
+        let sp_no_pitch = SpeedProfile {
+            speed_multiplier: 2.0,
+            pitch_correction: false,
+        };
+        let a_no_pitch = build_speed_audio_filters(Some(&sp_no_pitch));
+        assert_eq!(a_no_pitch, vec!["volume=0"]);
+    }
+
+    #[test]
+    fn test_phase8_lens_effects() {
+        let lens = LensEffects {
+            defish_enabled: true,
+            defish_strength: 0.8,
+            gaussian_blur: 12.0,
+        };
+        let filters = build_lens_effects_filter_chain(Some(&lens));
+        assert_eq!(filters.len(), 2);
+        assert!(filters[0].contains("lenscorrection="));
+        assert!(filters[1].contains("gblur=sigma=12.0"));
+    }
+
+    #[test]
+    fn test_phase8_motion_transform_filters() {
+        let (filters, overlay_x, overlay_y) = build_motion_transform_filters(
+            Some(1.5),
+            Some(50.0),
+            Some(-30.0),
+            Some(45.0),
+            Some(0.8),
+            None,
+            1920,
+            1080,
+        );
+
+        assert!(filters.iter().any(|f| f.contains("scale=")));
+        assert!(filters.iter().any(|f| f.contains("rotate=")));
+        assert!(filters.iter().any(|f| f.contains("colorchannelmixer=")));
+        assert_eq!(overlay_x, "(W-w)/2+50.0");
+        assert_eq!(overlay_y, "(H-h)/2+-30.0");
     }
 }

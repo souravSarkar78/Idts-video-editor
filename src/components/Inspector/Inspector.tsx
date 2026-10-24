@@ -19,14 +19,20 @@ import {
   Sun,
   Thermometer,
   Zap,
+  Move,
+  Maximize2,
+  Eye,
+  Camera,
 } from 'lucide-react';
+import { Diamond, RotateCw } from '@/components/Icons';
 import { useShallow } from 'zustand/react/shallow';
-import { useTimelineStore, isTauri, tauriInvoke } from '../../store/timelineStore';
+import { useTimelineStore, isTauri, tauriInvoke, getInterpolatedClipTransform } from '../../store/timelineStore';
 import { formatDeltaSeconds } from '../../utils/timecode';
 import { Clip, MediaTrack } from '../../types/ipc';
 
 export const Inspector: React.FC = () => {
   const {
+    playhead,
     selectedClipId,
     tracks,
     isPlaying,
@@ -38,8 +44,14 @@ export const Inspector: React.FC = () => {
     toggleMute,
     toggleSolo,
     getActiveVideoClip,
+    updateClipTransform,
+    addOrUpdateKeyframe,
+    removeKeyframe,
+    updateClipSpeed,
+    updateClipLensEffects,
   } = useTimelineStore(
     useShallow((state) => ({
+      playhead: state.playhead,
       selectedClipId: state.selectedClipId,
       tracks: state.tracks,
       isPlaying: state.isPlaying,
@@ -51,6 +63,11 @@ export const Inspector: React.FC = () => {
       toggleMute: state.toggleMute,
       toggleSolo: state.toggleSolo,
       getActiveVideoClip: state.getActiveVideoClip,
+      updateClipTransform: state.updateClipTransform,
+      addOrUpdateKeyframe: state.addOrUpdateKeyframe,
+      removeKeyframe: state.removeKeyframe,
+      updateClipSpeed: state.updateClipSpeed,
+      updateClipLensEffects: state.updateClipLensEffects,
     }))
   );
 
@@ -90,9 +107,71 @@ export const Inspector: React.FC = () => {
   const [volumeDb, setVolumeDb] = useState<number>(0); // -60 to +12 dB
   const [speedMultiplier, setSpeedMultiplier] = useState(1.0);
 
+  // Synchronized interpolated transform based on current playhead
+  const currentTransform = selectedClip
+    ? getInterpolatedClipTransform(selectedClip, playhead)
+    : { scale: 1.0, positionX: 0, positionY: 0, rotation: 0, opacity: 1.0 };
+
+  const currentSpeed = selectedClip?.speedProfile?.speedMultiplier ?? 1.0;
+  const currentPitchCorrection = selectedClip?.speedProfile?.pitchCorrection ?? true;
+  const currentDefish = selectedClip?.lensEffects?.defishEnabled ?? false;
+  const currentDefishStrength = Math.round((selectedClip?.lensEffects?.defishStrength ?? 0) * 100);
+  const currentBlur = selectedClip?.lensEffects?.gaussianBlur ?? 0;
+
   // Live stereo VU meter animation during playback
   const [meterL, setMeterL] = useState(-36);
   const [meterR, setMeterR] = useState(-34);
+
+  // Keyframe status helper for animatable properties
+  const getKeyframeStatus = (property: string) => {
+    if (!selectedClip) return { hasTrack: false, hasKeyframeAtPlayhead: false, relTime: 0, keyframe: null };
+    const startSec = selectedClip.startPositionSeconds ?? (selectedClip.startTimeMs / 1000);
+    const durSec = selectedClip.durationSeconds ?? (selectedClip.durationMs / 1000);
+    const speed = selectedClip.speedProfile?.speedMultiplier ?? 1.0;
+    const relTime = Math.max(0, Math.min(durSec, playhead - startSec)) * speed;
+
+    const track = selectedClip.keyframeTracks?.find((t) => t.property === property);
+    if (!track) {
+      return { hasTrack: false, hasKeyframeAtPlayhead: false, relTime, keyframe: null };
+    }
+    const kf = track.keyframes.find((k) => Math.abs(k.time - relTime) < 0.08);
+    return {
+      hasTrack: track.keyframes.length > 0,
+      hasKeyframeAtPlayhead: Boolean(kf),
+      relTime,
+      keyframe: kf || null,
+    };
+  };
+
+  const handleToggleKeyframe = (property: string, currentValue: number) => {
+    if (!selectedClip) return;
+    const { hasKeyframeAtPlayhead, relTime, keyframe } = getKeyframeStatus(property);
+    if (hasKeyframeAtPlayhead && keyframe) {
+      removeKeyframe(selectedClip.id, property, keyframe.time);
+    } else {
+      addOrUpdateKeyframe(selectedClip.id, property, Number(relTime.toFixed(3)), currentValue);
+    }
+  };
+
+  const handleResetTransform = () => {
+    if (!selectedClip) return;
+    updateClipTransform(selectedClip.id, {
+      scale: 1.0,
+      positionX: 0,
+      positionY: 0,
+      rotation: 0,
+      opacity: 1.0,
+    });
+  };
+
+  const handleResetLens = () => {
+    if (!selectedClip) return;
+    updateClipLensEffects(selectedClip.id, {
+      defishEnabled: false,
+      defishStrength: 0,
+      gaussianBlur: 0,
+    });
+  };
 
   // Sync state when selected clip changes
   useEffect(() => {
@@ -431,6 +510,286 @@ export const Inspector: React.FC = () => {
                     ) : (
                       <span className="text-[10px] font-mono text-[#64748B]">Original Full-Res</span>
                     )}
+                  </div>
+                </div>
+
+                {/* Motion Transform Controls & Keyframe Engine */}
+                <div className="p-3 rounded-lg bg-[#0D0E11] border border-[#222630] space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-[#F0F3F8] flex items-center gap-1.5">
+                      <Move size={13} className="text-[#00F0FF]" />
+                      <span>Motion & Transform</span>
+                    </span>
+                    <button
+                      onClick={handleResetTransform}
+                      title="Reset all transforms"
+                      className="px-2 py-0.5 rounded bg-[#181B24] hover:bg-[#202532] text-[#8A92A6] hover:text-[#00F0FF] text-[10px] font-mono flex items-center gap-1 transition-colors cursor-pointer border border-[#222630]"
+                    >
+                      <RotateCcw size={10} />
+                      <span>Reset</span>
+                    </button>
+                  </div>
+
+                  {/* 1. Scale */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-[#8A92A6] flex items-center gap-1">
+                        <Maximize2 size={11} className="text-[#64748B]" />
+                        <span>Scale</span>
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono text-[#F0F3F8] text-[10px]">{currentTransform.scale.toFixed(2)}x</span>
+                        {/* Keyframe Stopwatch Diamond */}
+                        {(() => {
+                          const kf = getKeyframeStatus('scale');
+                          return (
+                            <button
+                              onClick={() => handleToggleKeyframe('scale', currentTransform.scale)}
+                              title={kf.hasKeyframeAtPlayhead ? 'Remove keyframe at playhead' : 'Add keyframe at playhead'}
+                              className={`p-1 rounded transition-colors cursor-pointer ${
+                                kf.hasKeyframeAtPlayhead
+                                  ? 'text-[#00F0FF] bg-[#00F0FF]/20 shadow-[0_0_6px_#00F0FF]'
+                                  : kf.hasTrack
+                                  ? 'text-[#00F0FF] hover:bg-[#00F0FF]/10'
+                                  : 'text-[#525D73] hover:text-[#8A92A6]'
+                              }`}
+                            >
+                              <Diamond size={11} fill={kf.hasKeyframeAtPlayhead ? 'currentColor' : 'none'} />
+                            </button>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                    <input
+                      type="range"
+                      min={0.1}
+                      max={3.0}
+                      step={0.05}
+                      value={currentTransform.scale}
+                      onChange={(e) => updateClipTransform(selectedClip.id, { scale: Number(e.target.value) })}
+                      className="w-full h-1 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#00F0FF]"
+                    />
+                  </div>
+
+                  {/* 2. Position X */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-[#8A92A6] flex items-center gap-1">
+                        <span>Position X</span>
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono text-[#F0F3F8] text-[10px]">{Math.round(currentTransform.positionX)} px</span>
+                        {(() => {
+                          const kf = getKeyframeStatus('position_x');
+                          return (
+                            <button
+                              onClick={() => handleToggleKeyframe('position_x', currentTransform.positionX)}
+                              title={kf.hasKeyframeAtPlayhead ? 'Remove keyframe at playhead' : 'Add keyframe at playhead'}
+                              className={`p-1 rounded transition-colors cursor-pointer ${
+                                kf.hasKeyframeAtPlayhead
+                                  ? 'text-[#00F0FF] bg-[#00F0FF]/20 shadow-[0_0_6px_#00F0FF]'
+                                  : kf.hasTrack
+                                  ? 'text-[#00F0FF] hover:bg-[#00F0FF]/10'
+                                  : 'text-[#525D73] hover:text-[#8A92A6]'
+                              }`}
+                            >
+                              <Diamond size={11} fill={kf.hasKeyframeAtPlayhead ? 'currentColor' : 'none'} />
+                            </button>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                    <input
+                      type="range"
+                      min={-1000}
+                      max={1000}
+                      step={2}
+                      value={currentTransform.positionX}
+                      onChange={(e) => updateClipTransform(selectedClip.id, { positionX: Number(e.target.value) })}
+                      className="w-full h-1 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#00F0FF]"
+                    />
+                  </div>
+
+                  {/* 3. Position Y */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-[#8A92A6] flex items-center gap-1">
+                        <span>Position Y</span>
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono text-[#F0F3F8] text-[10px]">{Math.round(currentTransform.positionY)} px</span>
+                        {(() => {
+                          const kf = getKeyframeStatus('position_y');
+                          return (
+                            <button
+                              onClick={() => handleToggleKeyframe('position_y', currentTransform.positionY)}
+                              title={kf.hasKeyframeAtPlayhead ? 'Remove keyframe at playhead' : 'Add keyframe at playhead'}
+                              className={`p-1 rounded transition-colors cursor-pointer ${
+                                kf.hasKeyframeAtPlayhead
+                                  ? 'text-[#00F0FF] bg-[#00F0FF]/20 shadow-[0_0_6px_#00F0FF]'
+                                  : kf.hasTrack
+                                  ? 'text-[#00F0FF] hover:bg-[#00F0FF]/10'
+                                  : 'text-[#525D73] hover:text-[#8A92A6]'
+                              }`}
+                            >
+                              <Diamond size={11} fill={kf.hasKeyframeAtPlayhead ? 'currentColor' : 'none'} />
+                            </button>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                    <input
+                      type="range"
+                      min={-1000}
+                      max={1000}
+                      step={2}
+                      value={currentTransform.positionY}
+                      onChange={(e) => updateClipTransform(selectedClip.id, { positionY: Number(e.target.value) })}
+                      className="w-full h-1 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#00F0FF]"
+                    />
+                  </div>
+
+                  {/* 4. Rotation */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-[#8A92A6] flex items-center gap-1">
+                        <RotateCw size={11} className="text-[#64748B]" />
+                        <span>Rotation</span>
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono text-[#F0F3F8] text-[10px]">{Math.round(currentTransform.rotation)}°</span>
+                        {(() => {
+                          const kf = getKeyframeStatus('rotation');
+                          return (
+                            <button
+                              onClick={() => handleToggleKeyframe('rotation', currentTransform.rotation)}
+                              title={kf.hasKeyframeAtPlayhead ? 'Remove keyframe at playhead' : 'Add keyframe at playhead'}
+                              className={`p-1 rounded transition-colors cursor-pointer ${
+                                kf.hasKeyframeAtPlayhead
+                                  ? 'text-[#00F0FF] bg-[#00F0FF]/20 shadow-[0_0_6px_#00F0FF]'
+                                  : kf.hasTrack
+                                  ? 'text-[#00F0FF] hover:bg-[#00F0FF]/10'
+                                  : 'text-[#525D73] hover:text-[#8A92A6]'
+                              }`}
+                            >
+                              <Diamond size={11} fill={kf.hasKeyframeAtPlayhead ? 'currentColor' : 'none'} />
+                            </button>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                    <input
+                      type="range"
+                      min={-360}
+                      max={360}
+                      step={1}
+                      value={currentTransform.rotation}
+                      onChange={(e) => updateClipTransform(selectedClip.id, { rotation: Number(e.target.value) })}
+                      className="w-full h-1 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#00F0FF]"
+                    />
+                  </div>
+
+                  {/* 5. Opacity */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-[#8A92A6] flex items-center gap-1">
+                        <Eye size={11} className="text-[#64748B]" />
+                        <span>Opacity</span>
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono text-[#F0F3F8] text-[10px]">{Math.round(currentTransform.opacity * 100)}%</span>
+                        {(() => {
+                          const kf = getKeyframeStatus('opacity');
+                          return (
+                            <button
+                              onClick={() => handleToggleKeyframe('opacity', currentTransform.opacity)}
+                              title={kf.hasKeyframeAtPlayhead ? 'Remove keyframe at playhead' : 'Add keyframe at playhead'}
+                              className={`p-1 rounded transition-colors cursor-pointer ${
+                                kf.hasKeyframeAtPlayhead
+                                  ? 'text-[#00F0FF] bg-[#00F0FF]/20 shadow-[0_0_6px_#00F0FF]'
+                                  : kf.hasTrack
+                                  ? 'text-[#00F0FF] hover:bg-[#00F0FF]/10'
+                                  : 'text-[#525D73] hover:text-[#8A92A6]'
+                              }`}
+                            >
+                              <Diamond size={11} fill={kf.hasKeyframeAtPlayhead ? 'currentColor' : 'none'} />
+                            </button>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={1.0}
+                      step={0.01}
+                      value={currentTransform.opacity}
+                      onChange={(e) => updateClipTransform(selectedClip.id, { opacity: Number(e.target.value) })}
+                      className="w-full h-1 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#00F0FF]"
+                    />
+                  </div>
+                </div>
+
+                {/* Lens / Optical Effects Section */}
+                <div className="p-3 rounded-lg bg-[#0D0E11] border border-[#222630] space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-[#F0F3F8] flex items-center gap-1.5">
+                      <Camera size={13} className="text-[#A855F7]" />
+                      <span>Lens & Optical Effects</span>
+                    </span>
+                    <button
+                      onClick={handleResetLens}
+                      title="Reset lens effects"
+                      className="px-2 py-0.5 rounded bg-[#181B24] hover:bg-[#202532] text-[#8A92A6] hover:text-[#A855F7] text-[10px] font-mono flex items-center gap-1 transition-colors cursor-pointer border border-[#222630]"
+                    >
+                      <RotateCcw size={10} />
+                      <span>Reset</span>
+                    </button>
+                  </div>
+
+                  {/* Action-Cam Defish */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <label className="flex items-center gap-2 cursor-pointer text-[#F0F3F8]">
+                        <input
+                          type="checkbox"
+                          checked={currentDefish}
+                          onChange={(e) => updateClipLensEffects(selectedClip.id, { defishEnabled: e.target.checked })}
+                          className="rounded border-[#222630] accent-[#A855F7]"
+                        />
+                        <span>Action-Cam Defish</span>
+                      </label>
+                      <span className="font-mono text-[#A855F7] text-[10px]">{currentDefishStrength}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={-100}
+                      max={100}
+                      step={1}
+                      disabled={!currentDefish}
+                      value={currentDefishStrength}
+                      onChange={(e) =>
+                        updateClipLensEffects(selectedClip.id, { defishStrength: Number(e.target.value) / 100 })
+                      }
+                      className="w-full h-1 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#A855F7] disabled:opacity-40"
+                    />
+                  </div>
+
+                  {/* Gaussian Blur */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-[#8A92A6]">Background Blur</span>
+                      <span className="font-mono text-[#F0F3F8] text-[10px]">{currentBlur.toFixed(1)} px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={50}
+                      step={0.5}
+                      value={currentBlur}
+                      onChange={(e) => updateClipLensEffects(selectedClip.id, { gaussianBlur: Number(e.target.value) })}
+                      className="w-full h-1 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#A855F7]"
+                    />
                   </div>
                 </div>
               </div>
@@ -773,29 +1132,89 @@ export const Inspector: React.FC = () => {
               </div>
             )}
 
-            {/* TAB: SPEED */}
+            {/* TAB: SPEED (Speed Ramping Panel) */}
             {inspectorTab === 'speed' && (
-              <div className="p-3 rounded-lg bg-[#0D0E11] border border-[#222630] space-y-3">
+              <div className="p-3 rounded-lg bg-[#0D0E11] border border-[#222630] space-y-4">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-[#F0F3F8]">Playback Speed</span>
-                  <span className="text-xs font-mono font-bold text-[#00F0FF]">
-                    {speedMultiplier.toFixed(1)}x
+                  <span className="text-xs font-bold text-[#F0F3F8] flex items-center gap-1.5">
+                    <Gauge size={13} className="text-[#00F0FF]" />
+                    <span>Speed Ramping</span>
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-[#00F0FF]/15 text-[#00F0FF] border border-[#00F0FF]/30 font-mono text-xs font-bold">
+                    {currentSpeed.toFixed(2)}x
                   </span>
                 </div>
-                <div className="grid grid-cols-4 gap-1.5">
-                  {[0.5, 1.0, 1.5, 2.0].map((rate) => (
-                    <button
-                      key={rate}
-                      onClick={() => setSpeedMultiplier(rate)}
-                      className={`py-1 rounded text-xs font-mono font-medium transition-colors cursor-pointer ${
-                        speedMultiplier === rate
-                          ? 'bg-[#00F0FF] text-[#0D0E11] font-bold'
-                          : 'bg-[#1A1D24] text-[#8A92A6] hover:text-[#F0F3F8]'
-                      }`}
-                    >
-                      {rate}x
-                    </button>
-                  ))}
+
+                {/* Speed Slider */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px] text-[#8A92A6]">
+                    <span>Speed Multiplier</span>
+                    <span className="font-mono text-[#F0F3F8] text-[10px]">
+                      {currentSpeed < 1.0 ? 'Slow Motion' : currentSpeed > 1.0 ? 'Fast Forward' : 'Normal (1.0x)'}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0.1}
+                    max={16.0}
+                    step={0.05}
+                    value={currentSpeed}
+                    onChange={(e) => updateClipSpeed(selectedClip.id, Number(e.target.value), currentPitchCorrection)}
+                    className="w-full h-1.5 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#00F0FF]"
+                  />
+                  <div className="flex justify-between text-[9px] font-mono text-[#525D73]">
+                    <span>0.1x</span>
+                    <span>1.0x</span>
+                    <span>4.0x</span>
+                    <span>16.0x</span>
+                  </div>
+                </div>
+
+                {/* Quick Speed Buttons */}
+                <div className="space-y-1.5">
+                  <span className="text-[10px] font-mono text-[#64748B] block">Quick Presets</span>
+                  <div className="grid grid-cols-6 gap-1">
+                    {[0.25, 0.5, 1.0, 2.0, 4.0, 8.0].map((rate) => (
+                      <button
+                        key={rate}
+                        onClick={() => updateClipSpeed(selectedClip.id, rate, currentPitchCorrection)}
+                        className={`py-1 rounded text-[11px] font-mono font-medium transition-colors cursor-pointer border ${
+                          Math.abs(currentSpeed - rate) < 0.01
+                            ? 'bg-[#00F0FF] text-[#0D0E11] border-[#00F0FF] font-bold shadow-[0_0_8px_rgba(0,240,255,0.4)]'
+                            : 'bg-[#14161B] text-[#8A92A6] border-[#222630] hover:text-[#F0F3F8]'
+                        }`}
+                      >
+                        {rate}x
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Pitch Correction Checkbox */}
+                <div className="pt-2 border-t border-[#1C202B]">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs text-[#F0F3F8]">
+                    <input
+                      type="checkbox"
+                      checked={currentPitchCorrection}
+                      onChange={(e) => updateClipSpeed(selectedClip.id, currentSpeed, e.target.checked)}
+                      className="rounded border-[#222630] accent-[#00F0FF]"
+                    />
+                    <span>Maintain Audio Pitch (atempo)</span>
+                  </label>
+                  <p className="text-[10px] text-[#525D73] mt-1">
+                    Preserves natural vocal pitch using cascaded FFmpeg tempo stretching without chipmunking or deep distortion.
+                  </p>
+                </div>
+
+                {/* Timeline Visual Feedback Note */}
+                <div className="p-2.5 rounded bg-[#14161B] border border-[#222630] text-[10px] text-[#8A92A6] space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold text-[#F0F3F8]">
+                    <Sparkles size={11} className="text-[#00F0FF]" />
+                    <span>Dynamic Timeline Stretch</span>
+                  </div>
+                  <p className="text-[#64748B] leading-relaxed">
+                    Changing playback speed directly adjusts clip length on the timeline and labels the clip block with a <span className="text-[#00F0FF] font-mono font-bold">[{currentSpeed.toFixed(1)}x]</span> tag.
+                  </p>
                 </div>
               </div>
             )}

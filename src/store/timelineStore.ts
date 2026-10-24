@@ -17,6 +17,10 @@ import {
   ProjectData,
   Transition,
   ColorCorrection,
+  KeyframePoint,
+  KeyframeTrack,
+  SpeedProfile,
+  LensEffects,
 } from '../types/ipc';
 
 export interface TimelineSnapshot {
@@ -65,6 +69,49 @@ export async function tauriInvoke<T>(cmd: string, args?: Record<string, unknown>
     console.warn(`[Tauri IPC] ${cmd} warning:`, err);
     return null;
   }
+}
+
+/**
+ * Computes interpolated motion transform values (linear / ease_in_out) at the given playhead time
+ */
+export function getInterpolatedClipTransform(clip: Clip, playhead: number) {
+  const startSec = clip.startPositionSeconds ?? (clip.startTimeMs / 1000);
+  const durSec = clip.durationSeconds ?? (clip.durationMs / 1000);
+  const speed = clip.speedProfile?.speedMultiplier ?? 1.0;
+  const relTime = Math.max(0, Math.min(durSec, playhead - startSec)) * speed;
+
+  const interpolateProp = (prop: string, defaultVal: number): number => {
+    const track = clip.keyframeTracks?.find((t) => t.property === prop);
+    if (!track || !track.keyframes || track.keyframes.length === 0) {
+      return defaultVal;
+    }
+    const kfs = [...track.keyframes].sort((a, b) => a.time - b.time);
+    if (relTime <= kfs[0].time) return kfs[0].value;
+    if (relTime >= kfs[kfs.length - 1].time) return kfs[kfs.length - 1].value;
+
+    for (let i = 0; i < kfs.length - 1; i++) {
+      const k0 = kfs[i];
+      const k1 = kfs[i + 1];
+      if (relTime >= k0.time && relTime <= k1.time) {
+        const span = k1.time - k0.time;
+        if (span <= 0.0001) return k0.value;
+        let t = (relTime - k0.time) / span;
+        if (k0.easing === 'ease_in_out') {
+          t = t * t * (3 - 2 * t);
+        }
+        return k0.value + (k1.value - k0.value) * t;
+      }
+    }
+    return defaultVal;
+  };
+
+  return {
+    scale: interpolateProp('scale', clip.scale ?? 1.0),
+    positionX: interpolateProp('position_x', clip.positionX ?? 0),
+    positionY: interpolateProp('position_y', clip.positionY ?? 0),
+    rotation: interpolateProp('rotation', clip.rotation ?? 0),
+    opacity: interpolateProp('opacity', clip.opacity ?? 1.0),
+  };
 }
 
 export interface ActiveDragAssetInfo {
@@ -146,8 +193,21 @@ export interface TimelineState {
   // Clip Manipulation
   moveClip: (clipId: string, newStartPositionSec: number, targetTrackId?: string) => void;
   trimClip: (clipId: string, newInSec: number, newOutSec: number, newStartSec?: number) => void;
-  trimClipLeft: (clipId: string, deltaSeconds: number) => void;
-  trimClipRight: (clipId: string, deltaSeconds: number) => void;
+  trimClipLeft: (
+    clipId: string,
+    deltaSeconds: number,
+    initialStartSec?: number,
+    initialInSec?: number,
+    initialDurSec?: number,
+    speed?: number
+  ) => void;
+  trimClipRight: (
+    clipId: string,
+    deltaSeconds: number,
+    initialDurSec?: number,
+    initialInSec?: number,
+    speed?: number
+  ) => void;
   splitClipAtPlayhead: (clipId?: string) => void;
   deleteClip: (clipId: string) => void;
   deleteSelectedClips: () => void;
@@ -252,6 +312,17 @@ export interface TimelineState {
   setRippleMode: (enabled: boolean) => void;
   deleteGapAtTime: (trackId: string, timeSec: number) => void;
 
+  // Trimming Tool vs Rate Stretch (Slow-Mo) Drag Mode
+  edgeDragMode: 'trim' | 'stretch';
+  setEdgeDragMode: (mode: 'trim' | 'stretch') => void;
+  toggleEdgeDragMode: () => void;
+  stretchClip: (
+    clipId: string,
+    newDurSec: number,
+    newStartSec?: number,
+    pitchCorrection?: boolean
+  ) => void;
+
   // Phase 6: Audio Silence Auto-Cut Modal & Engine
   isSilenceModalOpen: boolean;
   setSilenceModalOpen: (open: boolean) => void;
@@ -260,6 +331,37 @@ export interface TimelineState {
     thresholdDb: number,
     minDurationSec: number
   ) => Promise<{ cutCount: number; removedSec: number; error?: string }>;
+
+  // Phase 8: Motion Transform Controls, Dynamic Keyframing Engine, Speed Ramping, Lens Effects
+  expandedKeyframeClipIds: string[];
+  toggleKeyframeLane: (clipId: string) => void;
+  updateClipTransform: (
+    clipId: string,
+    transform: {
+      scale?: number;
+      positionX?: number;
+      positionY?: number;
+      rotation?: number;
+      opacity?: number;
+    }
+  ) => void;
+  addOrUpdateKeyframe: (
+    clipId: string,
+    property: string,
+    time: number,
+    value: number,
+    easing?: string
+  ) => void;
+  removeKeyframe: (clipId: string, property: string, time: number) => void;
+  updateClipSpeed: (
+    clipId: string,
+    speedMultiplier: number,
+    pitchCorrection?: boolean
+  ) => void;
+  updateClipLensEffects: (
+    clipId: string,
+    lens: Partial<LensEffects>
+  ) => void;
 }
 
 // Color palettes for dynamic track assignments
@@ -631,6 +733,9 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
   isRippleMode: false,
   toggleRippleMode: () => set((state) => ({ isRippleMode: !state.isRippleMode })),
   setRippleMode: (isRippleMode) => set({ isRippleMode }),
+  edgeDragMode: 'trim',
+  setEdgeDragMode: (edgeDragMode) => set({ edgeDragMode }),
+  toggleEdgeDragMode: () => set((state) => ({ edgeDragMode: state.edgeDragMode === 'trim' ? 'stretch' : 'trim' })),
   isSilenceModalOpen: false,
   setSilenceModalOpen: (isSilenceModalOpen) => set({ isSilenceModalOpen }),
 
@@ -1230,7 +1335,14 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
     }));
   },
 
-  trimClipLeft: (clipId, deltaSeconds) => {
+  trimClipLeft: (
+    clipId,
+    deltaSeconds,
+    initialStartSec,
+    initialInSec,
+    initialDurSec,
+    speed = 1.0
+  ) => {
     set((state) => {
       let shiftDelta = 0;
       let clipStartSec = 0;
@@ -1241,19 +1353,20 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
         const c = t.clips.find((item) => item.id === clipId);
         if (c) {
           targetTrackId = t.id;
-          const curIn = c.inPointSeconds || 0;
-          const curDur = c.durationSeconds || 10;
-          const maxDelta = curDur - 0.2;
-          const minDelta = -curIn;
+          const curIn = initialInSec !== undefined ? initialInSec : (c.inPointSeconds || 0);
+          const curDur = initialDurSec !== undefined ? initialDurSec : (c.durationSeconds || 10);
+          const curStart = initialStartSec !== undefined ? initialStartSec : (c.startPositionSeconds || 0);
+          const clipSpeed = c.speedProfile?.speedMultiplier ?? speed;
+
+          const maxDelta = Math.max(0, curDur - 0.1);
+          const minDelta = -(curIn / clipSpeed);
           const clampedDelta = Math.max(minDelta, Math.min(deltaSeconds, maxDelta));
           shiftDelta = clampedDelta;
-          clipStartSec = c.startPositionSeconds || 0;
-          clipEndSec = clipStartSec + curDur;
+          clipStartSec = curStart;
+          clipEndSec = curStart + curDur;
           break;
         }
       }
-
-      if (Math.abs(shiftDelta) < 0.001) return state;
 
       return {
         tracks: state.tracks.map((track) => {
@@ -1267,21 +1380,24 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
             ...track,
             clips: track.clips.map((clip) => {
               if (clip.id === clipId) {
-                const curIn = clip.inPointSeconds || 0;
-                const curDur = clip.durationSeconds || 10;
-                const curStart = clip.startPositionSeconds || 0;
+                const curIn = initialInSec !== undefined ? initialInSec : (clip.inPointSeconds || 0);
+                const curDur = initialDurSec !== undefined ? initialDurSec : (clip.durationSeconds || 10);
+                const curStart = initialStartSec !== undefined ? initialStartSec : (clip.startPositionSeconds || 0);
+                const clipSpeed = clip.speedProfile?.speedMultiplier ?? speed;
 
-                const maxDelta = curDur - 0.2;
-                const minDelta = -curIn;
+                const maxDelta = Math.max(0, curDur - 0.1);
+                const minDelta = -(curIn / clipSpeed);
                 const clampedDelta = Math.max(minDelta, Math.min(deltaSeconds, maxDelta));
 
-                const nextIn = Math.max(0, curIn + clampedDelta);
+                const nextIn = Math.max(0, curIn + (clampedDelta * clipSpeed));
                 const nextStart = state.isRippleMode ? curStart : Math.max(0, curStart + clampedDelta);
-                const nextDur = Math.max(0.2, curDur - clampedDelta);
+                const nextDur = Math.max(0.1, curDur - clampedDelta);
+                const nextOut = nextIn + (nextDur * clipSpeed);
 
                 return {
                   ...clip,
                   inPointSeconds: nextIn,
+                  outPointSeconds: nextOut,
                   startPositionSeconds: nextStart,
                   startTimeMs: Math.round(nextStart * 1000),
                   durationSeconds: nextDur,
@@ -1305,11 +1421,18 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
             }),
           };
         }),
+        isDirty: true,
       };
     });
   },
 
-  trimClipRight: (clipId, deltaSeconds) => {
+  trimClipRight: (
+    clipId,
+    deltaSeconds,
+    initialDurSec,
+    initialInSec,
+    speed = 1.0
+  ) => {
     set((state) => {
       let shiftDelta = 0;
       let clipEndSec = 0;
@@ -1319,16 +1442,22 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
         const c = t.clips.find((item) => item.id === clipId);
         if (c) {
           targetTrackId = t.id;
-          const curIn = c.inPointSeconds || 0;
-          const curDur = c.durationSeconds || 10;
-          const nextDur = Math.max(0.2, curDur + deltaSeconds);
+          const curIn = initialInSec !== undefined ? initialInSec : (c.inPointSeconds || 0);
+          const curDur = initialDurSec !== undefined ? initialDurSec : (c.durationSeconds || 10);
+          const clipStart = c.startPositionSeconds || 0;
+          const clipSpeed = c.speedProfile?.speedMultiplier ?? speed;
+
+          const sourceDur =
+            c.metadata?.durationSeconds ||
+            state.assets.find((a) => a.filePath === c.filePath)?.durationSeconds ||
+            7200;
+          const maxTimelineDur = Math.max(curDur, (sourceDur - curIn) / clipSpeed);
+          const nextDur = Math.max(0.1, Math.min(maxTimelineDur, curDur + deltaSeconds));
           shiftDelta = nextDur - curDur;
-          clipEndSec = (c.startPositionSeconds || 0) + curDur;
+          clipEndSec = clipStart + curDur;
           break;
         }
       }
-
-      if (Math.abs(shiftDelta) < 0.001) return state;
 
       return {
         tracks: state.tracks.map((track) => {
@@ -1342,10 +1471,18 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
             ...track,
             clips: track.clips.map((clip) => {
               if (clip.id === clipId) {
-                const curIn = clip.inPointSeconds || 0;
-                const curDur = clip.durationSeconds || 10;
-                const nextDur = Math.max(0.2, curDur + deltaSeconds);
-                const nextOut = curIn + nextDur;
+                const curIn = initialInSec !== undefined ? initialInSec : (clip.inPointSeconds || 0);
+                const curDur = initialDurSec !== undefined ? initialDurSec : (clip.durationSeconds || 10);
+                const clipSpeed = clip.speedProfile?.speedMultiplier ?? speed;
+
+                const sourceDur =
+                  clip.metadata?.durationSeconds ||
+                  state.assets.find((a) => a.filePath === clip.filePath)?.durationSeconds ||
+                  7200;
+                const maxTimelineDur = Math.max(curDur, (sourceDur - curIn) / clipSpeed);
+                const nextDur = Math.max(0.1, Math.min(maxTimelineDur, curDur + deltaSeconds));
+                const nextOut = Math.min(sourceDur, curIn + (nextDur * clipSpeed));
+
                 return {
                   ...clip,
                   outPointSeconds: nextOut,
@@ -1370,6 +1507,87 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
             }),
           };
         }),
+        isDirty: true,
+      };
+    });
+  },
+
+  stretchClip: (
+    clipId,
+    newDurSec,
+    newStartSec,
+    pitchCorrection = true
+  ) => {
+    set((state) => {
+      let shiftDelta = 0;
+      let clipEndSec = 0;
+      let targetTrackId = '';
+
+      for (const t of state.tracks) {
+        const c = t.clips.find((item) => item.id === clipId);
+        if (c) {
+          targetTrackId = t.id;
+          const curDur = c.durationSeconds || (c.durationMs ? c.durationMs / 1000 : 10);
+          const curStart = c.startPositionSeconds || 0;
+          const clampedDur = Math.max(0.1, newDurSec);
+          shiftDelta = clampedDur - curDur;
+          clipEndSec = curStart + curDur;
+          break;
+        }
+      }
+
+      return {
+        tracks: state.tracks.map((track) => {
+          const isAffectedTrack = state.isRippleMode
+            ? !track.locked && !track.isLocked
+            : track.id === targetTrackId;
+
+          if (!isAffectedTrack) return track;
+
+          return {
+            ...track,
+            clips: track.clips.map((clip) => {
+              if (clip.id === clipId) {
+                const currentSpeed = clip.speedProfile?.speedMultiplier ?? 1.0;
+                const sourceSpan =
+                  clip.outPointSeconds != null && clip.inPointSeconds != null && clip.outPointSeconds > clip.inPointSeconds
+                    ? clip.outPointSeconds - clip.inPointSeconds
+                    : (clip.durationSeconds || (clip.durationMs ? clip.durationMs / 1000 : 10)) * currentSpeed;
+
+                const clampedDur = Math.max(0.1, newDurSec);
+                const newSpeed = Math.max(0.1, Math.min(16.0, Number((sourceSpan / clampedDur).toFixed(3))));
+                const startSec = newStartSec !== undefined ? Math.max(0, newStartSec) : (clip.startPositionSeconds || 0);
+
+                return {
+                  ...clip,
+                  startPositionSeconds: startSec,
+                  startTimeMs: Math.round(startSec * 1000),
+                  durationSeconds: clampedDur,
+                  durationMs: Math.round(clampedDur * 1000),
+                  speedProfile: {
+                    speedMultiplier: newSpeed,
+                    pitchCorrection,
+                  },
+                };
+              }
+
+              if (state.isRippleMode) {
+                const cStart = clip.startPositionSeconds || 0;
+                if (cStart >= clipEndSec - 0.05) {
+                  const newStart = Math.max(0, cStart + shiftDelta);
+                  return {
+                    ...clip,
+                    startPositionSeconds: newStart,
+                    startTimeMs: Math.round(newStart * 1000),
+                  };
+                }
+              }
+
+              return clip;
+            }),
+          };
+        }),
+        isDirty: true,
       };
     });
   },
@@ -1482,7 +1700,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
       set({ selectedClipId: null, selectedClipIds: [] });
       return;
     }
-    const { selectedClipIds } = get();
+    const { selectedClipIds, tracks, playhead } = get();
     if (isMulti) {
       const nextIds = selectedClipIds.includes(selectedClipId)
         ? selectedClipIds.filter((id) => id !== selectedClipId)
@@ -1497,10 +1715,18 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
         selectedClipIds: [selectedClipId],
       });
     }
-    const { tracks } = get();
     const parentTrack = tracks.find((t) => t.clips.some((c) => c.id === selectedClipId));
     if (parentTrack) {
-      set({ selectedTrackId: parentTrack.id });
+      const targetClip = parentTrack.clips.find((c) => c.id === selectedClipId);
+      const updates: any = { selectedTrackId: parentTrack.id };
+      if (targetClip) {
+        const startSec = targetClip.startPositionSeconds ?? (targetClip.startTimeMs ? targetClip.startTimeMs / 1000 : 0);
+        const durSec = targetClip.durationSeconds ?? (targetClip.durationMs ? targetClip.durationMs / 1000 : 10);
+        if (playhead < startSec || playhead >= startSec + durSec) {
+          updates.playhead = startSec;
+        }
+      }
+      set(updates);
     }
   },
 
@@ -3060,5 +3286,161 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
       historyFuture: [],
     });
     updateAppTitle('Untitled Project', false, null);
+  },
+
+  // Phase 8: Motion Transform Controls, Dynamic Keyframing Engine, Speed Ramping, Lens Effects
+  expandedKeyframeClipIds: [],
+  toggleKeyframeLane: (clipId: string) => {
+    set((state) => ({
+      expandedKeyframeClipIds: state.expandedKeyframeClipIds.includes(clipId)
+        ? state.expandedKeyframeClipIds.filter((id) => id !== clipId)
+        : [...state.expandedKeyframeClipIds, clipId],
+    }));
+  },
+
+  updateClipTransform: (clipId, transform) => {
+    set((state) => ({
+      tracks: state.tracks.map((track) => ({
+        ...track,
+        clips: track.clips.map((clip) => {
+          if (clip.id !== clipId) return clip;
+          return {
+            ...clip,
+            scale: transform.scale !== undefined ? transform.scale : clip.scale,
+            positionX: transform.positionX !== undefined ? transform.positionX : clip.positionX,
+            positionY: transform.positionY !== undefined ? transform.positionY : clip.positionY,
+            rotation: transform.rotation !== undefined ? transform.rotation : clip.rotation,
+            opacity: transform.opacity !== undefined ? transform.opacity : clip.opacity,
+          };
+        }),
+      })),
+      isDirty: true,
+    }));
+  },
+
+  addOrUpdateKeyframe: (clipId, property, time, value, easing = 'linear') => {
+    set((state) => {
+      const tracks = state.tracks.map((track) => ({
+        ...track,
+        clips: track.clips.map((clip) => {
+          if (clip.id !== clipId) return clip;
+          const currentTracks = clip.keyframeTracks ? [...clip.keyframeTracks] : [];
+          const trackIdx = currentTracks.findIndex((t) => t.property === property);
+
+          if (trackIdx >= 0) {
+            const existingKfs = [...currentTracks[trackIdx].keyframes];
+            const kfIdx = existingKfs.findIndex((k) => Math.abs(k.time - time) < 0.05);
+            if (kfIdx >= 0) {
+              existingKfs[kfIdx] = { time, value, easing };
+            } else {
+              existingKfs.push({ time, value, easing });
+              existingKfs.sort((a, b) => a.time - b.time);
+            }
+            currentTracks[trackIdx] = { property, keyframes: existingKfs };
+          } else {
+            currentTracks.push({ property, keyframes: [{ time, value, easing }] });
+          }
+
+          return {
+            ...clip,
+            keyframeTracks: currentTracks,
+          };
+        }),
+      }));
+      return { tracks, isDirty: true };
+    });
+  },
+
+  removeKeyframe: (clipId, property, time) => {
+    set((state) => ({
+      tracks: state.tracks.map((track) => ({
+        ...track,
+        clips: track.clips.map((clip) => {
+          if (clip.id !== clipId || !clip.keyframeTracks) return clip;
+          const updatedTracks = clip.keyframeTracks
+            .map((t) => {
+              if (t.property !== property) return t;
+              return {
+                ...t,
+                keyframes: t.keyframes.filter((k) => Math.abs(k.time - time) >= 0.05),
+              };
+            })
+            .filter((t) => t.keyframes.length > 0);
+
+          return {
+            ...clip,
+            keyframeTracks: updatedTracks.length > 0 ? updatedTracks : undefined,
+          };
+        }),
+      })),
+      isDirty: true,
+    }));
+  },
+
+  updateClipSpeed: (clipId, speedMultiplier, pitchCorrection = true) => {
+    const { pushHistory, playhead } = get();
+    pushHistory();
+
+    let adjustedPlayhead: number | null = null;
+
+    set((state) => ({
+      tracks: state.tracks.map((track) => ({
+        ...track,
+        clips: track.clips.map((clip) => {
+          if (clip.id !== clipId) return clip;
+          const currentSpeed = clip.speedProfile?.speedMultiplier ?? 1.0;
+          const sourceDurSec =
+            (clip.outPointSeconds != null && clip.inPointSeconds != null && clip.outPointSeconds > clip.inPointSeconds)
+              ? (clip.outPointSeconds - clip.inPointSeconds)
+              : (clip.durationSeconds || (clip.durationMs ? clip.durationMs / 1000 : 10)) * currentSpeed;
+
+          const newDurSec = Math.max(0.1, sourceDurSec / speedMultiplier);
+          const newDurMs = Math.round(newDurSec * 1000);
+
+          const clipStart = clip.startPositionSeconds ?? (clip.startTimeMs ? clip.startTimeMs / 1000 : 0);
+          const oldDur = clip.durationSeconds ?? (clip.durationMs ? clip.durationMs / 1000 : 10);
+          if (playhead >= clipStart && playhead <= clipStart + oldDur) {
+            const ratio = oldDur > 0 ? (playhead - clipStart) / oldDur : 0;
+            adjustedPlayhead = clipStart + ratio * newDurSec;
+          }
+
+          return {
+            ...clip,
+            durationSeconds: newDurSec,
+            durationMs: newDurMs,
+            speedProfile: {
+              speedMultiplier,
+              pitchCorrection,
+            },
+          };
+        }),
+      })),
+      ...(adjustedPlayhead !== null ? { playhead: adjustedPlayhead } : {}),
+      isDirty: true,
+    }));
+  },
+
+  updateClipLensEffects: (clipId, lensUpdates) => {
+    set((state) => ({
+      tracks: state.tracks.map((track) => ({
+        ...track,
+        clips: track.clips.map((clip) => {
+          if (clip.id !== clipId) return clip;
+          const current = clip.lensEffects ?? {
+            defishEnabled: false,
+            defishStrength: 0,
+            gaussianBlur: 0,
+          };
+          return {
+            ...clip,
+            lensEffects: {
+              ...current,
+              ...lensUpdates,
+            },
+          };
+        }),
+      })),
+      isDirty: true,
+    }));
   },
 }));

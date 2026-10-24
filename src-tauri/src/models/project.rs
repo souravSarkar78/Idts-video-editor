@@ -3,6 +3,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use super::ipc::{MediaAsset, MediaBin, MediaTrack, Transition};
+pub use super::ipc::{KeyframePoint, KeyframeTrack, LensEffects, SpeedProfile};
 
 /// High-level project metadata for .idts project file
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -22,6 +22,7 @@ import {
   Plus,
   Trash2,
   Scissors,
+  Gauge,
   Wand2,
   Sparkles,
   Zap,
@@ -33,6 +34,7 @@ import {
   Maximize2,
   Film,
 } from 'lucide-react';
+ import { Diamond } from '@/components/Icons';
 import { useShallow } from 'zustand/react/shallow';
 import { useTimelineStore } from '../../store/timelineStore';
 import { formatTimecode, formatDeltaSeconds } from '../../utils/timecode';
@@ -110,6 +112,9 @@ export const Timeline: React.FC = () => {
     duplicateClip,
     trimClipLeft,
     trimClipRight,
+    stretchClip,
+    edgeDragMode,
+    setEdgeDragMode,
     setExportModalOpen,
     syncAllTracks,
     executeTauriSync,
@@ -140,6 +145,10 @@ export const Timeline: React.FC = () => {
     updateTransition,
     removeTransition,
     activeDragTransition,
+    addOrUpdateKeyframe,
+    removeKeyframe,
+    expandedKeyframeClipIds,
+    toggleKeyframeLane,
   } = useTimelineStore(
     useShallow((state) => ({
       project: state.project,
@@ -171,6 +180,9 @@ export const Timeline: React.FC = () => {
       duplicateClip: state.duplicateClip,
       trimClipLeft: state.trimClipLeft,
       trimClipRight: state.trimClipRight,
+      stretchClip: state.stretchClip,
+      edgeDragMode: state.edgeDragMode,
+      setEdgeDragMode: state.setEdgeDragMode,
       setExportModalOpen: state.setExportModalOpen,
       syncAllTracks: state.syncAllTracks,
       executeTauriSync: state.executeTauriSync,
@@ -201,6 +213,10 @@ export const Timeline: React.FC = () => {
       updateTransition: state.updateTransition,
       removeTransition: state.removeTransition,
       activeDragTransition: state.activeDragTransition,
+      addOrUpdateKeyframe: state.addOrUpdateKeyframe,
+      removeKeyframe: state.removeKeyframe,
+      expandedKeyframeClipIds: state.expandedKeyframeClipIds,
+      toggleKeyframeLane: state.toggleKeyframeLane,
     }))
   );
 
@@ -256,8 +272,97 @@ export const Timeline: React.FC = () => {
   const [trimmingClip, setTrimmingClip] = useState<{
     id: string;
     side: 'left' | 'right';
+    mode: 'trim' | 'stretch';
     initialMouseX: number;
+    initialStartSec: number;
+    initialInSec: number;
+    initialOutSec: number;
+    initialDurSec: number;
+    sourceSpan: number;
+    speed: number;
   } | null>(null);
+
+  // Real-time floating tooltip pill during trimming or slow-motion stretching
+  const [trimDragTooltip, setTrimDragTooltip] = useState<{
+    x: number;
+    y: number;
+    text: string;
+    isSlowMo: boolean;
+  } | null>(null);
+
+  // Keyframe diamond drag interaction state
+  const [draggingKeyframe, setDraggingKeyframe] = useState<{
+    clipId: string;
+    property: string;
+    originalTime: number;
+    initialMouseX: number;
+    clipDurationSec: number;
+  } | null>(null);
+
+  const handleStartKeyframeDrag = (
+    clipId: string,
+    property: string,
+    time: number,
+    mouseX: number,
+    clipDurationSec: number
+  ) => {
+    setDraggingKeyframe({
+      clipId,
+      property,
+      originalTime: time,
+      initialMouseX: mouseX,
+      clipDurationSec,
+    });
+  };
+
+  useEffect(() => {
+    if (!draggingKeyframe) return;
+
+    const onMouseMove = (e: MouseEvent) => {
+      const deltaPx = e.clientX - draggingKeyframe.initialMouseX;
+      const deltaSec = deltaPx / zoom;
+      const newTime = Math.max(
+        0,
+        Math.min(draggingKeyframe.clipDurationSec, draggingKeyframe.originalTime + deltaSec)
+      );
+
+      const allTracks = useTimelineStore.getState().tracks;
+      let targetKf: any = null;
+      for (const t of allTracks) {
+        const c = t.clips.find((item) => item.id === draggingKeyframe.clipId);
+        if (c) {
+          const kfTrack = c.keyframeTracks?.find((kt) => kt.property === draggingKeyframe.property);
+          targetKf = kfTrack?.keyframes.find((k) => Math.abs(k.time - draggingKeyframe.originalTime) < 0.08);
+          break;
+        }
+      }
+
+      if (targetKf) {
+        removeKeyframe(draggingKeyframe.clipId, draggingKeyframe.property, draggingKeyframe.originalTime);
+        addOrUpdateKeyframe(
+          draggingKeyframe.clipId,
+          draggingKeyframe.property,
+          Number(newTime.toFixed(3)),
+          targetKf.value,
+          targetKf.easing
+        );
+        setDraggingKeyframe((prev) =>
+          prev ? { ...prev, originalTime: Number(newTime.toFixed(3)), initialMouseX: e.clientX } : null
+        );
+      }
+    };
+
+    const onMouseUp = () => {
+      setDraggingKeyframe(null);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, [draggingKeyframe, zoom]);
 
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -468,15 +573,75 @@ export const Timeline: React.FC = () => {
         return;
       }
 
-      // 3. Clip Trimming (Left/Right)
+      // 3. Clip Trimming (Recover Footage) or Slow-Mo Rate Stretching
       if (trimmingClip) {
-        const deltaX = e.clientX - trimmingClip.initialMouseX;
-        const deltaSec = deltaX / zoom;
-        if (trimmingClip.side === 'left') {
-          trimClipLeft(trimmingClip.id, deltaSec);
-        } else {
-          trimClipRight(trimmingClip.id, deltaSec);
-        }
+        const clientX = e.clientX;
+        const clientY = e.clientY;
+        if (dragRafRef.current) cancelAnimationFrame(dragRafRef.current);
+        dragRafRef.current = requestAnimationFrame(() => {
+          const deltaX = clientX - trimmingClip.initialMouseX;
+          const deltaSec = deltaX / zoom;
+
+          if (trimmingClip.mode === 'stretch') {
+            if (trimmingClip.side === 'left') {
+              const newDur = Math.max(0.1, trimmingClip.initialDurSec - deltaSec);
+              const newStart = Math.max(0, trimmingClip.initialStartSec + deltaSec);
+              stretchClip(trimmingClip.id, newDur, newStart);
+              const newSpeed = Number((trimmingClip.sourceSpan / newDur).toFixed(2));
+              setTrimDragTooltip({
+                x: clientX + 16,
+                y: clientY - 32,
+                text: newSpeed < 1.0 ? `Slow-Mo: ${newSpeed}x (${newDur.toFixed(2)}s)` : `Fast-Motion: ${newSpeed}x (${newDur.toFixed(2)}s)`,
+                isSlowMo: newSpeed < 1.0,
+              });
+            } else {
+              const newDur = Math.max(0.1, trimmingClip.initialDurSec + deltaSec);
+              stretchClip(trimmingClip.id, newDur);
+              const newSpeed = Number((trimmingClip.sourceSpan / newDur).toFixed(2));
+              setTrimDragTooltip({
+                x: clientX + 16,
+                y: clientY - 32,
+                text: newSpeed < 1.0 ? `Slow-Mo: ${newSpeed}x (${newDur.toFixed(2)}s)` : `Fast-Motion: ${newSpeed}x (${newDur.toFixed(2)}s)`,
+                isSlowMo: newSpeed < 1.0,
+              });
+            }
+          } else {
+            if (trimmingClip.side === 'left') {
+              trimClipLeft(
+                trimmingClip.id,
+                deltaSec,
+                trimmingClip.initialStartSec,
+                trimmingClip.initialInSec,
+                trimmingClip.initialDurSec,
+                trimmingClip.speed
+              );
+              const newDur = Math.max(0.1, trimmingClip.initialDurSec - deltaSec);
+              const diff = newDur - trimmingClip.initialDurSec;
+              setTrimDragTooltip({
+                x: clientX + 16,
+                y: clientY - 32,
+                text: diff >= 0 ? `Recovered: +${diff.toFixed(2)}s (${newDur.toFixed(2)}s)` : `Trimmed: ${diff.toFixed(2)}s (${newDur.toFixed(2)}s)`,
+                isSlowMo: false,
+              });
+            } else {
+              trimClipRight(
+                trimmingClip.id,
+                deltaSec,
+                trimmingClip.initialDurSec,
+                trimmingClip.initialInSec,
+                trimmingClip.speed
+              );
+              const newDur = Math.max(0.1, trimmingClip.initialDurSec + deltaSec);
+              const diff = newDur - trimmingClip.initialDurSec;
+              setTrimDragTooltip({
+                x: clientX + 16,
+                y: clientY - 32,
+                text: diff >= 0 ? `Recovered: +${diff.toFixed(2)}s (${newDur.toFixed(2)}s)` : `Trimmed: ${diff.toFixed(2)}s (${newDur.toFixed(2)}s)`,
+                isSlowMo: false,
+              });
+            }
+          }
+        });
         return;
       }
 
@@ -543,6 +708,7 @@ export const Timeline: React.FC = () => {
       if (isScrubbing) setIsScrubbing(false);
       if (draggingClip) setDraggingClip(null);
       if (trimmingClip) setTrimmingClip(null);
+      setTrimDragTooltip(null);
 
       // Finish or cancel Marquee selection
       if (marqueeRef.current) {
@@ -580,8 +746,26 @@ export const Timeline: React.FC = () => {
     moveMultipleClips,
     trimClipLeft,
     trimClipRight,
+    stretchClip,
     handleRulerScrub,
   ]);
+
+  // Edge Drag Mode keyboard shortcut listener (T for Trim, R for Rate Stretch / Slow-Mo)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      if (e.code === 'KeyT') {
+        setEdgeDragMode('trim');
+      } else if (e.code === 'KeyR') {
+        setEdgeDragMode('stretch');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [setEdgeDragMode]);
 
   // Multi-Sync Action trigger (calls Tauri IPC sync_active_timeline with fallback)
   const handleSyncAll = async () => {
@@ -759,16 +943,16 @@ export const Timeline: React.FC = () => {
         </div>
       )}
 
-      {/* TOP TIMELINE TOOLBAR */}
-      <div className="h-10 bg-[#14161B] border-b border-[#222630] px-3 flex items-center justify-between z-20 shrink-0">
-        {/* Left Tools (Undo/Redo, Split, Delete, Ripple Delete, Snapping) */}
-        <div className="flex items-center gap-1">
-          {/* Undo / Redo */}
+      {/* TOP TIMELINE TOOLBAR (1-Row, Flex-Wrap If Overflow, Sync on Rightmost) */}
+      <div className="min-h-10 py-1 bg-[#14161B] border-b border-[#222630] px-3 flex flex-wrap items-center justify-between gap-y-1 gap-x-2 z-20 shrink-0">
+        {/* Left Tools (One-row with flex-wrap) */}
+        <div className="flex flex-wrap items-center gap-1">
+          {/* 1. Undo / Redo */}
           <button
             onClick={undo}
             disabled={!canUndo()}
             title="Undo (Ctrl+Z)"
-            className={`p-1.5 rounded transition-colors ${
+            className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors ${
               canUndo()
                 ? 'hover:bg-[#222630] text-[#8A92A6] hover:text-[#00F0FF] cursor-pointer'
                 : 'text-[#3E4554] cursor-not-allowed'
@@ -781,7 +965,7 @@ export const Timeline: React.FC = () => {
             onClick={redo}
             disabled={!canRedo()}
             title="Redo (Ctrl+Y)"
-            className={`p-1.5 rounded transition-colors ${
+            className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors ${
               canRedo()
                 ? 'hover:bg-[#222630] text-[#8A92A6] hover:text-[#00F0FF] cursor-pointer'
                 : 'text-[#3E4554] cursor-not-allowed'
@@ -792,59 +976,72 @@ export const Timeline: React.FC = () => {
 
           <div className="h-4 w-[1px] bg-[#222630] mx-0.5" />
 
-          {/* Magnetic Snapping Toggle */}
+          {/* 2. Magnetic Snapping Toggle */}
           <button
             onClick={toggleSnapping}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-all cursor-pointer border ${
+            className={`w-7 h-7 flex items-center justify-center rounded-md transition-all cursor-pointer border ${
               isSnappingEnabled
-                ? 'bg-[#00F0FF]/15 text-[#00F0FF] border-[#00F0FF]/40 shadow-[0_0_8px_rgba(0,240,255,0.2)]'
+                ? 'bg-[#00F0FF]/15 text-[#00F0FF] border-[#00F0FF]/50 shadow-[0_0_8px_rgba(0,240,255,0.25)]'
                 : 'bg-[#181B22] text-[#64748B] border-[#222630] hover:text-[#F0F3F8]'
             }`}
-            title="Toggle Magnetic Snapping (S)"
+            title={`Magnetic Snapping: ${isSnappingEnabled ? 'ON' : 'OFF'} (S)`}
           >
             <Magnet size={13} />
-            <span>Snapping {isSnappingEnabled ? 'ON' : 'OFF'}</span>
           </button>
 
-          {/* Multi-Track Ripple Mode Toggle */}
+          {/* 3. Multi-Track Ripple Mode Toggle */}
           <button
             onClick={toggleRippleMode}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-all cursor-pointer border ${
+            className={`w-7 h-7 flex items-center justify-center rounded-md transition-all cursor-pointer border ${
               isRippleMode
                 ? 'bg-[#A855F7]/20 text-[#A855F7] border-[#A855F7]/50 shadow-[0_0_8px_rgba(168,85,247,0.3)]'
                 : 'bg-[#181B22] text-[#64748B] border-[#222630] hover:text-[#F0F3F8]'
             }`}
-            title="Toggle Multi-Track Ripple Editing Mode (B) - Trims & gap deletions ripple downstream clips"
+            title={`Ripple Mode: ${isRippleMode ? 'ON' : 'OFF'} (B) - Trims & gap deletions ripple downstream clips`}
           >
             <Sliders size={13} />
-            <span>Ripple {isRippleMode ? 'ON' : 'OFF'}</span>
           </button>
 
           <div className="h-4 w-[1px] bg-[#222630] mx-0.5" />
 
-          {/* Auto-Cut Silence Button */}
-          <button
-            onClick={() => setSilenceModalOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#1C202B] hover:bg-[#252B3A] text-xs font-medium text-[#8A92A6] hover:text-amber-400 transition-colors border border-[#222630] cursor-pointer"
-            title="Open Audio Silence Auto-Cut Modal (Detects and ripple-deletes quiet intervals)"
-          >
-            <VolumeX size={13} className="text-amber-400" />
-            <span>Auto-Cut Silence</span>
-          </button>
-
-          <div className="h-4 w-[1px] bg-[#222630] mx-0.5" />
-
-          {/* Split */}
+          {/* 4. Split Clip */}
           <button
             onClick={() => splitClipAtPlayhead()}
             title="Split Clip at Playhead (C)"
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#1C202B] hover:bg-[#252B3A] text-xs font-medium text-[#8A92A6] hover:text-[#00F0FF] transition-colors border border-[#222630] cursor-pointer"
+            className="w-7 h-7 flex items-center justify-center rounded-md bg-[#1C202B] hover:bg-[#252B3A] text-[#8A92A6] hover:text-[#00F0FF] transition-colors border border-[#222630] cursor-pointer"
           >
             <Scissors size={13} />
-            <span>Split</span>
           </button>
 
-          {/* Delete */}
+          {/* 5. Edge Drag Mode Switcher */}
+          <div className="flex items-center bg-[#101217] p-0.5 rounded-md border border-[#222630]">
+            <button
+              onClick={() => setEdgeDragMode('trim')}
+              className={`w-6 h-6 flex items-center justify-center rounded transition-all cursor-pointer ${
+                edgeDragMode === 'trim'
+                  ? 'bg-[#00F0FF] text-[#0D0E11] font-bold shadow-[0_0_8px_rgba(0,240,255,0.4)]'
+                  : 'text-[#8A92A6] hover:text-[#F0F3F8]'
+              }`}
+              title="Trim / Recover Mode (T): Drag clip edges to trim or recover hidden video (Hold Alt for Slow-Mo)"
+            >
+              <Scissors size={12} className={edgeDragMode === 'trim' ? 'text-[#0D0E11]' : 'text-[#00F0FF]'} />
+            </button>
+            <button
+              onClick={() => setEdgeDragMode('stretch')}
+              className={`w-6 h-6 flex items-center justify-center rounded transition-all cursor-pointer ${
+                edgeDragMode === 'stretch'
+                  ? 'bg-[#F59E0B] text-[#0D0E11] font-bold shadow-[0_0_8px_rgba(245,158,11,0.4)]'
+                  : 'text-[#8A92A6] hover:text-[#F0F3F8]'
+              }`}
+              title="Slow-Mo Stretch Mode (R): Drag clip edges outward to slow down, or inward to speed up"
+            >
+              <Gauge size={12} className={edgeDragMode === 'stretch' ? 'text-[#0D0E11]' : 'text-[#F59E0B]'} />
+            </button>
+          </div>
+
+          <div className="h-4 w-[1px] bg-[#222630] mx-0.5" />
+
+          {/* 6. Delete */}
           <button
             onClick={() => {
               if (selectedClipId || selectedClipIds.length > 0) deleteSelectedClips();
@@ -855,94 +1052,103 @@ export const Timeline: React.FC = () => {
                 ? `Delete ${selectedClipIds.length} Selected Clips (Del)`
                 : 'Delete Selected Clip (Del)'
             }
-            className={`p-1.5 rounded transition-colors ${
+            className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors ${
               selectedClipId || selectedClipIds.length > 0
                 ? 'hover:bg-red-500/20 text-[#8A92A6] hover:text-red-400 cursor-pointer'
                 : 'text-[#3E4554] cursor-not-allowed'
             }`}
           >
-            <Trash2 size={14} />
+            <Trash2 size={13} />
           </button>
 
-          {/* Ripple Delete */}
+          {/* 7. Ripple Delete */}
           <button
             onClick={() => {
               if (selectedClipId) rippleDeleteClip(selectedClipId);
             }}
             disabled={!selectedClipId}
-            title="Ripple Delete (Shift+Delete - close gap)"
-            className={`px-2 py-1 rounded text-xs transition-colors border ${
+            title="Ripple Delete (Shift+Del): Delete clip and close timeline gap"
+            className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors border ${
               selectedClipId
-                ? 'bg-[#1C202B] hover:bg-amber-500/20 text-[#8A92A6] hover:text-amber-400 border-[#222630] cursor-pointer'
+                ? 'bg-[#1C202B] hover:bg-amber-500/20 text-amber-400 border-amber-500/30 cursor-pointer shadow-[0_0_6px_rgba(245,158,11,0.2)]'
                 : 'text-[#3E4554] border-transparent cursor-not-allowed'
             }`}
           >
-            Ripple Del
+            <div className="relative flex items-center justify-center">
+              <Trash2 size={13} className={selectedClipId ? 'text-amber-400' : 'text-[#3E4554]'} />
+              <span className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-amber-400" />
+            </div>
           </button>
 
-          <div className="h-4 w-[1px] bg-[#222630] mx-1" />
+          <div className="h-4 w-[1px] bg-[#222630] mx-0.5" />
 
-          {/* Dynamic Track Adders */}
+          {/* 8. Auto-Cut Silence Button */}
+          <button
+            onClick={() => setSilenceModalOpen(true)}
+            className="w-7 h-7 flex items-center justify-center rounded-md bg-[#1C202B] hover:bg-[#252B3A] text-amber-400 hover:text-amber-300 transition-colors border border-[#222630] cursor-pointer"
+            title="Auto-Cut Silence: Detect and ripple-delete quiet intervals"
+          >
+            <VolumeX size={13} className="text-amber-400" />
+          </button>
+
+          <div className="h-4 w-[1px] bg-[#222630] mx-0.5" />
+
+          {/* 9. Dynamic Track Adders */}
           <button
             onClick={() => addTrack('video')}
-            className="flex items-center gap-1 px-2.5 py-1 rounded bg-[#1A1D24] hover:bg-[#222630] border border-[#222630] text-xs font-medium text-[#8A92A6] hover:text-[#00F0FF] transition-colors"
+            className="h-7 px-2 flex items-center gap-1 rounded-md bg-[#1A1D24] hover:bg-[#222630] border border-[#222630] text-[#8A92A6] hover:text-[#00F0FF] transition-colors cursor-pointer"
+            title="Add Video Track"
           >
-            <Plus size={12} strokeWidth={3} className="text-[#00F0FF]" />
-            <span>Video Track</span>
+            <Plus size={10} strokeWidth={3} className="text-[#00F0FF]" />
+            <Video size={13} className="text-[#00F0FF]" />
           </button>
 
           <button
             onClick={() => addTrack('audio')}
-            className="flex items-center gap-1 px-2.5 py-1 rounded bg-[#1A1D24] hover:bg-[#222630] border border-[#222630] text-xs font-medium text-[#8A92A6] hover:text-[#F59E0B] transition-colors"
+            className="h-7 px-2 flex items-center gap-1 rounded-md bg-[#1A1D24] hover:bg-[#222630] border border-[#222630] text-[#8A92A6] hover:text-[#F59E0B] transition-colors cursor-pointer"
+            title="Add Audio Track"
           >
-            <Plus size={12} strokeWidth={3} className="text-[#F59E0B]" />
-            <span>Audio Track</span>
+            <Plus size={10} strokeWidth={3} className="text-[#F59E0B]" />
+            <Mic size={13} className="text-[#F59E0B]" />
           </button>
         </div>
 
-        {/* Center: Prominent Multi-Sync Action Button & Placement Mode Badge */}
-        <div className="flex items-center gap-2">
+        {/* Right Section: Sync Actions (before zoom slider), Zoom controls & FPS */}
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Sync Buttons */}
           <button
             onClick={handleSyncAll}
-            className="flex items-center gap-2 px-3.5 py-1 rounded-md bg-gradient-to-r from-[#00F0FF] to-[#10B981] hover:brightness-110 text-[#0D0E11] text-xs font-bold transition-all shadow-[0_0_12px_rgba(0,240,255,0.35)] cursor-pointer"
-            title={`Analyze clip filenames and synchronize tracks using ${
-              syncPlacementMode === 'compact'
-                ? `Take Snapping (Close Idle Gaps, ${syncGapCushionSec}s cushion)`
-                : syncPlacementMode === 'capped'
-                ? 'Capped Gap'
-                : 'Real Time Wall-Clock'
-            }`}
+            className="h-7 px-2.5 flex items-center gap-1.5 rounded-md bg-gradient-to-r from-[#00F0FF] to-[#10B981] hover:brightness-110 text-[#0D0E11] text-xs font-bold transition-all shadow-[0_0_8px_rgba(0,240,255,0.3)] cursor-pointer"
+            title={`Sync All Tracks (${syncedCount}/${allClips.length}) - Analyze clip filenames and synchronize tracks`}
           >
-            <Zap size={14} fill="currentColor" />
-            <span>Sync All Tracks</span>
-            <span className="px-1.5 py-0.2 rounded text-[10px] bg-black/30 text-white font-mono">
+            <Zap size={13} fill="currentColor" />
+            <span className="font-mono text-[11px] leading-none">
               {syncedCount}/{allClips.length}
             </span>
           </button>
 
-          {/* Placement Strategy Quick Mode Selector / Opener */}
+          {/* Sync Settings / Placement Strategy */}
           <button
             onClick={() => setSyncModalOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#1C202B] hover:bg-[#252B3A] border border-[#222630] hover:border-[#00F0FF]/50 text-[11px] font-mono text-[#8A92A6] hover:text-[#00F0FF] transition-all"
-            title="Configure Sync Presets & Placement Strategy (Take Snapping / Real Time / Capped Gap)"
-          >
-            <Sliders size={12} className="text-[#00F0FF]" />
-            <span>
-              {syncPlacementMode === 'compact'
-                ? `Snapped (${syncGapCushionSec}s)`
+            className="w-7 h-7 flex items-center justify-center rounded-md bg-[#1C202B] hover:bg-[#252B3A] border border-[#222630] hover:border-[#00F0FF]/50 text-[#8A92A6] hover:text-[#00F0FF] transition-all cursor-pointer"
+            title={`Sync Placement Settings: ${
+              syncPlacementMode === 'compact'
+                ? `Snapped (${syncGapCushionSec}s cushion)`
                 : syncPlacementMode === 'capped'
                 ? 'Capped Gap'
-                : 'Wall-Clock'}
-            </span>
+                : 'Real Time Wall-Clock'
+            } (Click to open settings)`}
+          >
+            <Sliders size={13} className="text-[#00F0FF]" />
           </button>
-        </div>
 
-        {/* Right: Zoom slider, Fit button & FPS */}
-        <div className="flex items-center gap-2.5">
-          <div className="flex items-center gap-1.5 bg-[#0D0E11] px-2 py-0.5 rounded border border-[#222630]">
+          <div className="h-4 w-[1px] bg-[#222630] mx-0.5" />
+
+          {/* Zoom controls */}
+          <div className="flex items-center gap-1.5 bg-[#0D0E11] px-2 py-1 rounded-md border border-[#222630] h-7">
             <button
               onClick={handleZoomToFit}
-              className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono text-[#8A92A6] hover:text-[#00F0FF] hover:bg-[#1A1D24] transition-colors cursor-pointer mr-0.5"
+              className="flex items-center gap-1 px-1 py-0.5 rounded text-[10px] font-mono text-[#8A92A6] hover:text-[#00F0FF] hover:bg-[#1A1D24] transition-colors cursor-pointer"
               title="Zoom to Fit All Media in Timeline"
             >
               <Maximize2 size={11} />
@@ -974,7 +1180,10 @@ export const Timeline: React.FC = () => {
             </button>
           </div>
 
-          <span className="text-[10px] font-mono text-[#64748B] px-1.5 py-0.5 rounded bg-[#0D0E11] border border-[#222630]">
+          <span
+            className="text-[10px] font-mono text-[#64748B] px-1.5 py-1 rounded-md bg-[#0D0E11] border border-[#222630] h-7 flex items-center"
+            title="Project Framerate"
+          >
             {project.fps} FPS
           </span>
         </div>
@@ -1167,18 +1376,61 @@ export const Timeline: React.FC = () => {
                       selectedClipPositions: clipPositions,
                     });
                   }}
-                  onStartTrimLeft={(clipId, mouseX) => {
+                  edgeDragMode={edgeDragMode}
+                  onStartTrimLeft={(clipId, mouseX, isAlt = false) => {
                     if (track.locked || track.isLocked) return;
+                    const c = track.clips.find((item) => item.id === clipId);
+                    if (!c) return;
                     pushHistory();
-                    setTrimmingClip({ id: clipId, side: 'left', initialMouseX: mouseX });
+                    const s = c.startPositionSeconds ?? (c.startTimeMs / 1000);
+                    const inPt = c.inPointSeconds ?? (c.sourceOffsetMs ? c.sourceOffsetMs / 1000 : 0);
+                    const dur = c.durationSeconds ?? (c.durationMs / 1000);
+                    const outPt = c.outPointSeconds ?? (inPt + dur);
+                    const spd = c.speedProfile?.speedMultiplier ?? 1.0;
+                    const mode = isAlt ? (edgeDragMode === 'stretch' ? 'trim' : 'stretch') : edgeDragMode;
+                    const sourceSpan = outPt > inPt ? outPt - inPt : dur * spd;
+                    setTrimmingClip({
+                      id: clipId,
+                      side: 'left',
+                      mode,
+                      initialMouseX: mouseX,
+                      initialStartSec: s,
+                      initialInSec: inPt,
+                      initialOutSec: outPt,
+                      initialDurSec: dur,
+                      sourceSpan,
+                      speed: spd,
+                    });
                   }}
-                  onStartTrimRight={(clipId, mouseX) => {
+                  onStartTrimRight={(clipId, mouseX, isAlt = false) => {
                     if (track.locked || track.isLocked) return;
+                    const c = track.clips.find((item) => item.id === clipId);
+                    if (!c) return;
                     pushHistory();
-                    setTrimmingClip({ id: clipId, side: 'right', initialMouseX: mouseX });
+                    const s = c.startPositionSeconds ?? (c.startTimeMs / 1000);
+                    const inPt = c.inPointSeconds ?? (c.sourceOffsetMs ? c.sourceOffsetMs / 1000 : 0);
+                    const dur = c.durationSeconds ?? (c.durationMs / 1000);
+                    const outPt = c.outPointSeconds ?? (inPt + dur);
+                    const spd = c.speedProfile?.speedMultiplier ?? 1.0;
+                    const mode = isAlt ? (edgeDragMode === 'stretch' ? 'trim' : 'stretch') : edgeDragMode;
+                    const sourceSpan = outPt > inPt ? outPt - inPt : dur * spd;
+                    setTrimmingClip({
+                      id: clipId,
+                      side: 'right',
+                      mode,
+                      initialMouseX: mouseX,
+                      initialStartSec: s,
+                      initialInSec: inPt,
+                      initialOutSec: outPt,
+                      initialDurSec: dur,
+                      sourceSpan,
+                      speed: spd,
+                    });
                   }}
                   fps={project.fps}
                   onContextMenu={setContextMenu}
+                  onStartKeyframeDrag={handleStartKeyframeDrag}
+                  onRemoveKeyframe={removeKeyframe}
                   onTrackGapContextMenu={(e, trackId) => {
                     const scrollContainer = scrollContainerRef.current;
                     if (!scrollContainer) return;
@@ -1324,6 +1576,21 @@ export const Timeline: React.FC = () => {
             <Scissors size={13} />
             <span>Delete Gap (Ripple Pull)</span>
           </button>
+        </div>
+      )}
+
+      {/* Real-time floating tooltip pill during trimming or slow-motion stretching */}
+      {trimDragTooltip && (
+        <div
+          style={{ left: `${trimDragTooltip.x}px`, top: `${trimDragTooltip.y}px` }}
+          className={`fixed pointer-events-none z-[999999] px-2.5 py-1 rounded shadow-xl text-xs font-mono font-bold border backdrop-blur-md flex items-center gap-1.5 transition-none ${
+            trimDragTooltip.isSlowMo
+              ? 'bg-[#F59E0B]/95 text-[#0D0E11] border-[#F59E0B] shadow-[0_0_14px_rgba(245,158,11,0.5)]'
+              : 'bg-[#00F0FF]/95 text-[#0D0E11] border-[#00F0FF] shadow-[0_0_14px_rgba(0,240,255,0.5)]'
+          }`}
+        >
+          {trimDragTooltip.isSlowMo ? <Gauge size={13} /> : <Scissors size={13} />}
+          <span>{trimDragTooltip.text}</span>
         </div>
       )}
     </div>
@@ -1515,8 +1782,9 @@ interface DynamicTrackLaneProps {
     trackId: string,
     mediaType?: string
   ) => void;
-  onStartTrimLeft: (id: string, clientX: number) => void;
-  onStartTrimRight: (id: string, clientX: number) => void;
+  edgeDragMode?: 'trim' | 'stretch';
+  onStartTrimLeft: (id: string, clientX: number, isAlt?: boolean) => void;
+  onStartTrimRight: (id: string, clientX: number, isAlt?: boolean) => void;
   onDragOver: (e: React.DragEvent) => void;
   onDragLeave: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent) => void;
@@ -1530,6 +1798,14 @@ interface DynamicTrackLaneProps {
     hasAttachedAudio: boolean;
   }) => void;
   onTrackGapContextMenu?: (e: React.MouseEvent, trackId: string) => void;
+  onStartKeyframeDrag?: (
+    clipId: string,
+    property: string,
+    time: number,
+    mouseX: number,
+    clipDurationSec: number
+  ) => void;
+  onRemoveKeyframe?: (clipId: string, property: string, time: number) => void;
   fps?: number;
 }
 
@@ -1550,6 +1826,7 @@ const DynamicTrackLane: React.FC<DynamicTrackLaneProps> = ({
   updateTransition,
   removeTransition,
   activeDragTransition = null,
+  edgeDragMode = 'trim',
   onSelectClip,
   onStartDragClip,
   onStartTrimLeft,
@@ -1559,6 +1836,8 @@ const DynamicTrackLane: React.FC<DynamicTrackLaneProps> = ({
   onDrop,
   onContextMenu,
   onTrackGapContextMenu,
+  onStartKeyframeDrag,
+  onRemoveKeyframe,
   fps = 30,
 }) => {
   const isVideo = track.trackType === 'video' || track.type === 'video';
@@ -1693,6 +1972,14 @@ const DynamicTrackLane: React.FC<DynamicTrackLaneProps> = ({
                       <div className="absolute top-1.5 left-2 right-2 flex items-center justify-between text-[10px] font-semibold text-white drop-shadow-md truncate pointer-events-none z-10">
                         <span className="truncate bg-black/60 px-1.5 py-0.5 rounded backdrop-blur-xs">{clip.name}</span>
                         <div className="flex items-center gap-1 shrink-0">
+                          {clip.speedProfile && clip.speedProfile.speedMultiplier !== 1.0 && (
+                            <div
+                              className="flex items-center px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-[#F59E0B]/90 text-[#0D0E11] shadow-xs"
+                              title={`Speed Ramping: ${clip.speedProfile.speedMultiplier}x`}
+                            >
+                              <span>[{clip.speedProfile.speedMultiplier}x]</span>
+                            </div>
+                          )}
                           {(clip.hasProxy || clip.proxyPath) && (
                             <div
                               className="flex items-center px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-[#10B981]/90 text-[#0D0E11] shadow-xs"
@@ -1774,6 +2061,14 @@ const DynamicTrackLane: React.FC<DynamicTrackLaneProps> = ({
                         )}
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
+                        {clip.speedProfile && clip.speedProfile.speedMultiplier !== 1.0 && (
+                          <div
+                            className="flex items-center px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-[#F59E0B]/90 text-[#0D0E11] shadow-xs"
+                            title={`Speed Ramping: ${clip.speedProfile.speedMultiplier}x`}
+                          >
+                            <span>[{clip.speedProfile.speedMultiplier}x]</span>
+                          </div>
+                        )}
                         {(clip.hasProxy || clip.proxyPath) && (
                           <div
                             className="flex items-center px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-[#10B981]/90 text-[#0D0E11] shadow-xs"
@@ -1807,15 +2102,25 @@ const DynamicTrackLane: React.FC<DynamicTrackLaneProps> = ({
                       <Mic size={10} className="text-[#F59E0B]" />
                       <span className="truncate bg-black/60 px-1.5 py-0.5 rounded backdrop-blur-xs">{clip.name}</span>
                     </div>
-                    {clip.synced && (
-                      <div
-                        className="flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-[#10B981]/90 text-[#0D0E11] shadow-xs shrink-0"
-                        title="Synced with earliest clip anchor"
-                      >
-                        <CheckCircle2 size={10} />
-                        <span>SYNCED</span>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-1 shrink-0">
+                      {clip.speedProfile && clip.speedProfile.speedMultiplier !== 1.0 && (
+                        <div
+                          className="flex items-center px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-[#F59E0B]/90 text-[#0D0E11] shadow-xs"
+                          title={`Speed Ramping: ${clip.speedProfile.speedMultiplier}x`}
+                        >
+                          <span>[{clip.speedProfile.speedMultiplier}x]</span>
+                        </div>
+                      )}
+                      {clip.synced && (
+                        <div
+                          className="flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-[#10B981]/90 text-[#0D0E11] shadow-xs shrink-0"
+                          title="Synced with earliest clip anchor"
+                        >
+                          <CheckCircle2 size={10} />
+                          <span>SYNCED</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {/* White Continuous Oscillating Waveform (Reference image style) */}
@@ -1859,28 +2164,86 @@ const DynamicTrackLane: React.FC<DynamicTrackLaneProps> = ({
                 </div>
               )}
 
-              {/* Left Trim Handle */}
+              {/* Keyframe Sub-Lane Visualizer */}
+              {clip.keyframeTracks && clip.keyframeTracks.some((t) => t.keyframes.length > 0) && (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute bottom-0 left-0 right-0 h-4 bg-black/85 border-t border-[#00F0FF]/40 z-20 flex items-center px-1 select-none"
+                  title="Keyframe Track Sub-Lane: Drag diamond to adjust animation timing, double-click to delete"
+                >
+                  <div className="flex items-center gap-1 text-[8px] font-mono font-bold text-[#00F0FF] shrink-0 pointer-events-none mr-1.5">
+                    <Diamond size={8} fill="currentColor" />
+                    <span>KF</span>
+                  </div>
+
+                  {/* Keyframe Diamond Points */}
+                  <div className="relative flex-1 h-full">
+                    {clip.keyframeTracks.flatMap((track) =>
+                      track.keyframes.map((kf, kfIdx) => {
+                        const kfPct = Math.min(100, Math.max(0, (kf.time / durSec) * 100));
+                        return (
+                          <div
+                            key={`${track.property}-${kfIdx}-${kf.time}`}
+                            style={{ left: `${kfPct}%` }}
+                            onMouseDown={(e) => {
+                              e.stopPropagation();
+                              e.preventDefault();
+                              onStartKeyframeDrag?.(clip.id, track.property, kf.time, e.clientX, durSec);
+                            }}
+                            onDoubleClick={(e) => {
+                              e.stopPropagation();
+                              onRemoveKeyframe?.(clip.id, track.property, kf.time);
+                            }}
+                            title={`${track.property}: ${kf.value} at ${kf.time.toFixed(2)}s\n(Drag to move, double-click to delete)`}
+                            className="absolute top-1/2 -mt-1.5 -ml-1.5 w-3 h-3 rotate-45 bg-[#00F0FF] border border-black shadow-[0_0_6px_#00F0FF] hover:scale-130 transition-transform cursor-ew-resize z-30"
+                          />
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Left Trim / Slow-Mo Stretch Handle */}
               <div
                 onMouseDown={(e) => {
                   e.stopPropagation();
-                  onStartTrimLeft(clip.id, e.clientX);
+                  e.preventDefault();
+                  onStartTrimLeft(clip.id, e.clientX, e.altKey);
                 }}
-                className="absolute left-0 top-0 bottom-0 w-2.5 bg-black/30 hover:bg-[#00F0FF] group-hover:bg-[#00F0FF]/40 transition-colors cursor-w-resize z-20 flex items-center justify-center"
-                title="Drag to trim In-point"
+                className={`absolute left-0 top-0 bottom-0 w-3.5 transition-colors cursor-col-resize z-25 flex items-center justify-center shadow-xs ${
+                  edgeDragMode === 'stretch'
+                    ? 'bg-amber-950/40 hover:bg-[#F59E0B] group-hover:bg-[#F59E0B]/30'
+                    : 'bg-black/40 hover:bg-[#00F0FF] group-hover:bg-[#00F0FF]/30'
+                }`}
+                title={
+                  edgeDragMode === 'stretch'
+                    ? 'Rate Stretch: Drag right to speed-up, drag left to slow-motion (Hold Alt for Trim)'
+                    : 'Trim / Recover: Drag left to recover hidden video, drag right to trim (Hold Alt for Slow-Mo)'
+                }
               >
-                <div className="w-[1.5px] h-3 bg-white/60 rounded-full" />
+                <div className={`w-[2px] h-4 rounded-full ${edgeDragMode === 'stretch' ? 'bg-[#F59E0B]' : 'bg-white/70'}`} />
               </div>
 
-              {/* Right Trim Handle */}
+              {/* Right Trim / Slow-Mo Stretch Handle */}
               <div
                 onMouseDown={(e) => {
                   e.stopPropagation();
-                  onStartTrimRight(clip.id, e.clientX);
+                  e.preventDefault();
+                  onStartTrimRight(clip.id, e.clientX, e.altKey);
                 }}
-                className="absolute right-0 top-0 bottom-0 w-2.5 bg-black/30 hover:bg-[#00F0FF] group-hover:bg-[#00F0FF]/40 transition-colors cursor-e-resize z-20 flex items-center justify-center"
-                title="Drag to trim Out-point"
+                className={`absolute right-0 top-0 bottom-0 w-3.5 transition-colors cursor-col-resize z-25 flex items-center justify-center shadow-xs ${
+                  edgeDragMode === 'stretch'
+                    ? 'bg-amber-950/40 hover:bg-[#F59E0B] group-hover:bg-[#F59E0B]/30'
+                    : 'bg-black/40 hover:bg-[#00F0FF] group-hover:bg-[#00F0FF]/30'
+                }`}
+                title={
+                  edgeDragMode === 'stretch'
+                    ? 'Rate Stretch: Drag right to stretch into Slow-Mo, drag left to speed-up (Hold Alt for Trim)'
+                    : 'Trim / Recover: Drag right to recover hidden video, drag left to trim (Hold Alt for Slow-Mo)'
+                }
               >
-                <div className="w-[1.5px] h-3 bg-white/60 rounded-full" />
+                <div className={`w-[2px] h-4 rounded-full ${edgeDragMode === 'stretch' ? 'bg-[#F59E0B]' : 'bg-white/70'}`} />
               </div>
             </div>
 

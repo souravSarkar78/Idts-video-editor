@@ -13,6 +13,30 @@ export const Play: React.FC<IconProps> = ({ size = 24, color = 'currentColor', s
   </svg>
 );
 
+export const Diamond: React.FC<IconProps> = ({ size = 24, color = 'currentColor', strokeWidth = 2, className, fill = 'none', ...props }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+    <polygon points="12 2 22 12 12 22 2 12 12 2" />
+  </svg>
+);
+
+export const RotateCw: React.FC<IconProps> = ({ size = 24, color = 'currentColor', strokeWidth = 2, className, ...props }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+    <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+    <polyline points="21 3 21 8 16 8" />
+  </svg>
+);
+
+export const Move: React.FC<IconProps> = ({ size = 24, color = 'currentColor', strokeWidth = 2, className, ...props }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+    <polyline points="5 9 2 12 5 15" />
+    <polyline points="9 5 12 2 15 5" />
+    <polyline points="15 19 12 22 9 19" />
+    <polyline points="19 9 22 12 19 15" />
+    <line x1="2" y1="12" x2="22" y2="12" />
+    <line x1="12" y1="2" x2="12" y2="22" />
+  </svg>
+);
+
 export const Pause: React.FC<IconProps> = ({ size = 24, color = 'currentColor', strokeWidth = 2, className, ...props }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill={props.fill || 'none'} stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
     <rect x="6" y="4" width="4" height="16" />
@@ -562,7 +586,8 @@ const allIcons = {
   Split, Filter, HelpCircle, Zap, Maximize, Maximize2, Folder, FolderOpen, FolderPlus,
   Upload, Grid, List, Plus, Trash2, Search, RotateCcw, Check, Scissors, Wand2, Tv, ArrowRight, Gauge, Cpu, Settings, Magnet,
   FilePlus, Save, SaveAll, Keyboard, Command, Info, Undo2, Redo2,
-  ArrowLeft, ArrowUp, ArrowDown, MoveRight, Sun, Moon, Palette, Thermometer
+  ArrowLeft, ArrowUp, ArrowDown, MoveRight, Sun, Moon, Palette, Thermometer,
+  Diamond, RotateCw, Move
 };
 
 export default allIcons;

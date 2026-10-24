@@ -13,10 +13,13 @@ use tauri_plugin_shell::process::Command;
 use tauri_plugin_shell::ShellExt;
 
 use crate::engine::filtergraph::{
-    build_color_filter_chain, escape_ffmpeg_filter_path, FilterGraph, VideoEncoder,
+    build_color_filter_chain, build_lens_effects_filter_chain, build_motion_transform_filters,
+    build_speed_audio_filters, build_speed_video_filters, escape_ffmpeg_filter_path, FilterGraph,
+    VideoEncoder,
 };
 use crate::models::ipc::{
-    ColorCorrection, ExportConfig as IpcExportConfig, ExportProgress, MediaType, TrackType, Transition,
+    ColorCorrection, ExportConfig as IpcExportConfig, ExportProgress, KeyframeTrack, LensEffects,
+    MediaType, SpeedProfile, TrackType, Transition,
 };
 
 /// Canonical Tauri sidecar executable names registered in `tauri.conf.json`.
@@ -475,6 +478,14 @@ struct ExportClipItem {
     temperature: Option<f32>,
     lut_path: Option<String>,
     volume_db: Option<f32>,
+    scale: Option<f32>,
+    position_x: Option<f32>,
+    position_y: Option<f32>,
+    rotation: Option<f32>,
+    opacity: Option<f32>,
+    keyframe_tracks: Option<Vec<KeyframeTrack>>,
+    speed_profile: Option<SpeedProfile>,
+    lens_effects: Option<LensEffects>,
 }
 
 /// Executes timeline project export via FFmpeg sidecar, streaming real-time progress events.
@@ -564,6 +575,14 @@ pub fn execute_export<R: Runtime>(
                 temperature: t,
                 lut_path: lut,
                 volume_db: clip.volume_db,
+                scale: clip.scale,
+                position_x: clip.position_x,
+                position_y: clip.position_y,
+                rotation: clip.rotation,
+                opacity: clip.opacity,
+                keyframe_tracks: clip.keyframe_tracks.clone(),
+                speed_profile: clip.speed_profile.clone(),
+                lens_effects: clip.lens_effects.clone(),
             });
             input_idx += 1;
         }
@@ -707,15 +726,24 @@ fn run_ffmpeg_export_process<R: Runtime>(
         let start = clip.start_sec;
         let end = clip.start_sec + clip.duration_sec;
 
-        let mut v_filters = vec![
-            format!("scale={}:{}:force_original_aspect_ratio=decrease", width, height),
-            format!("pad={}:{}:(ow-iw)/2:(oh-ih)/2", width, height),
-            "setsar=1".to_string(),
-            format!("fps=fps={:.2}", fps),
-            format!("setpts=PTS-STARTPTS+{:.3}/TB", start),
-        ];
+        let mut v_filters = Vec::new();
 
-        // Clip-level Inspector color adjustments (eq, colorbalance temperature, 3D LUT)
+        // 1. Speed retiming & optical flow
+        let speed_v = build_speed_video_filters(clip.speed_profile.as_ref());
+        v_filters.extend(speed_v);
+
+        // 2. Lens Effects (defish & blur)
+        let lens_v = build_lens_effects_filter_chain(clip.lens_effects.as_ref());
+        v_filters.extend(lens_v);
+
+        // 3. Base scaling and standard aspect conform
+        v_filters.push(format!("scale={}:{}:force_original_aspect_ratio=decrease", width, height));
+        v_filters.push(format!("pad={}:{}:(ow-iw)/2:(oh-ih)/2", width, height));
+        v_filters.push("setsar=1".to_string());
+        v_filters.push(format!("fps=fps={:.2}", fps));
+        v_filters.push(format!("setpts=PTS-STARTPTS+{:.3}/TB", start));
+
+        // 4. Clip-level Inspector color adjustments (eq, colorbalance temperature, 3D LUT)
         let color_corr = ColorCorrection {
             brightness: clip.brightness.unwrap_or(0.0),
             contrast: clip.contrast.unwrap_or(1.0),
@@ -726,7 +754,7 @@ fn run_ffmpeg_export_process<R: Runtime>(
         let color_filters = build_color_filter_chain(&color_corr);
         v_filters.extend(color_filters);
 
-        // Transition in from prior clip on the same track
+        // 5. Transition in from prior clip on the same track
         if let Some(trans) = transitions.iter().find(|t| t.to_clip_id == clip.id) {
             let dur = trans.duration.min(clip.duration_sec * 0.5).max(0.1);
             match trans.transition_type.to_lowercase().as_str() {
@@ -748,14 +776,27 @@ fn run_ffmpeg_export_process<R: Runtime>(
             v_filters.push(format!("fade=t=out:st={:.3}:d={:.3}:alpha=1", (end - dur).max(start), dur));
         }
 
+        // 6. Motion transforms & Keyframing (scale, rotate, opacity, position overlay)
+        let (transform_filters, overlay_x, overlay_y) = build_motion_transform_filters(
+            clip.scale,
+            clip.position_x,
+            clip.position_y,
+            clip.rotation,
+            clip.opacity,
+            clip.keyframe_tracks.as_deref(),
+            width,
+            height,
+        );
+        v_filters.extend(transform_filters);
+
         filter_chains.push(format!(
             "[{}:v]{}[{}]",
             clip.input_index, v_filters.join(","), v_scaled
         ));
 
         filter_chains.push(format!(
-            "[{}][{}]overlay=enable='between(t,{:.3},{:.3})':eof_action=pass[{}]",
-            last_v, v_scaled, start, end, next_v
+            "[{}][{}]overlay={}:{}:enable='between(t,{:.3},{:.3})':eof_action=pass[{}]",
+            last_v, v_scaled, overlay_x, overlay_y, start, end, next_v
         ));
         last_v = next_v;
     }
@@ -779,7 +820,13 @@ fn run_ffmpeg_export_process<R: Runtime>(
         for (idx, clip) in audio_clips.iter().enumerate() {
             let a_delayed = format!("a_del_{}", idx);
             let delay_ms = (clip.start_sec * 1000.0).round() as i64;
-            let mut a_filters = vec![format!("adelay={}|{}", delay_ms, delay_ms)];
+            let mut a_filters = Vec::new();
+
+            // Speed audio tempo cascading or pitch correction
+            let speed_a = build_speed_audio_filters(clip.speed_profile.as_ref());
+            a_filters.extend(speed_a);
+
+            a_filters.push(format!("adelay={}|{}", delay_ms, delay_ms));
 
             // Clip-level Inspector audio volume in dB
             if let Some(vol_db) = clip.volume_db {

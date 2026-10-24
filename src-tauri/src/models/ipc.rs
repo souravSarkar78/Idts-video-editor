@@ -81,6 +81,62 @@ pub struct ClipMetadata {
     pub file_size_bytes: Option<u64>,
 }
 
+/// Individual keyframe point on an animation track
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct KeyframePoint {
+    pub time: f64,       // seconds relative to clip start
+    pub value: f32,
+    pub easing: String,  // "linear", "ease_in_out"
+}
+
+/// Keyframe track binding a specific animatable property to an array of keyframe points
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct KeyframeTrack {
+    pub property: String, // "scale", "position_x", "position_y", "rotation", "opacity"
+    pub keyframes: Vec<KeyframePoint>,
+}
+
+/// Clip playback speed configuration
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SpeedProfile {
+    #[serde(default = "default_speed_multiplier")]
+    pub speed_multiplier: f32, // 0.1 to 16.0, default 1.0
+    #[serde(default = "default_true_val")]
+    pub pitch_correction: bool, // default true
+}
+
+fn default_speed_multiplier() -> f32 {
+    1.0
+}
+
+fn default_true_val() -> bool {
+    true
+}
+
+impl Default for SpeedProfile {
+    fn default() -> Self {
+        Self {
+            speed_multiplier: 1.0,
+            pitch_correction: true,
+        }
+    }
+}
+
+/// Optical lens distortion and blur parameters
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct LensEffects {
+    #[serde(default)]
+    pub defish_enabled: bool,
+    #[serde(default)]
+    pub defish_strength: f32, // -1.0 to 1.0
+    #[serde(default)]
+    pub gaussian_blur: f32,   // 0.0 to 50.0
+}
+
 /// A media clip placed on a timeline track
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -142,6 +198,24 @@ pub struct Clip {
     pub proxy_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub has_proxy: Option<bool>,
+
+    // Phase 8: Motion Transform Controls, Keyframing, Speed Ramping, Lens Effects
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scale: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub position_x: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub position_y: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rotation: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub opacity: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keyframe_tracks: Option<Vec<KeyframeTrack>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub speed_profile: Option<SpeedProfile>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lens_effects: Option<LensEffects>,
 }
 
 impl Clip {
@@ -189,6 +263,14 @@ impl Clip {
             has_audio: Some(true),
             proxy_path: None,
             has_proxy: Some(false),
+            scale: None,
+            position_x: None,
+            position_y: None,
+            rotation: None,
+            opacity: None,
+            keyframe_tracks: None,
+            speed_profile: None,
+            lens_effects: None,
         }
     }
 }

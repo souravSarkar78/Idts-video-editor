@@ -14,9 +14,11 @@ import {
   Video,
   Scissors,
   Zap,
+  Move,
 } from 'lucide-react';
+import { RotateCw } from '@/components/Icons';
 import { useShallow } from 'zustand/react/shallow';
-import { useTimelineStore, isTauri } from '../../store/timelineStore';
+import { useTimelineStore, isTauri, getInterpolatedClipTransform } from '../../store/timelineStore';
 import { formatTimecode } from '../../utils/timecode';
 import { Clip } from '../../types/ipc';
 
@@ -39,6 +41,8 @@ export const ProgramMonitor: React.FC = () => {
     isProxyMode,
     toggleProxyMode,
     transitions,
+    selectedClipId,
+    updateClipTransform,
   } = useTimelineStore(
     useShallow((state) => ({
       playhead: state.playhead,
@@ -58,6 +62,8 @@ export const ProgramMonitor: React.FC = () => {
       isProxyMode: state.isProxyMode,
       toggleProxyMode: state.toggleProxyMode,
       transitions: state.transitions,
+      selectedClipId: state.selectedClipId,
+      updateClipTransform: state.updateClipTransform,
     }))
   );
 
@@ -400,17 +406,34 @@ export const ProgramMonitor: React.FC = () => {
     existingClipIds,
   ]);
 
+  const getFreshClip = (clip: Clip | null | undefined): Clip | null => {
+    if (!clip) return null;
+    for (const t of tracks || []) {
+      const c = t.clips?.find((item) => item.id === clip.id);
+      if (c) return c;
+    }
+    return clip;
+  };
+
   const getClipSeekTime = (clip: Clip, ph: number): number => {
     const s = clip.startPositionSeconds ?? (clip.startTimeMs != null ? clip.startTimeMs / 1000 : 0);
     const inPoint = clip.inPointSeconds ?? (clip.sourceOffsetMs != null ? clip.sourceOffsetMs / 1000 : 0);
     const dur = clip.durationSeconds ?? (clip.durationMs != null ? clip.durationMs / 1000 : 10);
-    if (ph < s) {
+    const speed = clip.speedProfile?.speedMultiplier ?? 1.0;
+    const sourceDur =
+      clip.outPointSeconds != null && clip.outPointSeconds > inPoint
+        ? clip.outPointSeconds - inPoint
+        : dur * speed;
+
+    if (ph <= s) {
       return inPoint;
     }
-    if (ph > s + dur) {
-      return Math.max(inPoint, inPoint + dur - 0.03);
+    if (ph >= s + dur) {
+      return Math.max(inPoint, inPoint + sourceDur - 0.03);
     }
-    return ph - s + inPoint;
+    const timelineElapsed = ph - s;
+    const sourceElapsed = timelineElapsed * speed;
+    return Math.min(inPoint + sourceDur, inPoint + sourceElapsed);
   };
 
   // Compute real-time CSS filter style from clip's inspector adjustments & temperature
@@ -452,7 +475,13 @@ export const ProgramMonitor: React.FC = () => {
       lutFilter = ' contrast(1.08)';
     }
 
-    return `brightness(${brightnessVal}) contrast(${contrastVal}) saturate(${saturateVal})${tempFilter}${lutFilter}`;
+    let blurFilter = '';
+    const blur = targetClip.lensEffects?.gaussianBlur ?? 0;
+    if (blur > 0.05) {
+      blurFilter = ` blur(${Math.min(25, blur * 0.5)}px)`;
+    }
+
+    return `brightness(${brightnessVal}) contrast(${contrastVal}) saturate(${saturateVal})${tempFilter}${lutFilter}${blurFilter}`;
   };
 
   // Sync audio volume levels
@@ -496,7 +525,8 @@ export const ProgramMonitor: React.FC = () => {
   useEffect(() => {
     if (isPlaying) {
       const activeVid = activePlayer === 'player1' ? videoRef.current : incomingVideoRef.current;
-      const activeClip = activePlayer === 'player1' ? player1Clip : player2Clip;
+      const rawClip = activePlayer === 'player1' ? player1Clip : player2Clip;
+      const activeClip = getFreshClip(rawClip);
       if (activeVid && activeClip && currentActiveClip && activeClip.id === currentActiveClip.id) {
         const targetTime = getClipSeekTime(activeClip, playhead);
         const diff = Math.abs(activeVid.currentTime - targetTime);
@@ -514,12 +544,14 @@ export const ProgramMonitor: React.FC = () => {
     }
 
     if (videoRef.current && player1Clip && player1Clip.id === currentActiveClip.id) {
-      videoRef.current.currentTime = getClipSeekTime(player1Clip, playhead);
+      const fresh1 = getFreshClip(player1Clip) || player1Clip;
+      videoRef.current.currentTime = getClipSeekTime(fresh1, playhead);
     }
     if (incomingVideoRef.current && player2Clip && player2Clip.id === currentActiveClip.id) {
-      incomingVideoRef.current.currentTime = getClipSeekTime(player2Clip, playhead);
+      const fresh2 = getFreshClip(player2Clip) || player2Clip;
+      incomingVideoRef.current.currentTime = getClipSeekTime(fresh2, playhead);
     }
-  }, [playhead, isPlaying, player1Clip, player2Clip, activePlayer, currentActiveClip]);
+  }, [playhead, isPlaying, player1Clip, player2Clip, activePlayer, currentActiveClip, tracks]);
 
   // Continuous smooth requestAnimationFrame playback loop driven by hardware decoder clock
   useEffect(() => {
@@ -532,11 +564,17 @@ export const ProgramMonitor: React.FC = () => {
     }
 
     const curVid = activePlayerRef.current === 'player2' ? incomingVideoRef.current : videoRef.current;
-    const curClip = activePlayerRef.current === 'player2' ? player2Clip : player1Clip;
+    const rawCurClip = activePlayerRef.current === 'player2' ? player2Clip : player1Clip;
+    const curClip = getFreshClip(rawCurClip);
     // Only play video element if playhead is currently over a valid active video clip!
     if (currentActiveClip && curClip?.id === currentActiveClip.id) {
-      if (curVid && curVid.paused) {
-        curVid.play().catch(() => {});
+      if (curVid) {
+        const speed = curClip.speedProfile?.speedMultiplier ?? 1.0;
+        curVid.playbackRate = Math.max(0.1, Math.min(16.0, speed));
+        (curVid as any).preservesPitch = curClip.speedProfile?.pitchCorrection ?? true;
+        if (curVid.paused) {
+          curVid.play().catch(() => {});
+        }
       }
     } else {
       if (videoRef.current && !videoRef.current.paused) videoRef.current.pause();
@@ -557,12 +595,15 @@ export const ProgramMonitor: React.FC = () => {
       // Master video clock is the active player (only if currently inside the active clip)
       const topClip = getTopClipAt(nextPlayhead);
       const masterVideo = activePlayerRef.current === 'player2' ? incomingVideoRef.current : videoRef.current;
-      const masterClip = activePlayerRef.current === 'player2' ? player2Clip : player1Clip;
+      const rawMasterClip = activePlayerRef.current === 'player2' ? player2Clip : player1Clip;
+      const masterClip = getFreshClip(rawMasterClip);
 
       if (topClip && masterVideo && !masterVideo.paused && !masterVideo.seeking && masterClip && masterClip.id === topClip.id) {
         const clipStart = masterClip.startPositionSeconds ?? (masterClip.startTimeMs ? masterClip.startTimeMs / 1000 : 0);
         const inPoint = masterClip.inPointSeconds ?? (masterClip.sourceOffsetMs ? masterClip.sourceOffsetMs / 1000 : 0);
-        const calculatedPlayhead = clipStart + masterVideo.currentTime - inPoint;
+        const speed = masterClip.speedProfile?.speedMultiplier ?? 1.0;
+        const sourceElapsed = masterVideo.currentTime - inPoint;
+        const calculatedPlayhead = clipStart + (sourceElapsed / speed);
         const drift = calculatedPlayhead - state.playhead;
         if (Math.abs(drift) > 0.25 && Math.abs(drift) < 2.0) {
           nextPlayhead = state.playhead + deltaSec + drift * 0.15;
@@ -576,16 +617,28 @@ export const ProgramMonitor: React.FC = () => {
             activePlayerRef.current = 'player1';
             setActivePlayer('player1');
           }
-          if (videoRef.current && videoRef.current.paused) {
-            videoRef.current.play().catch(() => {});
+          if (videoRef.current) {
+            const fresh1 = getFreshClip(player1Clip) || player1Clip;
+            const speed = fresh1.speedProfile?.speedMultiplier ?? 1.0;
+            videoRef.current.playbackRate = Math.max(0.1, Math.min(16.0, speed));
+            (videoRef.current as any).preservesPitch = fresh1.speedProfile?.pitchCorrection ?? true;
+            if (videoRef.current.paused) {
+              videoRef.current.play().catch(() => {});
+            }
           }
         } else if (player2Clip?.id === topClip.id) {
           if (activePlayerRef.current !== 'player2') {
             activePlayerRef.current = 'player2';
             setActivePlayer('player2');
           }
-          if (incomingVideoRef.current && incomingVideoRef.current.paused) {
-            incomingVideoRef.current.play().catch(() => {});
+          if (incomingVideoRef.current) {
+            const fresh2 = getFreshClip(player2Clip) || player2Clip;
+            const speed = fresh2.speedProfile?.speedMultiplier ?? 1.0;
+            incomingVideoRef.current.playbackRate = Math.max(0.1, Math.min(16.0, speed));
+            (incomingVideoRef.current as any).preservesPitch = fresh2.speedProfile?.pitchCorrection ?? true;
+            if (incomingVideoRef.current.paused) {
+              incomingVideoRef.current.play().catch(() => {});
+            }
           }
         }
       } else {
@@ -596,18 +649,22 @@ export const ProgramMonitor: React.FC = () => {
 
       // Pre-roll standby player if approaching upcoming clip (within 0.8s)
       const standbyVideo = activePlayerRef.current === 'player2' ? videoRef.current : incomingVideoRef.current;
-      const standbyClip = activePlayerRef.current === 'player2' ? player1Clip : player2Clip;
+      const rawStandbyClip = activePlayerRef.current === 'player2' ? player1Clip : player2Clip;
+      const standbyClip = getFreshClip(rawStandbyClip);
       if (standbyVideo && standbyClip && standbyVideo.readyState >= 1) {
         const startSec = standbyClip.startPositionSeconds ?? (standbyClip.startTimeMs ? standbyClip.startTimeMs / 1000 : 0);
-        const inPoint = standbyClip.inPointSeconds ?? (standbyClip.sourceOffsetMs ? standbyClip.sourceOffsetMs / 1000 : 0);
         const curActiveClip = activePlayerRef.current === 'player2' ? player2Clip : player1Clip;
-        const activeEndSec = curActiveClip
-          ? (curActiveClip.startPositionSeconds ?? (curActiveClip.startTimeMs ? curActiveClip.startTimeMs / 1000 : 0)) +
-            (curActiveClip.durationSeconds ?? (curActiveClip.durationMs ? curActiveClip.durationMs / 1000 : 10))
+        const freshCurActive = getFreshClip(curActiveClip);
+        const activeEndSec = freshCurActive
+          ? (freshCurActive.startPositionSeconds ?? (freshCurActive.startTimeMs ? freshCurActive.startTimeMs / 1000 : 0)) +
+            (freshCurActive.durationSeconds ?? (freshCurActive.durationMs ? freshCurActive.durationMs / 1000 : 10))
           : 0;
 
         if (nextPlayhead >= activeEndSec - 0.8 || nextPlayhead >= startSec - 0.8) {
-          const targetTime = Math.max(0, nextPlayhead - startSec + inPoint);
+          const targetTime = getClipSeekTime(standbyClip, nextPlayhead);
+          const standbySpeed = standbyClip.speedProfile?.speedMultiplier ?? 1.0;
+          standbyVideo.playbackRate = Math.max(0.1, Math.min(16.0, standbySpeed));
+          (standbyVideo as any).preservesPitch = standbyClip.speedProfile?.pitchCorrection ?? true;
           if (standbyVideo.paused) {
             standbyVideo.currentTime = targetTime;
             standbyVideo.play().catch(() => {});
@@ -634,7 +691,7 @@ export const ProgramMonitor: React.FC = () => {
       if (videoRef.current && !videoRef.current.paused) videoRef.current.pause();
       if (incomingVideoRef.current && !incomingVideoRef.current.paused) incomingVideoRef.current.pause();
     };
-  }, [isPlaying, isVideoLoaded, isIncomingVideoLoaded, player1Clip, player2Clip, currentActiveClip]);
+  }, [isPlaying, isVideoLoaded, isIncomingVideoLoaded, player1Clip, player2Clip, currentActiveClip, tracks]);
 
   // Audio VU meter dynamics during playback
   useEffect(() => {
@@ -902,33 +959,153 @@ export const ProgramMonitor: React.FC = () => {
     }
   };
 
+  // Selected clip for direct transform manipulation
+  const selectedClip = useMemo(() => {
+    if (!selectedClipId) return null;
+    for (const t of tracks) {
+      const c = t.clips.find((item) => item.id === selectedClipId);
+      if (c) return c;
+    }
+    return null;
+  }, [tracks, selectedClipId]);
+
+  const selectedClipTransform = useMemo(() => {
+    if (!selectedClip) return null;
+    return getInterpolatedClipTransform(selectedClip, playhead);
+  }, [selectedClip, playhead]);
+
+  // Direct manipulation bounding box interaction state
+  const [activeHandle, setActiveHandle] = useState<
+    'center' | 'rotate' | 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | null
+  >(null);
+  const dragStartRef = useRef<{
+    clipId: string;
+    mouseX: number;
+    mouseY: number;
+    initialPosX: number;
+    initialPosY: number;
+    initialScale: number;
+    initialRotation: number;
+    initialDist: number;
+    centerX: number;
+    centerY: number;
+  } | null>(null);
+
+  const handleStartTransformDrag = (
+    handle: 'center' | 'rotate' | 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w',
+    e: React.MouseEvent
+  ) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!selectedClip || !selectedClipTransform) return;
+
+    const viewportRect = canvasRef.current?.getBoundingClientRect();
+    const centerX = viewportRect
+      ? viewportRect.left + viewportRect.width / 2 + selectedClipTransform.positionX
+      : e.clientX;
+    const centerY = viewportRect
+      ? viewportRect.top + viewportRect.height / 2 + selectedClipTransform.positionY
+      : e.clientY;
+    const initialDist = Math.hypot(e.clientX - centerX, e.clientY - centerY);
+
+    setActiveHandle(handle);
+    dragStartRef.current = {
+      clipId: selectedClip.id,
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      initialPosX: selectedClipTransform.positionX,
+      initialPosY: selectedClipTransform.positionY,
+      initialScale: selectedClipTransform.scale,
+      initialRotation: selectedClipTransform.rotation,
+      initialDist,
+      centerX,
+      centerY,
+    };
+  };
+
+  useEffect(() => {
+    if (!activeHandle || !dragStartRef.current) return;
+
+    const onMouseMove = (e: MouseEvent) => {
+      const start = dragStartRef.current;
+      if (!start) return;
+
+      const deltaX = e.clientX - start.mouseX;
+      const deltaY = e.clientY - start.mouseY;
+
+      if (activeHandle === 'center') {
+        const newX = Math.round(start.initialPosX + deltaX);
+        const newY = Math.round(start.initialPosY + deltaY);
+        updateClipTransform(start.clipId, { positionX: newX, positionY: newY });
+      } else if (activeHandle === 'rotate') {
+        const angleRad = Math.atan2(e.clientY - start.centerY, e.clientX - start.centerX);
+        let angleDeg = Math.round((angleRad * 180) / Math.PI + 90);
+        if (angleDeg < -180) angleDeg += 360;
+        if (angleDeg > 180) angleDeg -= 360;
+        updateClipTransform(start.clipId, { rotation: angleDeg });
+      } else {
+        // 8-direction scale handles
+        const currentDist = Math.hypot(e.clientX - start.centerX, e.clientY - start.centerY);
+        const ratio = currentDist / Math.max(10, start.initialDist);
+        const newScale = Math.max(0.1, Math.min(5.0, Number((start.initialScale * ratio).toFixed(2))));
+        updateClipTransform(start.clipId, { scale: newScale });
+      }
+    };
+
+    const onMouseUp = () => {
+      setActiveHandle(null);
+      dragStartRef.current = null;
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, [activeHandle]);
+
   const getPlayerStyle = (player: 'player1' | 'player2'): React.CSSProperties => {
+    const rawClip = player === 'player1' ? player1Clip : player2Clip;
+    const thisClip = getFreshClip(rawClip);
+    const transform = thisClip ? getInterpolatedClipTransform(thisClip, playhead) : null;
+    const dynamicTransformStyle: React.CSSProperties = transform
+      ? {
+          transform: `translate(${transform.positionX}px, ${transform.positionY}px) rotate(${transform.rotation}deg) scale(${transform.scale})`,
+          transformOrigin: 'center center',
+          opacity: transform.opacity,
+        }
+      : {
+          transformOrigin: 'center center',
+        };
+
     if (activeTransitionInfo && activeTransitionInfo.isActive) {
       const fromClipId = activeTransitionInfo.fromClip?.id;
       const toClipId = activeTransitionInfo.toClip?.id;
 
-      const thisClip = player === 'player1' ? player1Clip : player2Clip;
       if (thisClip?.id === toClipId) {
         return {
           ...getIncomingTransitionStyle(activeTransitionInfo),
+          ...dynamicTransformStyle,
           zIndex: 10,
         };
       }
       if (thisClip?.id === fromClipId) {
         return {
           ...getPrimaryTransitionStyle(activeTransitionInfo),
+          ...dynamicTransformStyle,
           zIndex: 5,
         };
       }
     }
 
-    const thisClip = player === 'player1' ? player1Clip : player2Clip;
     // Only display this player if there is an active clip at playhead AND this player holds that exact clip!
     const isCurrent = Boolean(currentActiveClip && thisClip?.id === currentActiveClip.id);
 
     if (isCurrent) {
       return {
-        opacity: 1,
+        ...dynamicTransformStyle,
+        opacity: dynamicTransformStyle.opacity !== undefined ? dynamicTransformStyle.opacity : 1,
         zIndex: 10,
         pointerEvents: 'auto',
       };
@@ -1068,12 +1245,13 @@ export const ProgramMonitor: React.FC = () => {
               onLoadedMetadata={() => {
                 setIsVideoLoaded(true);
                 if (videoRef.current && player1Clip) {
-                  videoRef.current.currentTime = getClipSeekTime(player1Clip, playhead);
+                  const fresh1 = getFreshClip(player1Clip) || player1Clip;
+                  videoRef.current.currentTime = getClipSeekTime(fresh1, playhead);
                 }
               }}
               onError={() => setIsVideoLoaded(false)}
               style={{
-                filter: getInspectorFilterStyle(player1Clip),
+                filter: getInspectorFilterStyle(getFreshClip(player1Clip) || player1Clip),
                 ...getPlayerStyle('player1'),
               }}
               className="absolute inset-0 w-full h-full object-contain"
@@ -1093,12 +1271,13 @@ export const ProgramMonitor: React.FC = () => {
               onLoadedMetadata={() => {
                 setIsIncomingVideoLoaded(true);
                 if (incomingVideoRef.current && player2Clip) {
-                  incomingVideoRef.current.currentTime = getClipSeekTime(player2Clip, playhead);
+                  const fresh2 = getFreshClip(player2Clip) || player2Clip;
+                  incomingVideoRef.current.currentTime = getClipSeekTime(fresh2, playhead);
                 }
               }}
               onError={() => setIsIncomingVideoLoaded(false)}
               style={{
-                filter: getInspectorFilterStyle(player2Clip),
+                filter: getInspectorFilterStyle(getFreshClip(player2Clip) || player2Clip),
                 ...getPlayerStyle('player2'),
               }}
               className="absolute inset-0 w-full h-full object-contain"
@@ -1156,6 +1335,101 @@ export const ProgramMonitor: React.FC = () => {
             <div className="absolute top-2 right-2 px-2 py-0.5 rounded bg-[#A855F7]/80 text-white font-mono text-[9px] font-bold z-20 flex items-center gap-1 shadow-lg pointer-events-none animate-pulse">
               <Sparkles size={10} />
               <span className="capitalize">{activeTransitionInfo.transition.transitionType} ({activeTransitionInfo.transition.duration}s)</span>
+            </div>
+          )}
+
+          {/* Program Monitor Direct Manipulation Transform Bounding Box */}
+          {selectedClip && selectedClipTransform && currentActiveClip?.id === selectedClip.id && (
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                width: '100%',
+                height: '100%',
+                transformOrigin: 'center center',
+                transform: `translate(${selectedClipTransform.positionX}px, ${selectedClipTransform.positionY}px) rotate(${selectedClipTransform.rotation}deg) scale(${selectedClipTransform.scale})`,
+                pointerEvents: 'none',
+                zIndex: 25,
+              }}
+              className="border-2 border-[#00F0FF] shadow-[0_0_12px_rgba(0,240,255,0.4)] select-none"
+            >
+              {/* Center Anchor Point Handle */}
+              <div
+                onMouseDown={(e) => handleStartTransformDrag('center', e)}
+                style={{ pointerEvents: 'auto' }}
+                title="Anchor Point: Drag to translate Position X/Y"
+                className="absolute left-1/2 top-1/2 -ml-3 -mt-3 w-6 h-6 rounded-full border-2 border-[#00F0FF] bg-black/70 flex items-center justify-center cursor-move z-30 shadow-[0_0_8px_#00F0FF] hover:scale-125 transition-transform"
+              >
+                <div className="w-1.5 h-1.5 bg-[#00F0FF] rounded-full" />
+              </div>
+
+              {/* Outer Rotation Handle (stem + round grip) */}
+              <div className="absolute left-1/2 -top-6 -ml-px w-0.5 h-6 bg-[#00F0FF] pointer-events-none" />
+              <div
+                onMouseDown={(e) => handleStartTransformDrag('rotate', e)}
+                style={{ pointerEvents: 'auto' }}
+                title="Rotation Handle: Drag to rotate clip"
+                className="absolute left-1/2 -top-9 -ml-3 w-6 h-6 rounded-full border-2 border-[#00F0FF] bg-black/80 flex items-center justify-center cursor-grab active:cursor-grabbing hover:scale-125 transition-transform z-30 shadow-[0_0_8px_#00F0FF]"
+              >
+                <RotateCw size={11} className="text-[#00F0FF]" />
+              </div>
+
+              {/* 8 Resize Handles */}
+              {/* NW */}
+              <div
+                onMouseDown={(e) => handleStartTransformDrag('nw', e)}
+                style={{ pointerEvents: 'auto' }}
+                className="absolute -left-1.5 -top-1.5 w-3 h-3 bg-[#00F0FF] border border-white cursor-nwse-resize z-30 hover:scale-125 transition-transform"
+              />
+              {/* N */}
+              <div
+                onMouseDown={(e) => handleStartTransformDrag('n', e)}
+                style={{ pointerEvents: 'auto' }}
+                className="absolute left-1/2 -ml-1.5 -top-1.5 w-3 h-3 bg-[#00F0FF] border border-white cursor-ns-resize z-30 hover:scale-125 transition-transform"
+              />
+              {/* NE */}
+              <div
+                onMouseDown={(e) => handleStartTransformDrag('ne', e)}
+                style={{ pointerEvents: 'auto' }}
+                className="absolute -right-1.5 -top-1.5 w-3 h-3 bg-[#00F0FF] border border-white cursor-nesw-resize z-30 hover:scale-125 transition-transform"
+              />
+              {/* E */}
+              <div
+                onMouseDown={(e) => handleStartTransformDrag('e', e)}
+                style={{ pointerEvents: 'auto' }}
+                className="absolute -right-1.5 top-1/2 -mt-1.5 w-3 h-3 bg-[#00F0FF] border border-white cursor-ew-resize z-30 hover:scale-125 transition-transform"
+              />
+              {/* SE */}
+              <div
+                onMouseDown={(e) => handleStartTransformDrag('se', e)}
+                style={{ pointerEvents: 'auto' }}
+                className="absolute -right-1.5 -bottom-1.5 w-3 h-3 bg-[#00F0FF] border border-white cursor-nwse-resize z-30 hover:scale-125 transition-transform"
+              />
+              {/* S */}
+              <div
+                onMouseDown={(e) => handleStartTransformDrag('s', e)}
+                style={{ pointerEvents: 'auto' }}
+                className="absolute left-1/2 -ml-1.5 -bottom-1.5 w-3 h-3 bg-[#00F0FF] border border-white cursor-ns-resize z-30 hover:scale-125 transition-transform"
+              />
+              {/* SW */}
+              <div
+                onMouseDown={(e) => handleStartTransformDrag('sw', e)}
+                style={{ pointerEvents: 'auto' }}
+                className="absolute -left-1.5 -bottom-1.5 w-3 h-3 bg-[#00F0FF] border border-white cursor-nesw-resize z-30 hover:scale-125 transition-transform"
+              />
+              {/* W */}
+              <div
+                onMouseDown={(e) => handleStartTransformDrag('w', e)}
+                style={{ pointerEvents: 'auto' }}
+                className="absolute -left-1.5 top-1/2 -mt-1.5 w-3 h-3 bg-[#00F0FF] border border-white cursor-ew-resize z-30 hover:scale-125 transition-transform"
+              />
+
+              {/* Real-time Transform Coordinate Pill Overlay */}
+              <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded bg-black/80 backdrop-blur-xs border border-[#222630] text-[#00F0FF] font-mono text-[9px] pointer-events-none whitespace-nowrap shadow-lg flex items-center gap-2">
+                <span>Scale: {selectedClipTransform.scale.toFixed(2)}x</span>
+                <span>Pos: ({selectedClipTransform.positionX}, {selectedClipTransform.positionY})</span>
+                <span>Rot: {selectedClipTransform.rotation}°</span>
+              </div>
             </div>
           )}
 
