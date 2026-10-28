@@ -3,7 +3,11 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use super::ipc::{MediaAsset, MediaBin, MediaTrack, Transition};
-pub use super::ipc::{KeyframePoint, KeyframeTrack, LensEffects, SpeedProfile};
+pub use super::ipc::{
+    AudioDeviceInfo, AudioProcessingSettings, CaptionSegment, ColorCorrection, ColorGradingProfile,
+    ColorWheel, DuckingConfig, HslQualifier, KeyframePoint, KeyframeTrack, LensEffects,
+    NoiseDenoiseAndFillProfile, SpeedProfile, SplineCurves, SplitToning, StabilizationSettings, SelectiveColorAdjustment, TextClip, TextClipStyle, TextTrack, VolumeKeyframePoint,
+};
 
 /// High-level project metadata for .idts project file
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -36,11 +40,16 @@ pub struct TimelineData {
     #[serde(default)]
     pub tracks: Vec<MediaTrack>,
     #[serde(default)]
+    pub text_tracks: Vec<TextTrack>,
+    #[serde(default)]
     pub transitions: Vec<Transition>,
     #[serde(default)]
     pub playhead_sec: f64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub active_camera_track_id: Option<String>,
+    // Phase 7: Hierarchical Master Bus Color Grading
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub master_grading: Option<ColorGradingProfile>,
 }
 
 /// Complete serializable project schema saved as `.idts`

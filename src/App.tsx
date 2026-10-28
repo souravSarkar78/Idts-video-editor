@@ -9,10 +9,15 @@ import { SyncModal } from './components/SyncModal/SyncModal';
 import { ExportModal } from './components/ExportModal/ExportModal';
 import { SettingsModal } from './components/SettingsModal/SettingsModal';
 import { SilenceModal } from './components/SilenceModal/SilenceModal';
-import { Film, Music, Video, Sparkles } from 'lucide-react';
+import { AutoCaptionModal } from './components/AutoCaption/AutoCaptionModal';
+import { VoiceoverModal } from './components/Voiceover/VoiceoverModal';
+import { NoiseProfileModal } from './components/Audio/NoiseProfileModal';
+import { TimelineAudioPlayer } from './components/Audio/TimelineAudioPlayer';
+import { Film, Music, Video, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTimelineStore, updateAppTitle } from './store/timelineStore';
 import { useShortcutStore, normalizeKeyEvent } from './store/shortcutStore';
 import { filePosterCache, getNearestCachedFrame } from './utils/frameCacheService';
+import { unlockAudioContext } from './utils/audioMastering';
 
 export const App: React.FC = () => {
   const {
@@ -37,6 +42,16 @@ export const App: React.FC = () => {
     activeDragTransition,
     isDirty,
     currentProjectPath,
+    timelineHeightPct,
+    mediaPoolWidthPx,
+    inspectorWidthPx,
+    isMediaPoolCollapsed,
+    isInspectorCollapsed,
+    setTimelineHeightPct,
+    setMediaPoolWidthPx,
+    setInspectorWidthPx,
+    toggleMediaPoolCollapsed,
+    toggleInspectorCollapsed,
   } = useTimelineStore(
     useShallow((state) => ({
       togglePlayPause: state.togglePlayPause,
@@ -60,8 +75,87 @@ export const App: React.FC = () => {
       activeDragTransition: state.activeDragTransition,
       isDirty: state.isDirty,
       currentProjectPath: state.currentProjectPath,
+      timelineHeightPct: state.timelineHeightPct,
+      mediaPoolWidthPx: state.mediaPoolWidthPx,
+      inspectorWidthPx: state.inspectorWidthPx,
+      isMediaPoolCollapsed: state.isMediaPoolCollapsed,
+      isInspectorCollapsed: state.isInspectorCollapsed,
+      setTimelineHeightPct: state.setTimelineHeightPct,
+      setMediaPoolWidthPx: state.setMediaPoolWidthPx,
+      setInspectorWidthPx: state.setInspectorWidthPx,
+      toggleMediaPoolCollapsed: state.toggleMediaPoolCollapsed,
+      toggleInspectorCollapsed: state.toggleInspectorCollapsed,
     }))
   );
+
+  const mainContainerRef = React.useRef<HTMLElement>(null);
+
+  // Splitter Handlers: Vertical Workspace Resizing (Upper Stage vs Timeline)
+  const handleTimelineResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startY = e.clientY;
+    const startPct = timelineHeightPct;
+    const mainHeight = mainContainerRef.current?.clientHeight || window.innerHeight;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const deltaY = moveEvent.clientY - startY;
+      const deltaPct = (deltaY / mainHeight) * 100;
+      // Dragging down decreases timeline height; dragging up increases timeline height
+      const newPct = Math.max(15, Math.min(80, startPct - deltaPct));
+      setTimelineHeightPct(newPct);
+    };
+
+    const onMouseUp = () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
+
+  // Splitter Handlers: Media Pool Width Resizing
+  const handleMediaPoolResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = mediaPoolWidthPx;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const newWidth = Math.max(200, Math.min(850, startWidth + deltaX));
+      setMediaPoolWidthPx(newWidth);
+    };
+
+    const onMouseUp = () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
+
+  // Splitter Handlers: Inspector Width Resizing
+  const handleInspectorResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = inspectorWidthPx;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      // Dragging left increases inspector width; dragging right decreases inspector width
+      const deltaX = startX - moveEvent.clientX;
+      const newWidth = Math.max(220, Math.min(650, startWidth + deltaX));
+      setInspectorWidthPx(newWidth);
+    };
+
+    const onMouseUp = () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
 
   const { loadPreferences } = useShortcutStore();
 
@@ -70,6 +164,19 @@ export const App: React.FC = () => {
     loadPreferences();
     initProxyEventListener();
     updateAppTitle(project.name || 'Untitled Project', isDirty, currentProjectPath);
+  }, []);
+
+  // Ensure Web Audio context is seamlessly unlocked on first user gesture
+  useEffect(() => {
+    const unlock = () => {
+      unlockAudioContext();
+    };
+    window.addEventListener('pointerdown', unlock);
+    window.addEventListener('keydown', unlock);
+    return () => {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
   }, []);
 
   // Centralized Global Keyboard Shortcuts Engine
@@ -92,6 +199,22 @@ export const App: React.FC = () => {
         return;
       }
 
+      // Ignore global timeline shortcuts if modal dialogs (like Noise Profile Modal) are open
+      if (useTimelineStore.getState().isNoiseModalOpen) {
+        return;
+      }
+
+      // If user is currently recording, pressing Space or Escape stops and saves recording cleanly
+      if (e.key === ' ' || e.code === 'Space' || e.key === 'Escape') {
+        if (target && target.tagName === 'BUTTON') target.blur();
+        if (useTimelineStore.getState().isRecordingVoiceover) {
+          e.preventDefault();
+          e.stopPropagation();
+          useTimelineStore.getState().stopVoiceoverRecording();
+          return;
+        }
+      }
+
       const combo = normalizeKeyEvent(e);
       const shortcuts = useShortcutStore.getState().shortcuts;
 
@@ -106,6 +229,10 @@ export const App: React.FC = () => {
             e.preventDefault();
             e.stopPropagation();
             if (target && target.tagName === 'BUTTON') target.blur();
+            if (useTimelineStore.getState().isRecordingVoiceover) {
+              useTimelineStore.getState().stopVoiceoverRecording();
+              return;
+            }
             togglePlayPause();
             return;
           case 'shuttle_reverse':
@@ -114,6 +241,10 @@ export const App: React.FC = () => {
             return;
           case 'shuttle_pause':
             e.preventDefault();
+            if (useTimelineStore.getState().isRecordingVoiceover) {
+              useTimelineStore.getState().stopVoiceoverRecording();
+              return;
+            }
             if (isPlaying) togglePlayPause();
             return;
           case 'shuttle_forward':
@@ -211,27 +342,122 @@ export const App: React.FC = () => {
       <Header />
 
       {/* Main Studio Body */}
-      <main className="flex-1 flex flex-col min-h-0 overflow-hidden">
+      <main ref={mainContainerRef} className="flex-1 flex flex-col min-h-0 overflow-hidden">
         {/* Upper Studio Stage: Media Pool (Left), Program Monitor (Center), Inspector (Right) */}
-        <section className="h-[48%] min-h-[260px] flex overflow-hidden border-b border-[#222630]">
+        <section
+          style={{ height: `${100 - timelineHeightPct}%`, minHeight: '180px' }}
+          className="flex overflow-hidden"
+        >
           {/* 1. Media Library / Assets & Bins Panel */}
-          <div className="w-[40%] min-w-[360px] max-w-[560px] flex overflow-hidden">
-            <MediaPool />
-          </div>
+          {isMediaPoolCollapsed ? (
+            <div
+              onClick={toggleMediaPoolCollapsed}
+              className="w-8 shrink-0 bg-[#12141A] border-r border-[#222630] flex flex-col items-center py-2.5 select-none cursor-pointer hover:bg-[#181B22] transition-colors group z-10"
+              title="Expand Media Pool (Click to show)"
+            >
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleMediaPoolCollapsed();
+                }}
+                className="p-1 rounded bg-[#1C202B] hover:bg-[#00F0FF] text-[#8A92A6] hover:text-[#0D0E11] transition-all cursor-pointer"
+                title="Expand Media Pool"
+              >
+                <ChevronRight size={13} />
+              </button>
+              <div className="mt-6 flex flex-col items-center gap-4 text-[#64748B] group-hover:text-[#F0F3F8] transition-colors">
+                <span className="text-[10px] font-bold tracking-widest uppercase [writing-mode:vertical-lr] rotate-180">
+                  Media Pool
+                </span>
+                <Film size={13} className="text-[#8A92A6] group-hover:text-[#00F0FF] transition-colors" />
+              </div>
+            </div>
+          ) : (
+            <>
+              <div
+                style={{ width: `${mediaPoolWidthPx}px` }}
+                className="flex overflow-hidden shrink-0 relative"
+              >
+                <MediaPool />
+              </div>
 
-          {/* 2. Center Program Monitor Canvas (Single Player) */}
-          <div className="flex-1 flex overflow-hidden">
+              {/* Splitter 1: Media Pool <-> Program Monitor */}
+              <div
+                onMouseDown={handleMediaPoolResizeStart}
+                onDoubleClick={() => setMediaPoolWidthPx(400)}
+                className="w-1.5 hover:w-2 bg-[#12141A] hover:bg-[#00F0FF]/40 active:bg-[#00F0FF] cursor-col-resize relative flex flex-col items-center justify-center transition-all group z-20 border-x border-[#222630] select-none shrink-0"
+                title="Hold and drag to resize Media Pool (Double-click to reset)"
+              >
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleMediaPoolCollapsed();
+                  }}
+                  className="absolute top-2 -left-2 w-4 h-6 bg-[#181B22] hover:bg-[#00F0FF] text-[#8A92A6] hover:text-[#0D0E11] rounded border border-[#222630] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md z-30 cursor-pointer"
+                  title="Hide Media Pool (Maximize Monitor Space)"
+                >
+                  <ChevronLeft size={11} />
+                </button>
+                <div className="h-8 w-1 bg-[#374151] group-hover:bg-[#00F0FF] rounded-full transition-colors" />
+              </div>
+            </>
+          )}
+
+          {/* 2. Center Program Monitor Canvas (Single Player - Expands into all available space) */}
+          <div className="flex-1 flex min-w-0 overflow-hidden">
             <ProgramMonitor />
           </div>
 
+          {/* Splitter 2: Program Monitor <-> Inspector (Shown only when Inspector is expanded) */}
+          {!isInspectorCollapsed && (
+            <div
+              onMouseDown={handleInspectorResizeStart}
+              onDoubleClick={() => setInspectorWidthPx(300)}
+              className="w-1.5 hover:w-2 bg-[#12141A] hover:bg-[#00F0FF]/40 active:bg-[#00F0FF] cursor-col-resize relative flex flex-col items-center justify-center transition-all group z-20 border-x border-[#222630] select-none shrink-0"
+              title="Hold and drag to resize Inspector (Double-click to reset)"
+            >
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleInspectorCollapsed();
+                }}
+                className="absolute top-2 -right-2 w-4 h-6 bg-[#181B22] hover:bg-[#00F0FF] text-[#8A92A6] hover:text-[#0D0E11] rounded border border-[#222630] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md z-30 cursor-pointer"
+                title="Hide Inspector (Maximize Monitor Space)"
+              >
+                <ChevronRight size={11} />
+              </button>
+              <div className="h-8 w-1 bg-[#374151] group-hover:bg-[#00F0FF] rounded-full transition-colors" />
+            </div>
+          )}
+
           {/* 3. Right Clip Inspector / Properties Panel */}
-          <div className="w-[280px] xl:w-[320px] flex overflow-hidden">
+          <div
+            style={isInspectorCollapsed ? undefined : { width: `${inspectorWidthPx}px` }}
+            className={`flex overflow-hidden shrink-0 ${isInspectorCollapsed ? 'w-10' : ''}`}
+          >
             <Inspector />
           </div>
         </section>
 
+        {/* Horizontal Workspace Splitter (Upper Stage vs Timeline) */}
+        <div
+          onMouseDown={handleTimelineResizeStart}
+          onDoubleClick={() => setTimelineHeightPct(50)}
+          className="h-2 bg-[#12141A] hover:bg-[#00F0FF]/40 active:bg-[#00F0FF] cursor-row-resize relative flex items-center justify-center transition-colors group z-20 border-y border-[#222630] select-none shrink-0"
+          title="Hold and drag to resize Timeline height (Double-click to reset to 50%)"
+        >
+          <div className="w-14 h-1 bg-[#374151] group-hover:bg-[#00F0FF] rounded-full transition-colors flex items-center justify-center gap-1">
+            <span className="w-1 h-0.5 bg-black/40 rounded-full" />
+            <span className="w-1 h-0.5 bg-black/40 rounded-full" />
+            <span className="w-1 h-0.5 bg-black/40 rounded-full" />
+          </div>
+        </div>
+
         {/* Lower Studio Stage: Dynamic Multi-Track Timeline */}
-        <section className="h-[52%] min-h-[240px] flex flex-col overflow-hidden">
+        <section
+          style={{ height: `${timelineHeightPct}%`, minHeight: '160px' }}
+          className="flex flex-col overflow-hidden"
+        >
           <Timeline />
         </section>
       </main>
@@ -247,6 +473,18 @@ export const App: React.FC = () => {
 
       {/* Audio Silence Auto-Cut Configuration Dialog */}
       <SilenceModal />
+
+      {/* Local AI Auto-Captions Configuration Dialog */}
+      <AutoCaptionModal />
+
+      {/* Live Audio / Voiceover Recording Dialog */}
+      <VoiceoverModal />
+
+      {/* Spectral Noise Profile & Room Tone Capture Dialog */}
+      <NoiseProfileModal />
+
+      {/* Multi-Track Synchronous Audio Player */}
+      <TimelineAudioPlayer />
 
       {/* Floating Ghost Card during Media Drag */}
       {activeDragAsset && (() => {

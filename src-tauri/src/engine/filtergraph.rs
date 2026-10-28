@@ -7,7 +7,8 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 use crate::models::ipc::{
-    ColorCorrection, KeyframeTrack, LensEffects, SpeedProfile,
+    ColorCorrection, ColorGradingProfile, KeyframeTrack, LensEffects, SpeedProfile,
+    StabilizationSettings,
 };
 
 /// Builds video filter expression tokens for color correction, temperature, and 3D LUT.
@@ -59,7 +60,305 @@ pub fn build_color_filter_chain(color: &ColorCorrection) -> Vec<String> {
     filters
 }
 
-/// Builds video speed adjustment filters (PTS retiming and optical flow interpolation for slow motion).
+/// Builds video filter expression tokens for a selected filter preset or 3D LUT with intensity blending.
+pub fn build_preset_filter_chain(
+    filter_id: Option<&str>,
+    lut_path: Option<&str>,
+    intensity: Option<f32>,
+    recipe: Option<&crate::models::filters::ShaderRecipe>,
+) -> Vec<String> {
+    let mut filters = Vec::new();
+    let intensity = intensity.unwrap_or(1.0).clamp(0.0, 1.0);
+    if intensity <= 0.001 {
+        return filters;
+    }
+
+    // 1. 3D LUT (.cube)
+    if let Some(lut) = lut_path {
+        let trimmed = lut.trim();
+        if !trimmed.is_empty() && !trimmed.starts_with("builtin://") {
+            let escaped = escape_ffmpeg_filter_path(Path::new(trimmed));
+            filters.push(format!("lut3d=file='{}'", escaped));
+        }
+    }
+
+    // 2. Native shader/color parameters from recipe or built-in filter
+    if let Some(r) = recipe {
+        // eq: brightness, contrast, saturation
+        let b = (r.brightness * intensity).clamp(-1.0, 1.0);
+        let c = (1.0 + (r.contrast - 1.0) * intensity).clamp(0.0, 3.0);
+        let s = (1.0 + (r.saturation - 1.0) * intensity).clamp(0.0, 3.0);
+
+        let needs_eq = b.abs() > 0.001 || (c - 1.0).abs() > 0.001 || (s - 1.0).abs() > 0.001;
+        if needs_eq {
+            filters.push(format!("eq=brightness={:.3}:contrast={:.3}:saturation={:.3}", b, c, s));
+        }
+
+        // colorbalance: temperature, tint, rgb_balance
+        let temp_factor = ((r.temperature / 100.0) * 0.35 * intensity).clamp(-0.8, 0.8);
+        let tint_factor = ((r.tint / 100.0) * 0.25 * intensity).clamp(-0.8, 0.8);
+        let r_mul = (r.rgb_balance[0] - 1.0) * intensity;
+        let g_mul = (r.rgb_balance[1] - 1.0) * intensity;
+        let b_mul = (r.rgb_balance[2] - 1.0) * intensity;
+
+        let rs = temp_factor + r_mul;
+        let gs = tint_factor + g_mul;
+        let bs = -temp_factor + b_mul;
+
+        if rs.abs() > 0.01 || gs.abs() > 0.01 || bs.abs() > 0.01 {
+            filters.push(format!(
+                "colorbalance=rs={:.3}:rm={:.3}:gs={:.3}:gm={:.3}:bs={:.3}:bm={:.3}",
+                rs, rs * 0.5, gs, gs * 0.5, bs, bs * 0.5
+            ));
+        }
+
+        // hue: hue_rotate_deg
+        if r.hue_rotate_deg.abs() > 0.5 {
+            let h = r.hue_rotate_deg * intensity;
+            filters.push(format!("hue=h={:.2}", h));
+        }
+
+        // sepia
+        if r.sepia > 0.01 {
+            let sepia_factor = (r.sepia * intensity).clamp(0.0, 1.0);
+            if sepia_factor > 0.05 {
+                filters.push(format!(
+                    "colorchannelmixer={:.3}:{:.3}:{:.3}:0:{:.3}:{:.3}:{:.3}:0:{:.3}:{:.3}:{:.3}",
+                    1.0 - 0.607 * sepia_factor,
+                    0.769 * sepia_factor,
+                    0.189 * sepia_factor,
+                    0.349 * sepia_factor,
+                    1.0 - 0.314 * sepia_factor,
+                    0.168 * sepia_factor,
+                    0.272 * sepia_factor,
+                    0.534 * sepia_factor,
+                    1.0 - 0.869 * sepia_factor
+                ));
+            }
+        }
+    } else if let Some(fid) = filter_id {
+        // Look up built-in preset by id
+        let built_ins = crate::models::filters::get_built_in_presets();
+        if let Some(preset) = built_ins.iter().find(|p| p.id == fid) {
+            return build_preset_filter_chain(
+                None,
+                preset.lut_path.as_deref(),
+                Some(intensity),
+                Some(&preset.shader_recipe),
+            );
+        }
+    }
+
+    filters
+}
+
+/// Helper function to format curve point tuples into FFmpeg curves coordinates
+fn format_curve_point_tokens(points: &[(f32, f32)]) -> Option<String> {
+    if points.is_empty() {
+        return None;
+    }
+    let formatted: Vec<String> = points
+        .iter()
+        .map(|(x, y)| format!("{:.3}/{:.3}", x.clamp(0.0, 1.0), y.clamp(0.0, 1.0)))
+        .collect();
+    Some(formatted.join(" "))
+}
+
+/// Helper to convert hue (0-360 deg) and saturation (0-100%) to normalized RGB offset vectors
+fn hue_sat_to_rgb_offset(hue_deg: f32, sat_pct: f32) -> (f32, f32, f32) {
+    if sat_pct <= 0.001 {
+        return (0.0, 0.0, 0.0);
+    }
+    let h = (hue_deg % 360.0 + 360.0) % 360.0;
+    let s = (sat_pct / 100.0).clamp(0.0, 1.0) * 0.4;
+    let h_rad = h.to_radians();
+
+    let r = s * h_rad.cos();
+    let b = -s * (h_rad - std::f32::consts::FRAC_PI_3).cos();
+    let g = -(r + b) * 0.5;
+
+    (r.clamp(-1.0, 1.0), g.clamp(-1.0, 1.0), b.clamp(-1.0, 1.0))
+}
+
+/// Builds dynamic video filter expressions for Phase 7 Hierarchical Color Grading Profiles.
+/// Includes Primaries & Balance, 3-Way Wheels, Spline Curves, HSL Secondary Qualifier,
+/// Split-Toning, and 3D LUTs.
+pub fn build_color_grading_profile_filters(profile: &ColorGradingProfile) -> Vec<String> {
+    let mut filters = Vec::new();
+
+    // 1. Primaries, Exposure, Whites, Blacks, Contrast, Saturation & Vibrance
+    let exp_brightness = if profile.exposure.abs() > 0.01 {
+        (2.0_f32.powf(profile.exposure * 0.4) - 1.0).clamp(-1.0, 1.0)
+    } else {
+        0.0
+    };
+    let brightness = (exp_brightness + profile.whites * 0.15 + profile.blacks * 0.15).clamp(-1.0, 1.0);
+    let contrast = profile.contrast.clamp(0.0, 3.0);
+    let saturation = (profile.saturation * (1.0 + profile.vibrance * 0.4)).clamp(0.0, 3.0);
+
+    let needs_eq = (brightness.abs() > 0.001)
+        || ((contrast - 1.0).abs() > 0.001)
+        || ((saturation - 1.0).abs() > 0.001);
+
+    if needs_eq {
+        filters.push(format!(
+            "eq=brightness={:.3}:contrast={:.3}:saturation={:.3}",
+            brightness, contrast, saturation
+        ));
+    }
+
+    // 2. Color Balance (Temperature, Tint, Lift/Gamma/Gain wheels, Split-Toning)
+    let temp_factor = (profile.temperature.clamp(-100.0, 100.0) / 100.0) * 0.35;
+    let tint_factor = (profile.tint.clamp(-100.0, 100.0) / 100.0) * 0.25;
+
+    let mut rs = temp_factor;
+    let mut rm = temp_factor;
+    let mut rh = temp_factor;
+
+    let mut bs = -temp_factor;
+    let mut bm = -temp_factor;
+    let mut bh = -temp_factor;
+
+    let mut gs = tint_factor;
+    let mut gm = tint_factor;
+    let mut gh = tint_factor;
+
+    // 3-Way Color Wheels
+    if let Some(ref lift) = profile.lift {
+        rs += lift.r * 0.35 + lift.luma * 0.2;
+        gs += lift.g * 0.35 + lift.luma * 0.2;
+        bs += lift.b * 0.35 + lift.luma * 0.2;
+    }
+    if let Some(ref gamma) = profile.gamma {
+        rm += gamma.r * 0.35 + gamma.luma * 0.2;
+        gm += gamma.g * 0.35 + gamma.luma * 0.2;
+        bm += gamma.b * 0.35 + gamma.luma * 0.2;
+    }
+    if let Some(ref gain) = profile.gain {
+        rh += gain.r * 0.35 + gain.luma * 0.2;
+        gh += gain.g * 0.35 + gain.luma * 0.2;
+        bh += gain.b * 0.35 + gain.luma * 0.2;
+    }
+    if let Some(ref offset) = profile.offset {
+        let off_r = offset.r * 0.25 + offset.luma * 0.15;
+        let off_g = offset.g * 0.25 + offset.luma * 0.15;
+        let off_b = offset.b * 0.25 + offset.luma * 0.15;
+        rs += off_r; rm += off_r; rh += off_r;
+        gs += off_g; gm += off_g; gh += off_g;
+        bs += off_b; bm += off_b; bh += off_b;
+    }
+
+    // Split-Toning
+    if let Some(ref split) = profile.split_toning {
+        let (s_r, s_g, s_b) = hue_sat_to_rgb_offset(split.shadow_hue, split.shadow_sat);
+        let (h_r, h_g, h_b) = hue_sat_to_rgb_offset(split.highlight_hue, split.highlight_sat);
+        let bal_factor = (split.balance / 100.0).clamp(-1.0, 1.0);
+
+        rs += s_r * (1.0 - bal_factor * 0.5);
+        gs += s_g * (1.0 - bal_factor * 0.5);
+        bs += s_b * (1.0 - bal_factor * 0.5);
+
+        rh += h_r * (1.0 + bal_factor * 0.5);
+        gh += h_g * (1.0 + bal_factor * 0.5);
+        bh += h_b * (1.0 + bal_factor * 0.5);
+    }
+
+    let needs_balance = rs.abs() > 0.005
+        || gs.abs() > 0.005
+        || bs.abs() > 0.005
+        || rm.abs() > 0.005
+        || gm.abs() > 0.005
+        || bm.abs() > 0.005
+        || rh.abs() > 0.005
+        || gh.abs() > 0.005
+        || bh.abs() > 0.005;
+
+    if needs_balance {
+        filters.push(format!(
+            "colorbalance=rs={:.3}:gs={:.3}:bs={:.3}:rm={:.3}:gm={:.3}:bm={:.3}:rh={:.3}:gh={:.3}:bh={:.3}",
+            rs.clamp(-1.0, 1.0),
+            gs.clamp(-1.0, 1.0),
+            bs.clamp(-1.0, 1.0),
+            rm.clamp(-1.0, 1.0),
+            gm.clamp(-1.0, 1.0),
+            bm.clamp(-1.0, 1.0),
+            rh.clamp(-1.0, 1.0),
+            gh.clamp(-1.0, 1.0),
+            bh.clamp(-1.0, 1.0)
+        ));
+    }
+
+    // 3. Spline Curves (Master, Red, Green, Blue)
+    if let Some(ref curves) = profile.curves {
+        let mut curve_tokens = Vec::new();
+        if let Some(m) = format_curve_point_tokens(&curves.master) {
+            curve_tokens.push(format!("m='{}'", m));
+        }
+        if let Some(r) = format_curve_point_tokens(&curves.red) {
+            curve_tokens.push(format!("r='{}'", r));
+        }
+        if let Some(g) = format_curve_point_tokens(&curves.green) {
+            curve_tokens.push(format!("g='{}'", g));
+        }
+        if let Some(b) = format_curve_point_tokens(&curves.blue) {
+            curve_tokens.push(format!("b='{}'", b));
+        }
+        if !curve_tokens.is_empty() {
+            filters.push(format!("curves={}", curve_tokens.join(":")));
+        }
+    }
+
+    // 4. HSL Secondary Qualifier adjustments
+    if let Some(ref hsl) = profile.hsl_qualifier {
+        if hsl.enabled {
+            if hsl.show_matte {
+                let h_val = (hsl.hue_center / 360.0).clamp(0.0, 1.0);
+                filters.push(format!("colorkey=color={:.2}x{:.2}x{:.2}:similarity={:.2}:blend={:.2}", h_val, h_val, h_val, hsl.hue_width / 360.0, hsl.hue_softness / 360.0));
+            } else {
+                let shift = hsl.isolated_hue_shift.clamp(-180.0, 180.0);
+                let sat = hsl.isolated_sat.clamp(0.0, 2.0);
+                let gain = hsl.isolated_gain.clamp(0.0, 2.0);
+
+                if shift.abs() > 0.5 || (sat - 1.0).abs() > 0.01 || (gain - 1.0).abs() > 0.01 {
+                    filters.push(format!("hue=h={:.1}:s={:.2}", shift, sat));
+                    if (gain - 1.0).abs() > 0.01 {
+                        filters.push(format!("eq=brightness={:.3}", (gain - 1.0) * 0.2));
+                    }
+                }
+            }
+        }
+    }
+
+    // 5. 3D LUT (.cube)
+    if let Some(ref lut) = profile.lut_path {
+        let trimmed = lut.trim();
+        if !trimmed.is_empty() {
+            let escaped = escape_ffmpeg_filter_path(Path::new(trimmed));
+            filters.push(format!("lut3d=file='{}'", escaped));
+        }
+    }
+
+    filters
+}
+
+/// Builds video stabilization filter chain using FFmpeg's `deshake` filter.
+/// Maps intensity (0.0 - 1.0) to search range `rx`/`ry` (8 - 64) with edge mirroring.
+pub fn build_stabilization_filter_chain(stab: Option<&StabilizationSettings>) -> Vec<String> {
+    let mut filters = Vec::new();
+    if let Some(settings) = stab {
+        if settings.enabled && settings.intensity > 0.001 {
+            let clamped_intensity = settings.intensity.clamp(0.0, 1.0);
+            let rx = (8.0 + clamped_intensity * 56.0).round() as u32; // 8 to 64
+            let ry = (8.0 + clamped_intensity * 56.0).round() as u32;
+            let blocksize = if clamped_intensity > 0.6 { 16 } else { 32 };
+            filters.push(format!(
+                "deshake=x=-1:y=-1:w=-1:h=-1:rx={}:ry={}:edge=mirror:blocksize={}",
+                rx, ry, blocksize
+            ));
+        }
+    }
+    filters
+}
 pub fn build_speed_video_filters(speed_profile: Option<&SpeedProfile>) -> Vec<String> {
     let mut filters = Vec::new();
     if let Some(sp) = speed_profile {

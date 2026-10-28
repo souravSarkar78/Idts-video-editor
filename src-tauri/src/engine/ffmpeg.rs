@@ -13,13 +13,13 @@ use tauri_plugin_shell::process::Command;
 use tauri_plugin_shell::ShellExt;
 
 use crate::engine::filtergraph::{
-    build_color_filter_chain, build_lens_effects_filter_chain, build_motion_transform_filters,
-    build_speed_audio_filters, build_speed_video_filters, escape_ffmpeg_filter_path, FilterGraph,
-    VideoEncoder,
+    build_color_filter_chain, build_color_grading_profile_filters, build_lens_effects_filter_chain,
+    build_motion_transform_filters, build_speed_audio_filters, build_speed_video_filters,
+    build_stabilization_filter_chain, escape_ffmpeg_filter_path, FilterGraph, VideoEncoder,
 };
 use crate::models::ipc::{
-    ColorCorrection, ExportConfig as IpcExportConfig, ExportProgress, KeyframeTrack, LensEffects,
-    MediaType, SpeedProfile, TrackType, Transition,
+    ColorCorrection, ColorGradingProfile, ExportConfig as IpcExportConfig, ExportProgress,
+    KeyframeTrack, LensEffects, MediaType, SpeedProfile, StabilizationSettings, TrackType, Transition,
 };
 
 /// Canonical Tauri sidecar executable names registered in `tauri.conf.json`.
@@ -486,6 +486,10 @@ struct ExportClipItem {
     keyframe_tracks: Option<Vec<KeyframeTrack>>,
     speed_profile: Option<SpeedProfile>,
     lens_effects: Option<LensEffects>,
+    stabilization: Option<StabilizationSettings>,
+    color_grading: Option<ColorGradingProfile>,
+    track_grading: Option<ColorGradingProfile>,
+    is_adjustment_layer: bool,
 }
 
 /// Executes timeline project export via FFmpeg sidecar, streaming real-time progress events.
@@ -541,16 +545,25 @@ pub fn execute_export<R: Runtime>(
                 continue;
             }
 
+            let is_adj = clip.is_adjustment_layer.unwrap_or(false)
+                || matches!(clip.media_type, Some(MediaType::AdjustmentLayer))
+                || clip.file_path == "adjustment_layer";
+
             let is_video = match clip.media_type {
                 Some(MediaType::Video) => true,
+                Some(MediaType::AdjustmentLayer) => true,
                 Some(MediaType::Audio) => false,
                 _ => is_video_track,
             };
 
-            let has_audio = match clip.media_type {
-                Some(MediaType::Audio) => true,
-                Some(MediaType::Video) => clip.metadata.as_ref().and_then(|m| m.channels).unwrap_or(2) > 0,
-                _ => true,
+            let has_audio = if is_adj {
+                false
+            } else {
+                match clip.media_type {
+                    Some(MediaType::Audio) => true,
+                    Some(MediaType::Video) => clip.metadata.as_ref().and_then(|m| m.channels).unwrap_or(2) > 0,
+                    _ => true,
+                }
             };
 
             let b = clip.color.as_ref().map(|c| c.brightness).or(clip.brightness);
@@ -558,6 +571,11 @@ pub fn execute_export<R: Runtime>(
             let s = clip.color.as_ref().map(|c| c.saturation).or(clip.saturation);
             let t = clip.color.as_ref().map(|c| c.temperature).or(clip.temperature);
             let lut = clip.color.as_ref().and_then(|c| c.lut_path.clone()).or_else(|| clip.lut_path.clone());
+
+            let curr_input_idx = if is_adj { 9999 } else { input_idx };
+            if !is_adj {
+                input_idx += 1;
+            }
 
             active_clips.push(ExportClipItem {
                 id: clip.id.clone(),
@@ -568,7 +586,7 @@ pub fn execute_export<R: Runtime>(
                 in_point_sec,
                 is_video,
                 has_audio,
-                input_index: input_idx,
+                input_index: curr_input_idx,
                 brightness: b,
                 contrast: c,
                 saturation: s,
@@ -583,8 +601,11 @@ pub fn execute_export<R: Runtime>(
                 keyframe_tracks: clip.keyframe_tracks.clone(),
                 speed_profile: clip.speed_profile.clone(),
                 lens_effects: clip.lens_effects.clone(),
+                stabilization: clip.stabilization.clone(),
+                color_grading: clip.color_grading.clone(),
+                track_grading: track.track_grading.clone(),
+                is_adjustment_layer: is_adj,
             });
-            input_idx += 1;
         }
     }
 
@@ -697,6 +718,9 @@ fn run_ffmpeg_export_process<R: Runtime>(
 
     // Inputs with trim
     for clip in active_clips {
+        if clip.is_adjustment_layer || clip.path.is_empty() || clip.path == "adjustment_layer" {
+            continue;
+        }
         if clip.in_point_sec > 0.0 {
             args.push("-ss".to_string());
             args.push(format!("{:.3}", clip.in_point_sec));
@@ -708,8 +732,9 @@ fn run_ffmpeg_export_process<R: Runtime>(
     }
 
     // Build -filter_complex
-    let video_clips: Vec<&ExportClipItem> = active_clips.iter().filter(|c| c.is_video).collect();
-    let audio_clips: Vec<&ExportClipItem> = active_clips.iter().filter(|c| c.has_audio).collect();
+    let video_clips: Vec<&ExportClipItem> = active_clips.iter().filter(|c| c.is_video && !c.is_adjustment_layer).collect();
+    let adjustment_clips: Vec<&ExportClipItem> = active_clips.iter().filter(|c| c.is_adjustment_layer).collect();
+    let audio_clips: Vec<&ExportClipItem> = active_clips.iter().filter(|c| c.has_audio && !c.is_adjustment_layer).collect();
 
     let mut filter_chains: Vec<String> = Vec::new();
 
@@ -736,6 +761,10 @@ fn run_ffmpeg_export_process<R: Runtime>(
         let lens_v = build_lens_effects_filter_chain(clip.lens_effects.as_ref());
         v_filters.extend(lens_v);
 
+        // 2b. Video Stabilization (deshake)
+        let stab_v = build_stabilization_filter_chain(clip.stabilization.as_ref());
+        v_filters.extend(stab_v);
+
         // 3. Base scaling and standard aspect conform
         v_filters.push(format!("scale={}:{}:force_original_aspect_ratio=decrease", width, height));
         v_filters.push(format!("pad={}:{}:(ow-iw)/2:(oh-ih)/2", width, height));
@@ -743,18 +772,27 @@ fn run_ffmpeg_export_process<R: Runtime>(
         v_filters.push(format!("fps=fps={:.2}", fps));
         v_filters.push(format!("setpts=PTS-STARTPTS+{:.3}/TB", start));
 
-        // 4. Clip-level Inspector color adjustments (eq, colorbalance temperature, 3D LUT)
-        let color_corr = ColorCorrection {
-            brightness: clip.brightness.unwrap_or(0.0),
-            contrast: clip.contrast.unwrap_or(1.0),
-            saturation: clip.saturation.unwrap_or(1.0),
-            temperature: clip.temperature.unwrap_or(0.0),
-            lut_path: clip.lut_path.clone(),
-        };
-        let color_filters = build_color_filter_chain(&color_corr);
-        v_filters.extend(color_filters);
+        // 4. Clip-level Pass: Apply Clip Color Grading (Profile or Legacy ColorCorrection)
+        if let Some(ref prof) = clip.color_grading {
+            v_filters.extend(build_color_grading_profile_filters(prof));
+        } else {
+            let color_corr = ColorCorrection {
+                brightness: clip.brightness.unwrap_or(0.0),
+                contrast: clip.contrast.unwrap_or(1.0),
+                saturation: clip.saturation.unwrap_or(1.0),
+                temperature: clip.temperature.unwrap_or(0.0),
+                lut_path: clip.lut_path.clone(),
+            };
+            let color_filters = build_color_filter_chain(&color_corr);
+            v_filters.extend(color_filters);
+        }
 
-        // 5. Transition in from prior clip on the same track
+        // 5. Track-level Pass: If parent track has track_grading, apply immediately after clip stream
+        if let Some(ref t_prof) = clip.track_grading {
+            v_filters.extend(build_color_grading_profile_filters(t_prof));
+        }
+
+        // 6. Transition in from prior clip on the same track
         if let Some(trans) = transitions.iter().find(|t| t.to_clip_id == clip.id) {
             let dur = trans.duration.min(clip.duration_sec * 0.5).max(0.1);
             match trans.transition_type.to_lowercase().as_str() {
@@ -776,7 +814,7 @@ fn run_ffmpeg_export_process<R: Runtime>(
             v_filters.push(format!("fade=t=out:st={:.3}:d={:.3}:alpha=1", (end - dur).max(start), dur));
         }
 
-        // 6. Motion transforms & Keyframing (scale, rotate, opacity, position overlay)
+        // 7. Motion transforms & Keyframing (scale, rotate, opacity, position overlay)
         let (transform_filters, overlay_x, overlay_y) = build_motion_transform_filters(
             clip.scale,
             clip.position_x,
@@ -801,12 +839,38 @@ fn run_ffmpeg_export_process<R: Runtime>(
         last_v = next_v;
     }
 
+    // 8. Adjustment Layer Pass: Apply active adjustment layers directly over composited stream
+    for (a_idx, adj) in adjustment_clips.iter().enumerate() {
+        if let Some(ref prof) = adj.color_grading {
+            let adj_filters = build_color_grading_profile_filters(prof);
+            if !adj_filters.is_empty() {
+                let adj_v = format!("v_adj_{}", a_idx);
+                filter_chains.push(format!(
+                    "[{}]{}[{}]",
+                    last_v, adj_filters.join(","), adj_v
+                ));
+                last_v = adj_v;
+            }
+        }
+    }
+
+    // 9. Master Pass: Chain timeline.master_grading directly before final encoder
+    let master_grading = ipc_config.project.as_ref().and_then(|p| p.master_grading.as_ref());
+    if let Some(prof) = master_grading {
+        let master_filters = build_color_grading_profile_filters(prof);
+        if !master_filters.is_empty() {
+            let v_master = "v_master".to_string();
+            filter_chains.push(format!("[{}]{}[{}]", last_v, master_filters.join(","), v_master));
+            last_v = v_master;
+        }
+    }
+
     // Apply global project 3D LUT if requested
     if let Some(ref lut_path) = ipc_config.applied_lut_path {
         if !lut_path.trim().is_empty() {
             let escaped_lut = escape_ffmpeg_filter_path(Path::new(lut_path));
             let v_lut = "v_lut".to_string();
-            filter_chains.push(format!("[{}]lut3d=file='{}'[{}]", last_v, escaped_lut, v_lut));
+            filter_chains.push(format!("[{}]{}[{}]", last_v, format!("lut3d=file='{}'", escaped_lut), v_lut));
             last_v = v_lut;
         }
     }

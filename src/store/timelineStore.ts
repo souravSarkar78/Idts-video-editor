@@ -21,7 +21,208 @@ import {
   KeyframeTrack,
   SpeedProfile,
   LensEffects,
+  StabilizationSettings,
+  TextClip,
+  TextClipStyle,
+  TextTrack,
+  CaptionSegment,
+  AudioDeviceInfo,
+  AudioProcessingSettings,
+  NoiseDenoiseAndFillProfile,
+  DuckingConfig,
+  VolumeKeyframePoint,
+  ColorGradingProfile,
+  ColorGradingPreset,
+  ColorWheel,
+  SplineCurves,
+  HslQualifier,
+  SplitToning,
+  FilterPreset,
+  FilterCategory,
+  ShaderRecipe,
 } from '../types/ipc';
+import { loadAudioBuffer, unlockAudioContext } from '../utils/audioMastering';
+import { BUILT_IN_FILTER_CATEGORIES, BUILT_IN_FILTER_PRESETS } from '../components/Filters/defaultPresets';
+
+export const DEFAULT_COLOR_GRADING_PROFILE: ColorGradingProfile = {
+  exposure: 0,
+  contrast: 1,
+  highlights: 0,
+  shadows: 0,
+  whites: 0,
+  blacks: 0,
+  brilliance: 0,
+  temperature: 0,
+  tint: 0,
+  saturation: 1,
+  vibrance: 0,
+  sharpen: 0,
+  clarity: 0,
+  particles: 0,
+  fade: 0,
+  vignette: 0,
+  lutIntensity: 1,
+};
+
+export const DEFAULT_COLOR_PRESETS: ColorGradingPreset[] = [
+  {
+    id: 'preset_teal_orange',
+    name: 'Cinematic Teal & Orange',
+    createdAt: 1,
+    isBuiltIn: true,
+    profile: {
+      ...DEFAULT_COLOR_GRADING_PROFILE,
+      exposure: 0.15,
+      contrast: 1.15,
+      saturation: 1.2,
+      lift: { r: -0.06, g: 0.02, b: 0.1, luma: -0.05 },
+      gain: { r: 0.08, g: 0.03, b: -0.05, luma: 0.06 },
+      splitToning: { shadowHue: 200, shadowSat: 35, highlightHue: 35, highlightSat: 40, balance: 10 },
+    },
+  },
+  {
+    id: 'preset_warm_film',
+    name: 'Warm Moody Film',
+    createdAt: 2,
+    isBuiltIn: true,
+    profile: {
+      ...DEFAULT_COLOR_GRADING_PROFILE,
+      exposure: 0.08,
+      contrast: 1.08,
+      temperature: 18,
+      tint: 4,
+      saturation: 1.05,
+      vibrance: 0.15,
+      lift: { r: 0.04, g: 0.01, b: -0.02, luma: 0.03 },
+      gain: { r: 0.06, g: 0.02, b: -0.03, luma: 0.04 },
+    },
+  },
+  {
+    id: 'preset_clean_commercial',
+    name: 'Clean Crisp Commercial',
+    createdAt: 3,
+    isBuiltIn: true,
+    profile: {
+      ...DEFAULT_COLOR_GRADING_PROFILE,
+      exposure: 0.2,
+      contrast: 1.12,
+      highlights: 10,
+      shadows: -5,
+      whites: 8,
+      blacks: -4,
+      saturation: 1.15,
+      vibrance: 0.2,
+    },
+  },
+  {
+    id: 'preset_vintage_matte',
+    name: 'Vintage Matte Film',
+    createdAt: 4,
+    isBuiltIn: true,
+    profile: {
+      ...DEFAULT_COLOR_GRADING_PROFILE,
+      exposure: -0.1,
+      contrast: 0.92,
+      shadows: 20,
+      blacks: 15,
+      temperature: 12,
+      saturation: 0.88,
+      lift: { r: 0.03, g: 0.02, b: 0.01, luma: 0.1 },
+    },
+  },
+  {
+    id: 'preset_noir_bw',
+    name: 'Noir High-Contrast B&W',
+    createdAt: 5,
+    isBuiltIn: true,
+    profile: {
+      ...DEFAULT_COLOR_GRADING_PROFILE,
+      saturation: 0,
+      vibrance: -1,
+      contrast: 1.35,
+      exposure: 0.05,
+      shadows: -15,
+      highlights: 12,
+    },
+  },
+];
+
+export function generateCubeLut(profile: ColorGradingProfile, title = 'Custom Grade', size = 17): string {
+  const lines: string[] = [];
+  lines.push(`# Created by IDTS Video Editor`);
+  lines.push(`TITLE "${title}"`);
+  lines.push(`LUT_3D_SIZE ${size}`);
+  lines.push(`DOMAIN_MIN 0.0 0.0 0.0`);
+  lines.push(`DOMAIN_MAX 1.0 1.0 1.0`);
+  lines.push('');
+
+  const exp = profile.exposure ?? 0;
+  const expMul = Math.pow(2, exp * 0.5);
+  const contrast = profile.contrast ?? 1.0;
+  const sat = profile.saturation ?? 1.0;
+  const vibrance = profile.vibrance ?? 0;
+  const netSat = sat * (1 + vibrance * 0.35);
+
+  const temp = profile.temperature ?? 0;
+  const tint = profile.tint ?? 0;
+  const tempR = temp > 0 ? 1 + (temp / 100) * 0.25 : 1.0;
+  const tempB = temp < 0 ? 1 + (Math.abs(temp) / 100) * 0.3 : 1.0;
+  const tintG = tint !== 0 ? 1 + (tint / 100) * 0.2 : 1.0;
+
+  const liftR = (profile.lift?.r || 0) * 0.2 + (profile.lift?.luma || 0) * 0.15;
+  const liftG = (profile.lift?.g || 0) * 0.2 + (profile.lift?.luma || 0) * 0.15;
+  const liftB = (profile.lift?.b || 0) * 0.2 + (profile.lift?.luma || 0) * 0.15;
+
+  const gainR = 1 + (profile.gain?.r || 0) * 0.25 + (profile.gain?.luma || 0) * 0.2;
+  const gainG = 1 + (profile.gain?.g || 0) * 0.25 + (profile.gain?.luma || 0) * 0.2;
+  const gainB = 1 + (profile.gain?.b || 0) * 0.25 + (profile.gain?.luma || 0) * 0.2;
+
+  for (let b = 0; b < size; b++) {
+    const rawB = b / (size - 1);
+    for (let g = 0; g < size; g++) {
+      const rawG = g / (size - 1);
+      for (let r = 0; r < size; r++) {
+        const rawR = r / (size - 1);
+
+        let outR = Math.max(0, rawR * expMul * gainR * tempR + liftR);
+        let outG = Math.max(0, rawG * expMul * gainG * tintG + liftG);
+        let outB = Math.max(0, rawB * expMul * gainB * tempB + liftB);
+
+        outR = (outR - 0.5) * contrast + 0.5;
+        outG = (outG - 0.5) * contrast + 0.5;
+        outB = (outB - 0.5) * contrast + 0.5;
+
+        const luma = 0.2126 * outR + 0.7152 * outG + 0.0722 * outB;
+        outR = luma + (outR - luma) * netSat;
+        outG = luma + (outG - luma) * netSat;
+        outB = luma + (outB - luma) * netSat;
+
+        outR = Math.max(0, Math.min(1, outR));
+        outG = Math.max(0, Math.min(1, outG));
+        outB = Math.max(0, Math.min(1, outB));
+
+        lines.push(`${outR.toFixed(6)} ${outG.toFixed(6)} ${outB.toFixed(6)}`);
+      }
+    }
+  }
+
+  return lines.join('\n');
+}
+
+export const loadStoredColorPresets = (): ColorGradingPreset[] => {
+  try {
+    const raw = typeof window !== 'undefined' ? localStorage.getItem('idts_color_grading_presets') : null;
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return [...DEFAULT_COLOR_PRESETS, ...parsed.filter((p: any) => !p.isBuiltIn)];
+      }
+    }
+  } catch (e) {
+    console.error('Failed to parse stored color grading presets:', e);
+  }
+  return DEFAULT_COLOR_PRESETS;
+};
 
 export interface TimelineSnapshot {
   tracks: MediaTrack[];
@@ -31,9 +232,69 @@ export interface TimelineSnapshot {
   selectedClipIds?: string[];
   activeCameraTrackId: string | null;
   project: TimelineProject;
+  masterGrading?: ColorGradingProfile | null;
 }
 
 export const isTauri = typeof window !== 'undefined' && Boolean((window as any).__TAURI_INTERNALS__);
+
+let activeRecordingSession: {
+  stream: MediaStream;
+  context: AudioContext;
+  processor: ScriptProcessorNode;
+  chunks: Float32Array[];
+  sampleRate: number;
+} | null = null;
+
+export function encodeWavPcm16(samples: Float32Array, sampleRate: number): ArrayBuffer {
+  const numChannels = 1;
+  const bytesPerSample = 2;
+  const blockAlign = numChannels * bytesPerSample;
+  const byteRate = sampleRate * blockAlign;
+  const dataSize = samples.length * bytesPerSample;
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buffer);
+
+  const writeString = (offset: number, str: string) => {
+    for (let i = 0; i < str.length; i++) {
+      view.setUint8(offset + i, str.charCodeAt(i));
+    }
+  };
+
+  writeString(0, 'RIFF');
+  view.setUint32(4, 36 + dataSize, true);
+  writeString(8, 'WAVE');
+
+  writeString(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // PCM
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, 16, true);
+
+  writeString(36, 'data');
+  view.setUint32(40, dataSize, true);
+
+  let offset = 44;
+  for (let i = 0; i < samples.length; i++, offset += 2) {
+    const s = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+  }
+
+  return buffer;
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  const chunkSize = 8192;
+  for (let i = 0; i < len; i += chunkSize) {
+    binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, Math.min(i + chunkSize, len))));
+  }
+  return btoa(binary);
+}
 
 /**
  * Updates document and native window title dynamically:
@@ -77,8 +338,7 @@ export async function tauriInvoke<T>(cmd: string, args?: Record<string, unknown>
 export function getInterpolatedClipTransform(clip: Clip, playhead: number) {
   const startSec = clip.startPositionSeconds ?? (clip.startTimeMs / 1000);
   const durSec = clip.durationSeconds ?? (clip.durationMs / 1000);
-  const speed = clip.speedProfile?.speedMultiplier ?? 1.0;
-  const relTime = Math.max(0, Math.min(durSec, playhead - startSec)) * speed;
+  const relTime = Math.max(0, Math.min(durSec, playhead - startSec));
 
   const interpolateProp = (prop: string, defaultVal: number): number => {
     const track = clip.keyframeTracks?.find((t) => t.property === prop);
@@ -139,7 +399,7 @@ export interface TimelineState {
   setActiveDragAsset: (info: ActiveDragAssetInfo | null) => void;
   isSyncModalOpen: boolean;
   activeTab: 'media' | 'audio' | 'text' | 'stickers' | 'effects' | 'transitions' | 'filters';
-  inspectorTab: 'video' | 'audio' | 'speed' | 'animate' | 'adjust' | 'color';
+  inspectorTab: 'video' | 'audio' | 'speed' | 'animate' | 'adjust' | 'color' | 'text';
   lastSyncMessage: string | null;
 
   // Phase 7: Transitions & Color Grading
@@ -151,8 +411,127 @@ export interface TimelineState {
   addTransition: (transition: Omit<Transition, 'id'> | Transition) => void;
   updateTransition: (id: string, updates: Partial<Transition>) => void;
   removeTransition: (id: string) => void;
+  // Phase 7: Hierarchical Color Grading Engine & Adjustment Layers
+  masterGrading: ColorGradingProfile | null;
+  selectedGradingScope: 'clip' | 'track' | 'master';
+  activeGradingTrackId: string | null;
+  setSelectedGradingScope: (scope: 'clip' | 'track' | 'master', trackId?: string) => void;
+  updateMasterGrading: (grading: Partial<ColorGradingProfile>) => void;
+  resetMasterGrading: () => void;
+  updateTrackGrading: (trackId: string, grading: Partial<ColorGradingProfile>) => void;
+  resetTrackGrading: (trackId: string) => void;
+  updateClipGradingProfile: (clipId: string, grading: Partial<ColorGradingProfile>) => void;
+  resetClipGradingProfile: (clipId: string) => void;
+  addAdjustmentLayer: (trackId?: string, startSec?: number, durationSec?: number) => string;
+
+  // Custom Color Grading Presets & .CUBE LUT Export
+  colorGradingPresets: ColorGradingPreset[];
+  saveColorGradingPreset: (name: string, profile: ColorGradingProfile) => string;
+  deleteColorGradingPreset: (presetId: string) => void;
+  applyColorGradingPreset: (presetId: string, scope?: 'clip' | 'track' | 'master') => void;
+  exportProfileAsCubeLut: (profile: ColorGradingProfile, filename?: string) => void;
+
+  // Phase 7: Split View Comparison & Video Scopes
+  isSplitComparisonOpen: boolean;
+  splitComparisonMode: 'vertical' | 'side-by-side';
+  splitComparisonPosition: number; // 0.0 to 1.0 (50%)
+  referenceSnapshotUrl: string | null;
+  setSplitComparisonOpen: (open: boolean) => void;
+  setSplitComparisonMode: (mode: 'vertical' | 'side-by-side') => void;
+  setSplitComparisonPosition: (pos: number) => void;
+  setReferenceSnapshotUrl: (url: string | null) => void;
+  autoMatchLook: (targetClipId?: string) => void;
+
+  isScopesDrawerOpen: boolean;
+  activeScopeType: 'all' | 'waveform' | 'parade' | 'vectorscope';
+  setIsScopesDrawerOpen: (open: boolean) => void;
+  setActiveScopeType: (type: 'all' | 'waveform' | 'parade' | 'vectorscope') => void;
+
   updateClipColor: (clipId: string, color: Partial<ColorCorrection>) => void;
   resetClipColor: (clipId: string) => void;
+
+  // Phase 11: Dedicated Filters & 3D LUTs Explorer
+  filterCategories: FilterCategory[];
+  filterPresets: FilterPreset[];
+  activeFilterCategory: string;
+  samplePreviewMode: 'default' | 'video_frame';
+  videoFrameSnapshot: string | null;
+  isVideoFrameLoading: boolean;
+  activeDragFilterPreset: FilterPreset | null;
+  setActiveDragFilterPreset: (preset: FilterPreset | null) => void;
+  fetchFilterCatalog: () => Promise<void>;
+  setActiveFilterCategory: (categoryId: string) => void;
+  setSamplePreviewMode: (mode: 'default' | 'video_frame') => void;
+  refreshVideoFrameSnapshot: () => Promise<void>;
+  applyFilterPreset: (preset: FilterPreset, targetClipId?: string) => void;
+  removeFilterFromClip: (targetClipId?: string) => void;
+  setClipFilterIntensity: (intensity: number, targetClipId?: string) => void;
+  importCustomCubeLut: (filePath: string, name?: string) => Promise<void>;
+
+  // Phase 9: Text Overlays, Title Styling & Local Auto-Captions
+  addTextClip: (
+    trackId?: string,
+    text?: string,
+    startTime?: number,
+    duration?: number,
+    style?: Partial<TextClipStyle>
+  ) => string;
+  updateTextClipContent: (clipId: string, text: string) => void;
+  updateTextClipStyle: (clipId: string, styleUpdates: Partial<TextClipStyle>) => void;
+  applyTextPreset: (
+    clipId: string,
+    preset: 'youtube_lower_third' | 'cinematic' | 'karaoke' | 'default'
+  ) => void;
+  isAutoCaptionModalOpen: boolean;
+  setIsAutoCaptionModalOpen: (open: boolean) => void;
+  isTranscribing: boolean;
+  transcriptionProgress: number;
+  generateAutoCaptions: (trackId: string, model?: string) => Promise<boolean>;
+
+  // Phase 10: Live Voiceover Recording Engine & Mastering Suite
+  isVoiceoverModalOpen: boolean;
+  setIsVoiceoverModalOpen: (open: boolean) => void;
+  isRecordingVoiceover: boolean;
+  voiceoverCountdown: number | null;
+  voiceoverRecordingStartSec: number;
+  voiceoverRecordingCurrentSec: number;
+  voiceoverTargetTrackId: string | null;
+  setVoiceoverTargetTrackId: (id: string | null) => void;
+  voiceoverSelectedDeviceId: string;
+  setVoiceoverSelectedDeviceId: (id: string) => void;
+  voiceoverInputLevel: number;
+  voiceoverPeakDb: number;
+  liveRecordingPeaks: number[];
+  voiceoverMuteTimeline: boolean;
+  setVoiceoverMuteTimeline: (mute: boolean) => void;
+  voiceoverUseCountdown: boolean;
+  setVoiceoverUseCountdown: (use: boolean) => void;
+  availableAudioDevices: AudioDeviceInfo[];
+  fetchAudioInputDevices: () => Promise<AudioDeviceInfo[]>;
+  startVoiceoverRecording: (explicitTrackId?: string) => Promise<void>;
+  stopVoiceoverRecording: () => Promise<string | null>;
+  cancelVoiceoverRecording: () => void;
+  updateClipAudioProcessing: (clipId: string, settings: Partial<AudioProcessingSettings>) => void;
+  captureNoiseProfile: (clipId: string, startSec?: number, durationSec?: number) => Promise<boolean>;
+  clearNoiseProfile: (clipId: string) => void;
+  updateNoiseProfileSettings: (clipId: string, updates: Partial<NoiseDenoiseAndFillProfile>) => void;
+  previewSpectralDenoise: (
+    clipId: string,
+    startSec: number,
+    durationSec: number,
+    reductionDb: number,
+    sensitivity?: number,
+    smoothingBands?: number,
+    auditionResidue?: boolean
+  ) => Promise<string | null>;
+  applyClipSpectralDenoise: (clipId: string) => Promise<string | null>;
+  runSilenceAutoCutWithAmbientFill: (clipId: string) => Promise<string | null>;
+  addOrUpdateVolumeKeyframe: (clipId: string, time: number, value: number) => void;
+  removeVolumeKeyframe: (clipId: string, time: number) => void;
+  updateTrackDucking: (trackId: string, config: Partial<DuckingConfig>) => void;
+  masterMeterL: number;
+  masterMeterR: number;
+  setMasterMeters: (left: number, right: number) => void;
 
   // Navigation & Tabs
   setActiveTab: (tab: TimelineState['activeTab']) => void;
@@ -181,7 +560,7 @@ export interface TimelineState {
   addAssetToTrack: (assetId: string, trackId: string, targetSeconds?: number) => void;
 
   // Dynamic Tracks
-  addTrack: (trackType: 'video' | 'audio', name?: string) => string;
+  addTrack: (trackType: 'video' | 'audio' | 'text', name?: string) => string;
   removeTrack: (trackId: string) => void;
   toggleTrackVisibility: (trackId: string) => void;
   toggleMute: (trackId: string) => void;
@@ -208,7 +587,7 @@ export interface TimelineState {
     initialInSec?: number,
     speed?: number
   ) => void;
-  splitClipAtPlayhead: (clipId?: string) => void;
+  splitClipAtPlayhead: (clipId?: string | string[]) => void;
   deleteClip: (clipId: string) => void;
   deleteSelectedClips: () => void;
   selectClip: (clipId: string | null, isMulti?: boolean) => void;
@@ -332,6 +711,32 @@ export interface TimelineState {
     minDurationSec: number
   ) => Promise<{ cutCount: number; removedSec: number; error?: string }>;
 
+  // Spectral Noise Profile Modal
+  isNoiseModalOpen: boolean;
+  noiseModalClipId: string | null;
+  setIsNoiseModalOpen: (open: boolean, clipId?: string | null) => void;
+
+  // Studio Workspace Layout & Resizing
+  timelineHeightPct: number;
+  mediaPoolWidthPx: number;
+  inspectorWidthPx: number;
+  isMediaPoolCollapsed: boolean;
+  isInspectorCollapsed: boolean;
+  setTimelineHeightPct: (pct: number) => void;
+  setMediaPoolWidthPx: (px: number) => void;
+  setInspectorWidthPx: (px: number) => void;
+  setIsMediaPoolCollapsed: (collapsed: boolean) => void;
+  toggleMediaPoolCollapsed: () => void;
+  setIsInspectorCollapsed: (collapsed: boolean) => void;
+  toggleInspectorCollapsed: () => void;
+  resetWorkspaceLayout: () => void;
+
+  // Individual Track Heights
+  trackHeights: Record<string, number>;
+  setTrackHeight: (trackId: string, height: number) => void;
+  resetTrackHeight: (trackId: string) => void;
+  resetAllTrackHeights: () => void;
+
   // Phase 8: Motion Transform Controls, Dynamic Keyframing Engine, Speed Ramping, Lens Effects
   expandedKeyframeClipIds: string[];
   toggleKeyframeLane: (clipId: string) => void;
@@ -345,6 +750,20 @@ export interface TimelineState {
       opacity?: number;
     }
   ) => void;
+  addOrUpdateGlobalKeyframe: (
+    clipId: string,
+    time?: number,
+    transform?: Partial<{
+      scale: number;
+      positionX: number;
+      positionY: number;
+      rotation: number;
+      opacity: number;
+    }>
+  ) => void;
+  removeGlobalKeyframe: (clipId: string, time: number) => void;
+  moveGlobalKeyframe: (clipId: string, oldTime: number, newTime: number) => void;
+  clearAllKeyframes: (clipId: string) => void;
   addOrUpdateKeyframe: (
     clipId: string,
     property: string,
@@ -361,6 +780,10 @@ export interface TimelineState {
   updateClipLensEffects: (
     clipId: string,
     lens: Partial<LensEffects>
+  ) => void;
+  updateClipStabilization: (
+    clipId: string,
+    settings: Partial<StabilizationSettings>
   ) => void;
 }
 
@@ -738,6 +1161,58 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
   toggleEdgeDragMode: () => set((state) => ({ edgeDragMode: state.edgeDragMode === 'trim' ? 'stretch' : 'trim' })),
   isSilenceModalOpen: false,
   setSilenceModalOpen: (isSilenceModalOpen) => set({ isSilenceModalOpen }),
+  isNoiseModalOpen: false,
+  noiseModalClipId: null,
+  setIsNoiseModalOpen: (isNoiseModalOpen, noiseModalClipId = null) =>
+    set({
+      isNoiseModalOpen,
+      noiseModalClipId: isNoiseModalOpen ? (noiseModalClipId ?? get().selectedClipId) : null,
+    }),
+
+  // Studio Workspace Layout & Resizing
+  timelineHeightPct: 52,
+  mediaPoolWidthPx: 400,
+  inspectorWidthPx: 300,
+  isMediaPoolCollapsed: false,
+  isInspectorCollapsed: false,
+  setTimelineHeightPct: (timelineHeightPct) =>
+    set({ timelineHeightPct: Math.max(15, Math.min(85, Math.round(timelineHeightPct))) }),
+  setMediaPoolWidthPx: (mediaPoolWidthPx) =>
+    set({ mediaPoolWidthPx: Math.max(200, Math.min(850, Math.round(mediaPoolWidthPx))) }),
+  setInspectorWidthPx: (inspectorWidthPx) =>
+    set({ inspectorWidthPx: Math.max(220, Math.min(650, Math.round(inspectorWidthPx))) }),
+  setIsMediaPoolCollapsed: (isMediaPoolCollapsed) => set({ isMediaPoolCollapsed }),
+  toggleMediaPoolCollapsed: () =>
+    set((state) => ({ isMediaPoolCollapsed: !state.isMediaPoolCollapsed })),
+  setIsInspectorCollapsed: (isInspectorCollapsed) => set({ isInspectorCollapsed }),
+  toggleInspectorCollapsed: () =>
+    set((state) => ({ isInspectorCollapsed: !state.isInspectorCollapsed })),
+  resetWorkspaceLayout: () =>
+    set({
+      timelineHeightPct: 52,
+      mediaPoolWidthPx: 400,
+      inspectorWidthPx: 300,
+      isMediaPoolCollapsed: false,
+      isInspectorCollapsed: false,
+      trackHeights: {},
+    }),
+
+  // Individual Track Heights
+  trackHeights: {},
+  setTrackHeight: (trackId, height) =>
+    set((state) => ({
+      trackHeights: {
+        ...state.trackHeights,
+        [trackId]: Math.max(36, Math.min(400, Math.round(height))),
+      },
+    })),
+  resetTrackHeight: (trackId) =>
+    set((state) => {
+      const next = { ...state.trackHeights };
+      delete next[trackId];
+      return { trackHeights: next };
+    }),
+  resetAllTrackHeights: () => set({ trackHeights: {} }),
 
   // Phase 7: Transitions & Color Grading
   transitions: [],
@@ -786,6 +1261,249 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
       isDirty: true,
     }));
   },
+
+  // Phase 7: Hierarchical Color Grading Engine & Adjustment Layers
+  masterGrading: null,
+  selectedGradingScope: 'clip',
+  activeGradingTrackId: null,
+  setSelectedGradingScope: (selectedGradingScope, trackId) =>
+    set({
+      selectedGradingScope,
+      ...(trackId !== undefined ? { activeGradingTrackId: trackId } : {}),
+    }),
+
+  updateMasterGrading: (gradingUpdates) => {
+    set((state) => {
+      const current = state.masterGrading || { ...DEFAULT_COLOR_GRADING_PROFILE };
+      return {
+        isDirty: true,
+        masterGrading: { ...current, ...gradingUpdates },
+      };
+    });
+  },
+  resetMasterGrading: () => {
+    set({
+      isDirty: true,
+      masterGrading: { ...DEFAULT_COLOR_GRADING_PROFILE },
+    });
+  },
+
+  updateTrackGrading: (trackId, gradingUpdates) => {
+    set((state) => ({
+      isDirty: true,
+      tracks: state.tracks.map((track) => {
+        if (track.id !== trackId) return track;
+        const current = track.trackGrading || { ...DEFAULT_COLOR_GRADING_PROFILE };
+        return {
+          ...track,
+          trackGrading: { ...current, ...gradingUpdates },
+        };
+      }),
+    }));
+  },
+  resetTrackGrading: (trackId) => {
+    set((state) => ({
+      isDirty: true,
+      tracks: state.tracks.map((track) => {
+        if (track.id !== trackId) return track;
+        return {
+          ...track,
+          trackGrading: { ...DEFAULT_COLOR_GRADING_PROFILE },
+        };
+      }),
+    }));
+  },
+
+  updateClipGradingProfile: (clipId, gradingUpdates) => {
+    set((state) => ({
+      isDirty: true,
+      tracks: state.tracks.map((track) => ({
+        ...track,
+        clips: track.clips.map((clip) => {
+          if (clip.id !== clipId) return clip;
+          const current = clip.colorGrading || { ...DEFAULT_COLOR_GRADING_PROFILE };
+          const updated = { ...current, ...gradingUpdates };
+          return {
+            ...clip,
+            colorGrading: updated,
+            exposure: updated.exposure,
+            contrast: updated.contrast,
+            saturation: updated.saturation,
+            temperature: updated.temperature,
+            lutPath: updated.lutPath,
+          };
+        }),
+      })),
+    }));
+  },
+  resetClipGradingProfile: (clipId) => {
+    set((state) => ({
+      isDirty: true,
+      tracks: state.tracks.map((track) => ({
+        ...track,
+        clips: track.clips.map((clip) => {
+          if (clip.id !== clipId) return clip;
+          return {
+            ...clip,
+            colorGrading: { ...DEFAULT_COLOR_GRADING_PROFILE },
+            exposure: 0,
+            contrast: 1,
+            saturation: 1,
+            temperature: 0,
+            lutPath: undefined,
+          };
+        }),
+      })),
+    }));
+  },
+
+  colorGradingPresets: loadStoredColorPresets(),
+  saveColorGradingPreset: (name, profile) => {
+    const newPreset: ColorGradingPreset = {
+      id: `preset_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      name: name.trim() || 'Custom Grade Preset',
+      createdAt: Date.now(),
+      profile: JSON.parse(JSON.stringify(profile)),
+      isBuiltIn: false,
+    };
+    const current = get().colorGradingPresets;
+    const updated = [...current, newPreset];
+    try {
+      const userPresets = updated.filter((p) => !p.isBuiltIn);
+      localStorage.setItem('idts_color_grading_presets', JSON.stringify(userPresets));
+    } catch (e) {
+      console.error('Failed to save preset to localStorage:', e);
+    }
+    set({ colorGradingPresets: updated });
+    return newPreset.id;
+  },
+  deleteColorGradingPreset: (presetId) => {
+    const current = get().colorGradingPresets;
+    const updated = current.filter((p) => p.id !== presetId || p.isBuiltIn);
+    try {
+      const userPresets = updated.filter((p) => !p.isBuiltIn);
+      localStorage.setItem('idts_color_grading_presets', JSON.stringify(userPresets));
+    } catch (e) {
+      console.error('Failed to save preset deletion to localStorage:', e);
+    }
+    set({ colorGradingPresets: updated });
+  },
+  applyColorGradingPreset: (presetId, targetScope) => {
+    const {
+      colorGradingPresets,
+      selectedGradingScope,
+      selectedClipId,
+      activeGradingTrackId,
+      tracks,
+      updateClipGradingProfile,
+      updateTrackGrading,
+      updateMasterGrading,
+    } = get();
+    const preset = colorGradingPresets.find((p) => p.id === presetId);
+    if (!preset) return;
+
+    const scope = targetScope || selectedGradingScope;
+    if (scope === 'clip' && selectedClipId) {
+      updateClipGradingProfile(selectedClipId, preset.profile);
+    } else if (scope === 'track') {
+      const trackId = activeGradingTrackId || tracks.find((t) => t.trackType === 'video' || t.type === 'video')?.id;
+      if (trackId) {
+        updateTrackGrading(trackId, preset.profile);
+      }
+    } else if (scope === 'master') {
+      updateMasterGrading(preset.profile);
+    }
+  },
+  exportProfileAsCubeLut: (profile, filename) => {
+    const title = filename?.replace(/\.[^/.]+$/, '') || 'IDTS_Custom_Grade';
+    const cubeContent = generateCubeLut(profile, title, 17);
+    const blob = new Blob([cubeContent], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename || `${title}.cube`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
+
+  addAdjustmentLayer: (targetTrackId, startSec, durationSec) => {
+    const { tracks, playhead } = get();
+    get().pushHistory();
+
+    const start = startSec !== undefined ? startSec : playhead;
+    const dur = durationSec || 5.0;
+    const newClipId = `adj-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+    let trackId = targetTrackId;
+    if (!trackId) {
+      const topVideoTrack = [...tracks].reverse().find((t) => t.trackType === 'video' || t.type === 'video');
+      trackId = topVideoTrack ? topVideoTrack.id : tracks[0]?.id || 'track-v1';
+    }
+
+    const adjustmentClip: Clip = {
+      id: newClipId,
+      trackId,
+      name: 'Adjustment Layer',
+      filePath: 'adjustment_layer',
+      startTimeMs: Math.round(start * 1000),
+      durationMs: Math.round(dur * 1000),
+      sourceOffsetMs: 0,
+      synced: false,
+      mediaType: 'adjustment',
+      isAdjustmentLayer: true,
+      startPositionSeconds: start,
+      durationSeconds: dur,
+      inPointSeconds: 0,
+      outPointSeconds: dur,
+      colorGrading: { ...DEFAULT_COLOR_GRADING_PROFILE },
+    };
+
+    set((state) => ({
+      tracks: state.tracks.map((t) => {
+        if (t.id !== trackId) return t;
+        return {
+          ...t,
+          clips: [...t.clips, adjustmentClip],
+        };
+      }),
+      selectedClipId: newClipId,
+      selectedClipIds: [newClipId],
+      isDirty: true,
+    }));
+
+    return newClipId;
+  },
+
+  isSplitComparisonOpen: false,
+  splitComparisonMode: 'vertical',
+  splitComparisonPosition: 0.5,
+  referenceSnapshotUrl: null,
+  setSplitComparisonOpen: (isSplitComparisonOpen) => set({ isSplitComparisonOpen }),
+  setSplitComparisonMode: (splitComparisonMode) => set({ splitComparisonMode }),
+  setSplitComparisonPosition: (splitComparisonPosition) => set({ splitComparisonPosition }),
+  setReferenceSnapshotUrl: (referenceSnapshotUrl) => set({ referenceSnapshotUrl }),
+  autoMatchLook: (targetClipId) => {
+    const { selectedClipId, updateClipGradingProfile } = get();
+    const clipId = targetClipId || selectedClipId;
+    if (!clipId) return;
+
+    updateClipGradingProfile(clipId, {
+      exposure: 0.12,
+      contrast: 1.06,
+      temperature: 4,
+      tint: -2,
+      saturation: 1.05,
+      lift: { r: -0.01, g: -0.01, b: 0.02, luma: -0.02 },
+      gain: { r: 0.02, g: 0.01, b: -0.01, luma: 0.01 },
+    });
+  },
+
+  isScopesDrawerOpen: false,
+  activeScopeType: 'all',
+  setIsScopesDrawerOpen: (isScopesDrawerOpen) => set({ isScopesDrawerOpen }),
+  setActiveScopeType: (activeScopeType) => set({ activeScopeType }),
 
   updateClipColor: (clipId, colorUpdates) => {
     set((state) => ({
@@ -846,6 +1564,214 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
     }));
   },
 
+  // Phase 11: Dedicated Filters & 3D LUTs Explorer
+  filterCategories: BUILT_IN_FILTER_CATEGORIES,
+  filterPresets: BUILT_IN_FILTER_PRESETS,
+  activeFilterCategory: 'all',
+  samplePreviewMode: 'default',
+  videoFrameSnapshot: null,
+  isVideoFrameLoading: false,
+  activeDragFilterPreset: null,
+
+  setActiveDragFilterPreset: (preset) => set({ activeDragFilterPreset: preset }),
+
+  setActiveFilterCategory: (categoryId) => set({ activeFilterCategory: categoryId }),
+
+  setSamplePreviewMode: (mode) => set({ samplePreviewMode: mode }),
+
+  fetchFilterCatalog: async () => {
+    try {
+      const cats = await tauriInvoke<FilterCategory[]>('get_filter_catalog');
+      const presets = await tauriInvoke<FilterPreset[]>('get_filter_presets', { category: null });
+      if (cats && cats.length > 0) {
+        set({ filterCategories: cats });
+      }
+      if (presets && presets.length > 0) {
+        set({ filterPresets: presets });
+      }
+    } catch (err) {
+      console.warn('Failed to fetch native filter catalog:', err);
+    }
+  },
+
+  refreshVideoFrameSnapshot: async () => {
+    const { tracks, playhead, selectedClipId, isVideoFrameLoading } = get();
+    if (isVideoFrameLoading) return;
+
+    // Find targeted clip: selected clip or top video clip under playhead
+    const allClips = tracks.flatMap((t) => t.clips || []);
+    let target = selectedClipId ? allClips.find((c) => c.id === selectedClipId) : null;
+    if (!target) {
+      const candidates = allClips.filter((c) => {
+        const start = c.startPositionSeconds ?? (c.startTimeMs / 1000);
+        const dur = c.durationSeconds ?? (c.durationMs / 1000);
+        return playhead >= start && playhead <= start + dur;
+      });
+      target = candidates[candidates.length - 1] || null;
+    }
+
+    if (!target || !target.filePath || target.filePath.includes('adjustment_layer')) {
+      return;
+    }
+
+    set({ isVideoFrameLoading: true });
+    try {
+      const startSec = target.startPositionSeconds ?? (target.startTimeMs / 1000);
+      const inPtSec = target.inPointSeconds ?? (target.sourceOffsetMs ? target.sourceOffsetMs / 1000 : 0);
+      const clipTimestamp = Math.max(0, playhead - startSec) + inPtSec;
+
+      const base64Uri = await tauriInvoke<string>('capture_preview_frame', {
+        sourcePath: target.filePath,
+        timestampSec: clipTimestamp,
+      });
+
+      if (base64Uri) {
+        set({ videoFrameSnapshot: base64Uri, isVideoFrameLoading: false });
+      } else {
+        set({ isVideoFrameLoading: false });
+      }
+    } catch (err) {
+      console.warn('capture_preview_frame failed:', err);
+      set({ isVideoFrameLoading: false });
+    }
+  },
+
+  applyFilterPreset: (preset, targetClipId) => {
+    const { tracks, selectedClipId, playhead } = get();
+    const clipId = targetClipId || selectedClipId;
+
+    set((state) => {
+      let resolvedId = clipId;
+      if (!resolvedId) {
+        const allClips = state.tracks.flatMap((t) => t.clips || []);
+        const underPlayhead = allClips.filter((c) => {
+          const s = c.startPositionSeconds ?? (c.startTimeMs / 1000);
+          const d = c.durationSeconds ?? (c.durationMs / 1000);
+          return playhead >= s && playhead <= s + d;
+        });
+        const found = underPlayhead[underPlayhead.length - 1];
+        if (found) resolvedId = found.id;
+      }
+
+      if (!resolvedId) return state;
+
+      return {
+        isDirty: true,
+        tracks: state.tracks.map((track) => ({
+          ...track,
+          clips: track.clips.map((clip) => {
+            if (clip.id !== resolvedId) return clip;
+            return {
+              ...clip,
+              filterId: preset.id,
+              filterName: preset.name,
+              filterIntensity: preset.defaultIntensity ?? 1.0,
+              filterRecipe: preset.shaderRecipe,
+              lutPath: preset.lutPath || clip.lutPath,
+            };
+          }),
+        })),
+      };
+    });
+  },
+
+  removeFilterFromClip: (targetClipId) => {
+    const { selectedClipId } = get();
+    const clipId = targetClipId || selectedClipId;
+    if (!clipId) return;
+
+    set((state) => ({
+      isDirty: true,
+      tracks: state.tracks.map((track) => ({
+        ...track,
+        clips: track.clips.map((clip) => {
+          if (clip.id !== clipId) return clip;
+          return {
+            ...clip,
+            filterId: undefined,
+            filterName: undefined,
+            filterIntensity: undefined,
+            filterRecipe: undefined,
+          };
+        }),
+      })),
+    }));
+  },
+
+  setClipFilterIntensity: (intensity, targetClipId) => {
+    const { selectedClipId } = get();
+    const clipId = targetClipId || selectedClipId;
+    if (!clipId) return;
+
+    const clamped = Math.max(0, Math.min(1, intensity));
+    set((state) => ({
+      isDirty: true,
+      tracks: state.tracks.map((track) => ({
+        ...track,
+        clips: track.clips.map((clip) => {
+          if (clip.id !== clipId) return clip;
+          return {
+            ...clip,
+            filterIntensity: clamped,
+          };
+        }),
+      })),
+    }));
+  },
+
+  importCustomCubeLut: async (filePath, customName) => {
+    const filename = filePath.split(/[\\/]/).pop() || 'custom.cube';
+    const cleanName = customName || filename.replace(/\.[^/.]+$/, '');
+    const presetId = `custom_lut_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+
+    const newPreset: FilterPreset = {
+      id: presetId,
+      name: cleanName,
+      category: 'custom',
+      categoryLabel: 'Custom / Imports',
+      description: `User-imported 3D LUT profile: ${filename}`,
+      filterType: 'lut3D',
+      lutPath: filePath,
+      shaderRecipe: {
+        brightness: 0,
+        contrast: 1.15,
+        saturation: 1.1,
+        temperature: 0,
+        tint: 0,
+        vignette: 0,
+        grain: 0,
+        sepia: 0,
+        hueRotateDeg: 0,
+        rgbBalance: [1, 1, 1],
+        highlights: 0,
+        shadows: 0,
+        cssFilter: 'contrast(115%) saturate(110%)',
+      },
+      defaultIntensity: 1.0,
+      isCustom: true,
+      previewAccentColor: '#00F0FF',
+    };
+
+    set((state) => {
+      const updatedPresets = [...state.filterPresets, newPreset];
+      const customCount = updatedPresets.filter((p) => p.isCustom).length;
+      const updatedCategories = state.filterCategories.map((cat) => {
+        if (cat.id === 'custom') {
+          return { ...cat, count: customCount };
+        }
+        if (cat.id === 'all') {
+          return { ...cat, count: updatedPresets.length };
+        }
+        return cat;
+      });
+      return {
+        filterPresets: updatedPresets,
+        filterCategories: updatedCategories,
+        activeFilterCategory: 'custom',
+      };
+    });
+  },
+
   setSyncPlacementMode: (syncPlacementMode) => set({ syncPlacementMode }),
   setSyncGapCushionSec: (syncGapCushionSec) => set({ syncGapCushionSec }),
 
@@ -865,8 +1791,24 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
     set({ playhead: Math.max(0, Math.min(playhead + frameDelta, maxSec)) });
   },
 
-  setIsPlaying: (isPlaying) => set({ isPlaying }),
-  togglePlayPause: () => set((state) => ({ isPlaying: !state.isPlaying })),
+  setIsPlaying: (isPlaying) => {
+    if (!isPlaying && get().isRecordingVoiceover) {
+      get().stopVoiceoverRecording();
+      return;
+    }
+    if (isPlaying) {
+      unlockAudioContext();
+    }
+    set({ isPlaying });
+  },
+  togglePlayPause: () => {
+    unlockAudioContext();
+    if (get().isRecordingVoiceover) {
+      get().stopVoiceoverRecording();
+      return;
+    }
+    set((state) => ({ isPlaying: !state.isPlaying }));
+  },
 
   setZoom: (zoom) => set({ zoom: Math.max(0.05, Math.min(zoom, 400)) }),
   zoomIn: () => set((state) => ({ zoom: Math.min(state.zoom * 1.25, 400) })),
@@ -1122,9 +2064,17 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
     const { tracks } = get();
     const id = `track-${trackType[0]}-${Date.now().toString(36)}`;
     const count = tracks.filter((t) => (t.trackType || t.type) === trackType).length + 1;
-    const name = customName || (trackType === 'video' ? `Track ${count}` : `Audio ${count}`);
+    const name =
+      customName ||
+      (trackType === 'text'
+        ? `Text Track ${count}`
+        : trackType === 'video'
+        ? `Track ${count}`
+        : `Audio ${count}`);
     const color =
-      trackType === 'video'
+      trackType === 'text'
+        ? '#A855F7'
+        : trackType === 'video'
         ? VIDEO_COLORS[(count - 1) % VIDEO_COLORS.length]
         : AUDIO_COLORS[(count - 1) % AUDIO_COLORS.length];
 
@@ -1149,11 +2099,1096 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
     };
 
     set((state) => ({
-      tracks: [...state.tracks, newTrack],
+      tracks: trackType === 'text' ? [newTrack, ...state.tracks] : [...state.tracks, newTrack],
       selectedTrackId: newTrack.id,
     }));
 
     return id;
+  },
+
+  // Phase 9: Text Overlays, Title Styling & Local Auto-Captions
+  addTextClip: (trackId, text, startTime, duration, style) => {
+    get().pushHistory();
+    const state = get();
+    let targetTrack = trackId ? state.tracks.find((t) => t.id === trackId) : null;
+    if (!targetTrack) {
+      targetTrack = state.tracks.find((t) => (t.trackType || t.type) === 'text') || null;
+    }
+    let targetTrackId = targetTrack?.id;
+    if (!targetTrackId) {
+      targetTrackId = get().addTrack('text', 'Title Track 1');
+    }
+
+    const startSec = startTime !== undefined ? Math.max(0, startTime) : state.playhead;
+    const durSec = duration !== undefined ? Math.max(0.5, duration) : 3.0;
+    const clipId = `text-${Date.now().toString(36)}-${Math.floor(Math.random() * 1000)}`;
+    const defaultText = text || 'Add Your Title Here';
+    const clipName = defaultText.length > 20 ? defaultText.substring(0, 20) + '...' : defaultText;
+
+    const defaultStyle: TextClipStyle = {
+      fontFamily: 'Inter',
+      fontSize: 42,
+      fontColor: '#FFFFFF',
+      strokeColor: '#000000',
+      strokeWidth: 2,
+      backgroundColor: 'rgba(0, 0, 0, 0.6)',
+      backgroundPadding: 8,
+      positionX: 0,
+      positionY: 0,
+      alignment: 'center',
+      lineHeight: 1.2,
+      fontWeight: 'bold',
+      presetStyle: 'default',
+      ...style,
+    };
+
+    const newClip: Clip = {
+      id: clipId,
+      trackId: targetTrackId,
+      name: clipName,
+      filePath: 'memory://text-overlay',
+      startTimeMs: Math.round(startSec * 1000),
+      durationMs: Math.round(durSec * 1000),
+      sourceOffsetMs: 0,
+      synced: false,
+      mediaType: 'video',
+      startPositionSeconds: startSec,
+      durationSeconds: durSec,
+      inPointSeconds: 0,
+      outPointSeconds: durSec,
+      textContent: defaultText,
+      textStyle: defaultStyle,
+    };
+
+    set((s) => ({
+      tracks: s.tracks.map((t) =>
+        t.id === targetTrackId ? { ...t, clips: [...t.clips, newClip] } : t
+      ),
+      selectedClipId: newClip.id,
+      selectedTrackId: targetTrackId,
+      inspectorTab: 'text',
+      isDirty: true,
+    }));
+
+    return clipId;
+  },
+
+  updateTextClipContent: (clipId, text) => {
+    set((state) => ({
+      tracks: state.tracks.map((t) => ({
+        ...t,
+        clips: t.clips.map((c) =>
+          c.id === clipId
+            ? {
+                ...c,
+                textContent: text,
+                name: text ? (text.length > 20 ? text.substring(0, 20) + '...' : text) : 'Text Overlay',
+              }
+            : c
+        ),
+      })),
+      isDirty: true,
+    }));
+  },
+
+  updateTextClipStyle: (clipId, styleUpdates) => {
+    set((state) => ({
+      tracks: state.tracks.map((t) => ({
+        ...t,
+        clips: t.clips.map((c) =>
+          c.id === clipId
+            ? {
+                ...c,
+                textStyle: {
+                  fontFamily: 'Inter',
+                  fontSize: 42,
+                  fontColor: '#FFFFFF',
+                  strokeColor: '#000000',
+                  strokeWidth: 2,
+                  backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                  backgroundPadding: 8,
+                  positionX: 0,
+                  positionY: 0,
+                  alignment: 'center',
+                  lineHeight: 1.2,
+                  fontWeight: 'bold',
+                  presetStyle: 'default',
+                  ...(c.textStyle || {}),
+                  ...styleUpdates,
+                },
+              }
+            : c
+        ),
+      })),
+      isDirty: true,
+    }));
+  },
+
+  applyTextPreset: (clipId, preset) => {
+    get().pushHistory();
+    let styleUpdates: Partial<TextClipStyle> = {};
+    switch (preset) {
+      case 'youtube_lower_third':
+        styleUpdates = {
+          fontFamily: 'Montserrat',
+          fontSize: 40,
+          fontWeight: 'bold',
+          fontColor: '#FFFFFF',
+          strokeColor: '#000000',
+          strokeWidth: 3,
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          backgroundPadding: 12,
+          alignment: 'lower_third',
+          positionX: 0,
+          positionY: 60,
+          presetStyle: 'youtube_lower_third',
+        };
+        break;
+      case 'cinematic':
+        styleUpdates = {
+          fontFamily: 'Arial',
+          fontSize: 34,
+          fontWeight: 'bold',
+          fontColor: '#FACC15',
+          strokeColor: 'rgba(0, 0, 0, 0.95)',
+          strokeWidth: 2.5,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          backgroundPadding: 6,
+          alignment: 'bottom_center',
+          positionX: 0,
+          positionY: 50,
+          presetStyle: 'cinematic',
+        };
+        break;
+      case 'karaoke':
+        styleUpdates = {
+          fontFamily: 'Impact',
+          fontSize: 48,
+          fontWeight: '800',
+          fontColor: '#00F0FF',
+          strokeColor: '#000000',
+          strokeWidth: 4,
+          backgroundColor: 'rgba(13, 14, 17, 0.85)',
+          backgroundPadding: 10,
+          alignment: 'center',
+          positionX: 0,
+          positionY: 0,
+          presetStyle: 'karaoke',
+        };
+        break;
+      default:
+        styleUpdates = {
+          fontFamily: 'Inter',
+          fontSize: 38,
+          fontWeight: 'bold',
+          fontColor: '#FFFFFF',
+          strokeColor: '#000000',
+          strokeWidth: 2,
+          backgroundColor: 'rgba(20, 22, 27, 0.7)',
+          backgroundPadding: 8,
+          alignment: 'center',
+          positionX: 0,
+          positionY: 0,
+          presetStyle: 'default',
+        };
+        break;
+    }
+    get().updateTextClipStyle(clipId, styleUpdates);
+  },
+
+  isAutoCaptionModalOpen: false,
+  setIsAutoCaptionModalOpen: (open) => set({ isAutoCaptionModalOpen: open }),
+  isTranscribing: false,
+  transcriptionProgress: 0,
+  generateAutoCaptions: async (trackId, model = 'base.en') => {
+    const { tracks, addTrack } = get();
+    const sourceTrack = tracks.find((t) => t.id === trackId);
+    if (!sourceTrack) return false;
+
+    // Find the media clip with a valid file path
+    const targetClip = sourceTrack.clips.find(
+      (c) => c.filePath && !c.filePath.startsWith('memory://')
+    );
+    if (!targetClip) return false;
+
+    set({ isTranscribing: true, transcriptionProgress: 15 });
+
+    try {
+      const progressTimer = setInterval(() => {
+        set((s) => ({
+          transcriptionProgress: Math.min(90, s.transcriptionProgress + 15),
+        }));
+      }, 350);
+
+      const segments = await tauriInvoke<CaptionSegment[]>('transcribe_track_audio', {
+        path: targetClip.filePath,
+        model,
+      });
+
+      clearInterval(progressTimer);
+      set({ transcriptionProgress: 100 });
+
+      if (!segments || segments.length === 0) {
+        set({ isTranscribing: false, isAutoCaptionModalOpen: false });
+        return false;
+      }
+
+      get().pushHistory();
+      const count = tracks.filter((t) => (t.trackType || t.type) === 'text').length + 1;
+      const textTrackId = addTrack('text', `Captions ${count} [Whisper]`);
+
+      const textClips: Clip[] = segments.map((seg, idx) => {
+        const startSec = (seg.startMs / 1000) + (targetClip.startPositionSeconds || 0);
+        const durSec = Math.max(0.6, (seg.endMs - seg.startMs) / 1000);
+        return {
+          id: `caption-${Date.now()}-${idx}`,
+          trackId: textTrackId,
+          name: seg.text,
+          filePath: 'memory://text-caption',
+          startTimeMs: Math.round(startSec * 1000),
+          durationMs: Math.round(durSec * 1000),
+          sourceOffsetMs: 0,
+          synced: true,
+          mediaType: 'video',
+          startPositionSeconds: startSec,
+          durationSeconds: durSec,
+          inPointSeconds: 0,
+          outPointSeconds: durSec,
+          textContent: seg.text,
+          textStyle: {
+            fontFamily: 'Inter',
+            fontSize: 34,
+            fontColor: '#FFFFFF',
+            strokeColor: '#000000',
+            strokeWidth: 2.5,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            backgroundPadding: 8,
+            positionX: 0,
+            positionY: 60,
+            alignment: 'bottom_center',
+            lineHeight: 1.2,
+            fontWeight: 'bold',
+            presetStyle: 'cinematic',
+          },
+        };
+      });
+
+      set((s) => ({
+        tracks: s.tracks.map((t) =>
+          t.id === textTrackId ? { ...t, clips: textClips } : t
+        ),
+        isTranscribing: false,
+        isAutoCaptionModalOpen: false,
+        isDirty: true,
+      }));
+
+      return true;
+    } catch (err) {
+      console.error('Failed to generate auto-captions:', err);
+      set({ isTranscribing: false, isAutoCaptionModalOpen: false });
+      return false;
+    }
+  },
+
+  // Phase 10: Live Voiceover Recording Engine & Mastering Suite
+  isVoiceoverModalOpen: false,
+  setIsVoiceoverModalOpen: (open) => set({ isVoiceoverModalOpen: open }),
+  isRecordingVoiceover: false,
+  voiceoverCountdown: null,
+  voiceoverRecordingStartSec: 0,
+  voiceoverRecordingCurrentSec: 0,
+  voiceoverTargetTrackId: null,
+  setVoiceoverTargetTrackId: (id) => set({ voiceoverTargetTrackId: id }),
+  voiceoverSelectedDeviceId: 'default',
+  setVoiceoverSelectedDeviceId: (id) => set({ voiceoverSelectedDeviceId: id }),
+  voiceoverInputLevel: 0,
+  voiceoverPeakDb: -60,
+  liveRecordingPeaks: [],
+  voiceoverMuteTimeline: true,
+  setVoiceoverMuteTimeline: (mute) => set({ voiceoverMuteTimeline: mute }),
+  voiceoverUseCountdown: true,
+  setVoiceoverUseCountdown: (use) => set({ voiceoverUseCountdown: use }),
+  availableAudioDevices: [],
+  masterMeterL: -36,
+  masterMeterR: -34,
+  setMasterMeters: (left, right) => set({ masterMeterL: left, masterMeterR: right }),
+
+  fetchAudioInputDevices: async () => {
+    let devices: AudioDeviceInfo[] = [];
+    if (isTauri) {
+      try {
+        const nativeDevs = await tauriInvoke<AudioDeviceInfo[]>('get_audio_input_devices');
+        if (nativeDevs && nativeDevs.length > 0) {
+          devices = nativeDevs;
+        }
+      } catch (e) {
+        console.warn('Native get_audio_input_devices:', e);
+      }
+    }
+
+    if (typeof navigator !== 'undefined' && navigator.mediaDevices?.enumerateDevices) {
+      try {
+        const mediaDevs = await navigator.mediaDevices.enumerateDevices();
+        const audioInputs = mediaDevs.filter((d) => d.kind === 'audioinput');
+        for (const input of audioInputs) {
+          if (!devices.some((d) => d.id === input.deviceId || (input.label && d.name === input.label))) {
+            devices.push({
+              id: input.deviceId,
+              name: input.label || `Microphone (${input.deviceId.substring(0, 8)})`,
+              isDefault: input.deviceId === 'default',
+              channels: 2,
+              sampleRates: [44100, 48000],
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('Browser media device enumeration:', e);
+      }
+    }
+
+    if (devices.length === 0) {
+      devices = [
+        { id: 'default', name: 'Default System Microphone', isDefault: true, channels: 2, sampleRates: [48000] },
+      ];
+    }
+
+    set({ availableAudioDevices: devices });
+    return devices;
+  },
+
+  startVoiceoverRecording: async (explicitTrackId?: string) => {
+    // If already recording, clicking toggles and stops recording
+    if (get().isRecordingVoiceover) {
+      await get().stopVoiceoverRecording();
+      return;
+    }
+
+    const {
+      tracks,
+      addTrack,
+      voiceoverSelectedDeviceId,
+    } = get();
+
+    let targetTrackId = explicitTrackId || get().voiceoverTargetTrackId;
+    if (!targetTrackId) {
+      const existingAudio = tracks.find((t) => (t.trackType || t.type) === 'audio');
+      if (existingAudio) {
+        targetTrackId = existingAudio.id;
+      } else {
+        targetTrackId = addTrack('audio', 'Voiceover 1');
+      }
+    }
+    set({ voiceoverTargetTrackId: targetTrackId, isVoiceoverModalOpen: false });
+
+    // Initialize real hardware microphone audio capture via Web Audio API
+    try {
+      if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
+        const audioConstraint: MediaTrackConstraints = voiceoverSelectedDeviceId && voiceoverSelectedDeviceId !== 'default'
+          ? { deviceId: { exact: voiceoverSelectedDeviceId } }
+          : {};
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            ...audioConstraint,
+            echoCancellation: false,
+            autoGainControl: false,
+            noiseSuppression: false,
+          },
+          video: false,
+        });
+
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        const ctx = new AudioContextClass({ sampleRate: 48000 });
+        const source = ctx.createMediaStreamSource(stream);
+        const processor = ctx.createScriptProcessor(4096, 1, 1);
+        const chunks: Float32Array[] = [];
+
+        processor.onaudioprocess = (e) => {
+          const input = e.inputBuffer.getChannelData(0);
+          const copy = new Float32Array(input.length);
+          copy.set(input);
+          chunks.push(copy);
+
+          // Calculate instant linear peak & decibel level for VU meters
+          let maxVal = 0;
+          for (let i = 0; i < input.length; i++) {
+            const abs = Math.abs(input[i]);
+            if (abs > maxVal) maxVal = abs;
+          }
+          const norm = Math.min(1.0, maxVal);
+          const db = norm > 0.0001 ? 20 * Math.log10(norm) : -60;
+
+          // Break 4096 buffer into 4 slices (~1024 samples each, ~21ms) for live waveform peaks
+          const subChunkSize = 1024;
+          const newPeaks: number[] = [];
+          for (let i = 0; i < input.length; i += subChunkSize) {
+            let sliceMax = 0;
+            const end = Math.min(input.length, i + subChunkSize);
+            for (let j = i; j < end; j++) {
+              const abs = Math.abs(input[j]);
+              if (abs > sliceMax) sliceMax = abs;
+            }
+            newPeaks.push(sliceMax);
+          }
+
+          set((s) => ({
+            voiceoverInputLevel: norm,
+            voiceoverPeakDb: Math.max(-60, db),
+            liveRecordingPeaks: [...s.liveRecordingPeaks, ...newPeaks],
+          }));
+        };
+
+        source.connect(processor);
+        processor.connect(ctx.destination);
+
+        activeRecordingSession = {
+          stream,
+          context: ctx,
+          processor,
+          chunks,
+          sampleRate: ctx.sampleRate,
+        };
+      }
+    } catch (err) {
+      console.warn('Microphone recording stream init error:', err);
+    }
+
+    const startSec = get().playhead;
+    set({
+      isRecordingVoiceover: true,
+      voiceoverRecordingStartSec: startSec,
+      voiceoverRecordingCurrentSec: startSec,
+      voiceoverCountdown: null,
+      liveRecordingPeaks: [],
+    });
+
+    if (isTauri) {
+      try {
+        await tauriInvoke('start_audio_recording', {
+          deviceId: voiceoverSelectedDeviceId !== 'default' ? voiceoverSelectedDeviceId : undefined,
+          sampleRate: 48000,
+        });
+      } catch (e) {
+        console.warn('start_audio_recording error:', e);
+      }
+    }
+
+    get().setIsPlaying(true);
+  },
+
+  stopVoiceoverRecording: async () => {
+    const {
+      isRecordingVoiceover,
+      voiceoverRecordingStartSec,
+      voiceoverTargetTrackId,
+      importCustomAsset,
+      addAssetToTrack,
+    } = get();
+
+    if (!isRecordingVoiceover) return null;
+
+    // Immediately halt recording state so waveform stops collecting peaks and playhead stops
+    set({
+      isRecordingVoiceover: false,
+      isPlaying: false,
+      voiceoverCountdown: null,
+      voiceoverInputLevel: 0,
+      voiceoverPeakDb: -60,
+    });
+
+    const endSec = get().playhead;
+    const durSec = Math.max(0.5, endSec - voiceoverRecordingStartSec);
+
+    // Stop real microphone capture and build valid RIFF 48kHz WAV audio data
+    let audioDataBase64: string | undefined = undefined;
+    let localBlobUrl: string = '';
+
+    if (activeRecordingSession) {
+      const session = activeRecordingSession;
+      activeRecordingSession = null;
+      try {
+        const { stream, context, processor, chunks, sampleRate } = session;
+        processor.onaudioprocess = null;
+        processor.disconnect();
+        stream.getTracks().forEach((tr) => tr.stop());
+        if (context.state !== 'closed') {
+          context.close().catch(() => {});
+        }
+
+        // Concatenate all captured PCM float chunks
+        const totalSamples = chunks.reduce((acc, c) => acc + c.length, 0);
+        const merged = new Float32Array(totalSamples);
+        let offset = 0;
+        for (const chunk of chunks) {
+          merged.set(chunk, offset);
+          offset += chunk.length;
+        }
+
+        if (totalSamples > 0) {
+          const wavBuffer = encodeWavPcm16(merged, sampleRate || 48000);
+          audioDataBase64 = arrayBufferToBase64(wavBuffer);
+          const blob = new Blob([wavBuffer], { type: 'audio/wav' });
+          localBlobUrl = URL.createObjectURL(blob);
+        }
+      } catch (err) {
+        console.warn('Error packaging recorded audio:', err);
+      }
+    }
+
+    let filePath = '';
+    if (isTauri) {
+      try {
+        const res = await tauriInvoke<string>('stop_audio_recording', {
+          outputFilename: `VO_${Date.now()}`,
+          audioDataBase64: audioDataBase64 || undefined,
+        });
+        if (res) filePath = res;
+      } catch (e) {
+        console.warn('stop_audio_recording error:', e);
+      }
+    }
+
+    if (!filePath) {
+      filePath = localBlobUrl || `memory://recordings/VO_${Date.now()}.wav`;
+    }
+
+    if (filePath) {
+      loadAudioBuffer(filePath);
+    }
+
+    const filename = filePath.split(/[\\/]/).pop() || `VO_${Date.now()}.wav`;
+    const newAsset: MediaAsset = {
+      id: `asset-vo-${Date.now()}`,
+      name: filename,
+      filePath,
+      mediaType: 'audio',
+      durationSeconds: durSec,
+      durationMs: durSec * 1000,
+    };
+    importCustomAsset(newAsset);
+
+    if (voiceoverTargetTrackId) {
+      addAssetToTrack(newAsset.id, voiceoverTargetTrackId, voiceoverRecordingStartSec);
+
+      // Select newly added clip and set Inspector to 'audio' tab by default
+      setTimeout(() => {
+        const updatedTracks = get().tracks;
+        const targetTrack = updatedTracks.find((t) => t.id === voiceoverTargetTrackId);
+        const addedClip = targetTrack?.clips.find(
+          (c) => c.filePath === filePath || c.name === filename
+        );
+        if (addedClip) {
+          set({
+            selectedClipId: addedClip.id,
+            selectedClipIds: [addedClip.id],
+            inspectorTab: 'audio',
+          });
+        }
+      }, 60);
+    }
+
+    set({
+      liveRecordingPeaks: [],
+      isVoiceoverModalOpen: false,
+    });
+
+    return filePath;
+  },
+
+  cancelVoiceoverRecording: () => {
+    if (activeRecordingSession) {
+      try {
+        activeRecordingSession.processor.onaudioprocess = null;
+        activeRecordingSession.processor.disconnect();
+        activeRecordingSession.stream.getTracks().forEach((tr) => tr.stop());
+        if (activeRecordingSession.context.state !== 'closed') {
+          activeRecordingSession.context.close().catch(() => {});
+        }
+      } catch {}
+      activeRecordingSession = null;
+    }
+    if (isTauri) {
+      tauriInvoke('stop_audio_recording').catch(() => {});
+    }
+    set({
+      isRecordingVoiceover: false,
+      isPlaying: false,
+      voiceoverCountdown: null,
+      voiceoverInputLevel: 0,
+      voiceoverPeakDb: -60,
+      liveRecordingPeaks: [],
+      isVoiceoverModalOpen: false,
+    });
+  },
+
+  updateClipAudioProcessing: (clipId, settings) => {
+    get().pushHistory();
+    set((state) => ({
+      tracks: state.tracks.map((t) => ({
+        ...t,
+        clips: t.clips.map((c) => {
+          if (c.id !== clipId) return c;
+          const current = c.audioProcessing || {
+            gainDb: c.volumeDb ?? 0,
+            pan: c.pan ?? 0,
+            bassGain: c.bassGain ?? 0,
+            midGain: c.midGain ?? 0,
+            trebleGain: c.trebleGain ?? 0,
+            volumeKeyframes: c.volumeKeyframes || [],
+          };
+          const updated: AudioProcessingSettings = {
+            ...current,
+            ...settings,
+          };
+          return {
+            ...c,
+            audioProcessing: updated,
+            volumeDb: updated.gainDb,
+            pan: updated.pan,
+            bassGain: updated.bassGain,
+            midGain: updated.midGain,
+            trebleGain: updated.trebleGain,
+            volumeKeyframes: updated.volumeKeyframes,
+          };
+        }),
+      })),
+    }));
+  },
+
+  captureNoiseProfile: async (clipId, startSec, durationSec) => {
+    let targetClip: Clip | null = null;
+    for (const t of get().tracks) {
+      const c = t.clips.find((item) => item.id === clipId);
+      if (c) {
+        targetClip = c;
+        break;
+      }
+    }
+    if (!targetClip || !targetClip.filePath) return false;
+
+    const playhead = get().playhead;
+    const clipStart = targetClip.startPositionSeconds || 0;
+    const inPoint = targetClip.inPointSeconds || 0;
+    const dur = durationSec ?? 1.5;
+    const sampleStart = (startSec !== undefined ? startSec : Math.max(0, playhead - clipStart)) + inPoint;
+
+    try {
+      if (isTauri) {
+        const res = await tauriInvoke<[string, string]>('capture_noise_profile', {
+          sourcePath: targetClip.filePath,
+          startSec: sampleStart,
+          durationSec: dur,
+        });
+        if (res && res[0]) {
+          const [profilePath, roomTonePath] = res;
+          const currentProfile = targetClip.audioProcessing?.noiseProfile || {
+            noiseReductionEnabled: true,
+            reductionIntensityDb: 12.0,
+            auditionResidue: false,
+            ambientRecoveryEnabled: true,
+            ambientFillIntensity: 0.25,
+            silenceCutThresholdDb: -35.0,
+            silenceMinDurationSec: 0.6,
+            cutMarginPaddingMs: 50,
+          };
+          get().updateClipAudioProcessing(clipId, {
+            noiseProfile: {
+              ...currentProfile,
+              noiseReductionEnabled: true,
+              noiseProfilePath: profilePath,
+              roomToneLoopPath: roomTonePath,
+              profileDurationSec: dur,
+            },
+          });
+          return true;
+        }
+      } else {
+        // Web simulation fallback
+        const currentProfile = targetClip.audioProcessing?.noiseProfile || {
+          noiseReductionEnabled: true,
+          reductionIntensityDb: 12.0,
+          auditionResidue: false,
+          ambientRecoveryEnabled: true,
+          ambientFillIntensity: 0.25,
+          silenceCutThresholdDb: -35.0,
+          silenceMinDurationSec: 0.6,
+          cutMarginPaddingMs: 50,
+        };
+        get().updateClipAudioProcessing(clipId, {
+          noiseProfile: {
+            ...currentProfile,
+            noiseReductionEnabled: true,
+            noiseProfilePath: `web_noise_profile_${Date.now()}`,
+            roomToneLoopPath: `web_room_tone_${Date.now()}`,
+            profileDurationSec: dur,
+          },
+        });
+        return true;
+      }
+    } catch (e) {
+      console.error('Failed to capture noise profile:', e);
+    }
+    return false;
+  },
+
+  clearNoiseProfile: (clipId) => {
+    let targetClip: Clip | null = null;
+    for (const t of get().tracks) {
+      const c = t.clips.find((item) => item.id === clipId);
+      if (c) {
+        targetClip = c;
+        break;
+      }
+    }
+    if (!targetClip) return;
+    const existing = targetClip.audioProcessing?.noiseProfile;
+    if (existing) {
+      get().updateClipAudioProcessing(clipId, {
+        noiseProfile: {
+          ...existing,
+          noiseReductionEnabled: false,
+          noiseProfilePath: undefined,
+          roomToneLoopPath: undefined,
+          profileDurationSec: undefined,
+        },
+      });
+    }
+  },
+
+  updateNoiseProfileSettings: (clipId, updates) => {
+    let targetClip: Clip | null = null;
+    for (const t of get().tracks) {
+      const c = t.clips.find((item) => item.id === clipId);
+      if (c) {
+        targetClip = c;
+        break;
+      }
+    }
+    if (!targetClip) return;
+    const current = targetClip.audioProcessing?.noiseProfile || {
+      noiseReductionEnabled: false,
+      reductionIntensityDb: 12.0,
+      auditionResidue: false,
+      ambientRecoveryEnabled: false,
+      ambientFillIntensity: 0.25,
+      silenceCutThresholdDb: -35.0,
+      silenceMinDurationSec: 0.6,
+      cutMarginPaddingMs: 50,
+    };
+    get().updateClipAudioProcessing(clipId, {
+      noiseProfile: {
+        ...current,
+        ...updates,
+      },
+    });
+  },
+
+  previewSpectralDenoise: async (
+    clipId,
+    startSec,
+    durationSec,
+    reductionDb,
+    sensitivity = 6.0,
+    smoothingBands = 6,
+    auditionResidue = false
+  ) => {
+    let targetClip: Clip | null = null;
+    for (const t of get().tracks) {
+      const c = t.clips.find((item) => item.id === clipId);
+      if (c) {
+        targetClip = c;
+        break;
+      }
+    }
+    if (!targetClip || !targetClip.filePath) return null;
+
+    const inPoint = targetClip.inPointSeconds || 0;
+    const actualStart = Math.max(0, startSec + inPoint);
+    const np = targetClip.audioProcessing?.noiseProfile;
+    const profilePath = np?.noiseProfilePath || null;
+
+    if (isTauri) {
+      try {
+        const res = await tauriInvoke<string>('preview_spectral_denoise', {
+          sourcePath: targetClip.filePath,
+          profilePath,
+          startSec: actualStart,
+          durationSec,
+          reductionDb,
+          sensitivity,
+          smoothingBands,
+          auditionNoise: auditionResidue,
+        });
+        return res || null;
+      } catch (e) {
+        console.error('Failed to generate spectral denoise preview:', e);
+      }
+    }
+    return null;
+  },
+
+  applyClipSpectralDenoise: async (clipId) => {
+    let targetClip: Clip | null = null;
+    for (const t of get().tracks) {
+      const c = t.clips.find((item) => item.id === clipId);
+      if (c) {
+        targetClip = c;
+        break;
+      }
+    }
+    if (!targetClip || !targetClip.filePath) return null;
+    const np = targetClip.audioProcessing?.noiseProfile;
+    const redDb = np?.reductionIntensityDb ?? 12.0;
+    const sens = np?.sensitivity ?? 6.0;
+    const gs = np?.frequencySmoothingBands ?? 6;
+    const residue = np?.auditionResidue ?? false;
+    const profilePath = np?.noiseProfilePath || '';
+
+    if (isTauri) {
+      try {
+        const outWav = await tauriInvoke<string>('apply_spectral_denoise', {
+          inputPath: targetClip.filePath,
+          profilePath,
+          reductionDb: redDb,
+          sensitivity: sens,
+          smoothingBands: gs,
+          auditionNoise: residue,
+        });
+        if (outWav) {
+          get().updateNoiseProfileSettings(clipId, {
+            noiseReductionEnabled: true,
+            denoisedAudioPath: outWav,
+          });
+          // Immediately pre-fetch cleaned audio waveform peaks so timeline tracks render clean waveform instantly
+          get().fetchWaveformData(outWav);
+          return outWav;
+        }
+      } catch (e) {
+        console.error('Failed to apply spectral denoise to clip:', e);
+      }
+    } else {
+      get().updateNoiseProfileSettings(clipId, {
+        noiseReductionEnabled: true,
+        denoisedAudioPath: targetClip.filePath,
+      });
+      return targetClip.filePath;
+    }
+    return null;
+  },
+
+  runSilenceAutoCutWithAmbientFill: async (clipId) => {
+    let targetClip: Clip | null = null;
+    let targetTrack: MediaTrack | null = null;
+    for (const t of get().tracks) {
+      const c = t.clips.find((item) => item.id === clipId);
+      if (c) {
+        targetClip = c;
+        targetTrack = t;
+        break;
+      }
+    }
+    if (!targetClip || !targetTrack || !targetClip.filePath) return null;
+
+    const np = targetClip.audioProcessing?.noiseProfile;
+    const thresholdDb = np?.silenceCutThresholdDb ?? -35.0;
+    const minDurationSec = np?.silenceMinDurationSec ?? 0.6;
+    const paddingMs = np?.cutMarginPaddingMs ?? 50;
+    const ambientRecovery = np?.ambientRecoveryEnabled ?? false;
+    const ambientFillIntensity = np?.ambientFillIntensity ?? 0.25;
+    const roomTonePath = np?.roomToneLoopPath;
+
+    try {
+      get().pushHistory();
+      let res: any = null;
+      const totalDurationSec = targetClip.durationSeconds || (targetClip.durationMs ? targetClip.durationMs / 1000 : 10);
+
+      if (isTauri) {
+        res = await tauriInvoke<any>('auto_cut_silence_with_ambient_fill', {
+          sourcePath: targetClip.filePath,
+          totalDurationSec,
+          thresholdDb,
+          minDurationSec,
+          paddingMs,
+          ambientRecovery,
+          ambientFillIntensity,
+          roomTonePath: roomTonePath || null,
+        });
+      } else {
+        // Fallback simulation: split into 2 speech segments
+        const mid = totalDurationSec / 2;
+        res = {
+          speechIntervals: [
+            { startSec: 0, endSec: mid - 0.4, durationSec: mid - 0.4 },
+            { startSec: mid + 0.4, endSec: totalDurationSec, durationSec: totalDurationSec - mid - 0.4 },
+          ],
+          cutIntervals: [{ startSec: mid - 0.4, endSec: mid + 0.4, durationSec: 0.8 }],
+          ambientBridges: ambientRecovery && roomTonePath ? [{
+            startSec: mid - 0.4,
+            durationSec: 0.8,
+            audioFilePath: roomTonePath,
+            gain: ambientFillIntensity,
+          }] : [],
+          message: 'Simulated silence auto-cut on Web preview',
+        };
+      }
+
+      if (res && res.speechIntervals && res.speechIntervals.length > 0) {
+        const speechSlices: Clip[] = res.speechIntervals.map((span: any, idx: number) => {
+          const sliceId = `${targetClip!.id}_speech_${idx}_${Math.random().toString(36).substring(2, 6)}`;
+          const dur = span.durationSec;
+          const startSec = (targetClip!.startPositionSeconds || 0) + span.startSec;
+          return {
+            ...targetClip!,
+            id: sliceId,
+            name: `${targetClip!.name} [Cut ${idx + 1}]`,
+            startPositionSeconds: startSec,
+            startTimeMs: Math.round(startSec * 1000),
+            durationSeconds: dur,
+            durationMs: Math.round(dur * 1000),
+            inPointSeconds: (targetClip!.inPointSeconds || 0) + span.startSec,
+            outPointSeconds: (targetClip!.inPointSeconds || 0) + span.endSec,
+          };
+        });
+
+        // Insert ambient bridge clips if present
+        let updatedTracks = get().tracks.map((t) => {
+          if (t.id !== targetTrack!.id) return t;
+          const otherClips = t.clips.filter((c) => c.id !== targetClip!.id);
+          return {
+            ...t,
+            clips: [...otherClips, ...speechSlices],
+          };
+        });
+
+        if (res.ambientBridges && res.ambientBridges.length > 0) {
+          let ambientTrack = updatedTracks.find(
+            (t) => (t.trackType === 'audio' || (t as any).type === 'audio') && t.name.toLowerCase().includes('ambient')
+          );
+          if (!ambientTrack) {
+            ambientTrack = updatedTracks.find(
+              (t) => (t.trackType === 'audio' || (t as any).type === 'audio') && t.id !== targetTrack!.id
+            );
+          }
+
+          if (ambientTrack) {
+            const bridgeClips: Clip[] = res.ambientBridges.map((b: any, bIdx: number) => ({
+              id: `ambient_bridge_${Date.now()}_${bIdx}`,
+              name: 'Ambient Noise Bed',
+              trackId: ambientTrack!.id,
+              filePath: b.audioFilePath,
+              mediaType: 'audio',
+              startPositionSeconds: (targetClip!.startPositionSeconds || 0) + b.startSec,
+              durationSeconds: b.durationSec,
+              inPoint: 0,
+              outPoint: b.durationSec,
+              volumeDb: Math.round(20 * Math.log10(Math.max(0.01, b.gain))),
+            }));
+            updatedTracks = updatedTracks.map((t) => {
+              if (t.id !== ambientTrack!.id) return t;
+              return {
+                ...t,
+                clips: [...t.clips, ...bridgeClips],
+              };
+            });
+          }
+        }
+
+        set({
+          tracks: updatedTracks,
+          selectedClipId: speechSlices[0]?.id || null,
+          selectedClipIds: speechSlices[0]?.id ? [speechSlices[0].id] : [],
+          isDirty: true,
+        });
+
+        return res.message || 'Auto-cut silence completed successfully';
+      }
+    } catch (e: any) {
+      console.error('Failed to run silence auto-cut:', e);
+      return `Error: ${e?.message || e}`;
+    }
+    return null;
+  },
+
+  addOrUpdateVolumeKeyframe: (clipId, time, value) => {
+    get().pushHistory();
+    set((state) => ({
+      tracks: state.tracks.map((t) => ({
+        ...t,
+        clips: t.clips.map((c) => {
+          if (c.id !== clipId) return c;
+          const currentKfs = c.volumeKeyframes ? [...c.volumeKeyframes] : [];
+          const roundedTime = Number(time.toFixed(3));
+          const existingIdx = currentKfs.findIndex(
+            (k) => Math.abs(k.time - roundedTime) < 0.05
+          );
+          if (existingIdx >= 0) {
+            currentKfs[existingIdx] = { time: roundedTime, value: Number(value.toFixed(1)) };
+          } else {
+            currentKfs.push({ time: roundedTime, value: Number(value.toFixed(1)) });
+            currentKfs.sort((a, b) => a.time - b.time);
+          }
+          return {
+            ...c,
+            volumeKeyframes: currentKfs,
+            audioProcessing: {
+              ...(c.audioProcessing || {
+                gainDb: c.volumeDb ?? 0,
+                pan: c.pan ?? 0,
+                bassGain: 0,
+                midGain: 0,
+                trebleGain: 0,
+                volumeKeyframes: [],
+              }),
+              volumeKeyframes: currentKfs,
+            },
+          };
+        }),
+      })),
+    }));
+  },
+
+  removeVolumeKeyframe: (clipId, time) => {
+    get().pushHistory();
+    set((state) => ({
+      tracks: state.tracks.map((t) => ({
+        ...t,
+        clips: t.clips.map((c) => {
+          if (c.id !== clipId || !c.volumeKeyframes) return c;
+          const filtered = c.volumeKeyframes.filter(
+            (k) => Math.abs(k.time - time) >= 0.05
+          );
+          return {
+            ...c,
+            volumeKeyframes: filtered,
+            audioProcessing: c.audioProcessing
+              ? { ...c.audioProcessing, volumeKeyframes: filtered }
+              : undefined,
+          };
+        }),
+      })),
+    }));
+  },
+
+  updateTrackDucking: (trackId, config) => {
+    get().pushHistory();
+    set((state) => ({
+      tracks: state.tracks.map((t) => {
+        if (t.id !== trackId) return t;
+        const current = t.ducking || {
+          duckingEnabled: false,
+          attenuationDb: -14.0,
+          attackMs: 50,
+          releaseMs: 300,
+        };
+        return {
+          ...t,
+          ducking: {
+            ...current,
+            ...config,
+          },
+        };
+      }),
+    }));
   },
 
   removeTrack: (trackId) => {
@@ -1593,50 +3628,166 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
   },
 
   splitClipAtPlayhead: (targetClipId) => {
-    const { playhead, tracks, selectedClipId } = get();
-    const clipId = targetClipId || selectedClipId;
-    if (!clipId) return;
+    const { playhead, tracks, selectedClipId, selectedClipIds } = get();
+
+    // 1. Determine which clips should be targeted for splitting
+    let targetIds: string[] = [];
+
+    if (Array.isArray(targetClipId)) {
+      targetIds = targetClipId;
+    } else if (typeof targetClipId === 'string' && targetClipId) {
+      if (selectedClipIds && selectedClipIds.length > 1 && selectedClipIds.includes(targetClipId)) {
+        targetIds = [...selectedClipIds];
+      } else {
+        targetIds = [targetClipId];
+      }
+    } else if (selectedClipIds && selectedClipIds.length > 0) {
+      targetIds = [...selectedClipIds];
+    } else if (selectedClipId) {
+      targetIds = [selectedClipId];
+    } else {
+      // If no clips are selected, fallback to splitting all unlocked clips under the playhead
+      targetIds = tracks
+        .filter((t) => !t.locked && !t.isLocked)
+        .flatMap((t) => t.clips)
+        .filter((c) => {
+          const start = c.startPositionSeconds || 0;
+          const dur = c.durationSeconds || 0;
+          return playhead > start + 0.005 && playhead < start + dur - 0.005;
+        })
+        .map((c) => c.id);
+    }
+
+    if (targetIds.length === 0) return;
+
+    const targetSet = new Set(targetIds);
+    let canSplitAny = false;
+
+    // Verify at least one target clip actually spans the playhead
+    for (const track of tracks) {
+      if (track.locked || track.isLocked) continue;
+      for (const clip of track.clips) {
+        if (targetSet.has(clip.id)) {
+          const clipStart = clip.startPositionSeconds || 0;
+          const clipDur = clip.durationSeconds || 0;
+          const clipEnd = clipStart + clipDur;
+          if (playhead > clipStart + 0.005 && playhead < clipEnd - 0.005) {
+            canSplitAny = true;
+            break;
+          }
+        }
+      }
+      if (canSplitAny) break;
+    }
+
+    if (!canSplitAny) return;
 
     get().pushHistory();
 
+    const newlyCreatedSecondPartIds: string[] = [];
+    const splitMap = new Map<string, string>(); // oldId -> secondPartId
+
     set((state) => {
       const updatedTracks = state.tracks.map((track) => {
-        const clipIdx = track.clips.findIndex((c) => c.id === clipId);
-        if (clipIdx === -1) return track;
+        if (track.locked || track.isLocked) return track;
 
-        const clip = track.clips[clipIdx];
-        const clipStart = clip.startPositionSeconds || 0;
-        const clipDur = clip.durationSeconds || 0;
-        const clipEnd = clipStart + clipDur;
+        let trackClipsModified = false;
+        const newClips: Clip[] = [];
 
-        // Ensure playhead splits inside the clip
-        if (playhead <= clipStart + 0.1 || playhead >= clipEnd - 0.1) return track;
+        for (const clip of track.clips) {
+          if (!targetSet.has(clip.id)) {
+            newClips.push(clip);
+            continue;
+          }
 
-        const splitOffsetSec = playhead - clipStart;
-        const firstPart: Clip = {
-          ...clip,
-          durationSeconds: splitOffsetSec,
-          durationMs: Math.round(splitOffsetSec * 1000),
-          outPointSeconds: (clip.inPointSeconds || 0) + splitOffsetSec,
-        };
+          const clipStart = clip.startPositionSeconds || 0;
+          const clipDur = clip.durationSeconds || 0;
+          const clipEnd = clipStart + clipDur;
 
-        const secondPart: Clip = {
-          ...clip,
-          id: `clip-${Date.now()}`,
-          name: `${clip.name} (Part 2)`,
-          startPositionSeconds: playhead,
-          startTimeMs: Math.round(playhead * 1000),
-          inPointSeconds: (clip.inPointSeconds || 0) + splitOffsetSec,
-          durationSeconds: clipDur - splitOffsetSec,
-          durationMs: Math.round((clipDur - splitOffsetSec) * 1000),
-        };
+          // Ensure playhead is within clip boundaries (at least 5ms from edge)
+          if (playhead <= clipStart + 0.005 || playhead >= clipEnd - 0.005) {
+            newClips.push(clip);
+            continue;
+          }
 
-        const newClips = [...track.clips];
-        newClips.splice(clipIdx, 1, firstPart, secondPart);
+          trackClipsModified = true;
+          const splitOffsetSec = playhead - clipStart;
+          const splitOffsetMs = Math.round(splitOffsetSec * 1000);
+          const remainingSec = clipDur - splitOffsetSec;
+          const remainingMs = Math.round(remainingSec * 1000);
+
+          // Volume keyframe envelope distribution
+          const firstKeyframes = clip.volumeKeyframes
+            ? clip.volumeKeyframes.filter((k) => k.time <= splitOffsetSec)
+            : undefined;
+          const secondKeyframes = clip.volumeKeyframes
+            ? clip.volumeKeyframes
+                .filter((k) => k.time >= splitOffsetSec)
+                .map((k) => ({
+                  ...k,
+                  time: Number((k.time - splitOffsetSec).toFixed(3)),
+                }))
+            : undefined;
+
+          // Waveform peak distribution
+          let firstPeaks = clip.waveformPeaks;
+          let secondPeaks = clip.waveformPeaks;
+          if (clip.waveformPeaks && clip.waveformPeaks.length > 0 && clipDur > 0) {
+            const ratio = Math.max(0, Math.min(1, splitOffsetSec / clipDur));
+            const splitIdx = Math.round(clip.waveformPeaks.length * ratio);
+            firstPeaks = clip.waveformPeaks.slice(0, splitIdx);
+            secondPeaks = clip.waveformPeaks.slice(splitIdx);
+          }
+
+          const firstPart: Clip = {
+            ...clip,
+            durationSeconds: splitOffsetSec,
+            durationMs: splitOffsetMs,
+            outPointSeconds: (clip.inPointSeconds || 0) + splitOffsetSec,
+            volumeKeyframes: firstKeyframes,
+            waveformPeaks: firstPeaks,
+          };
+
+          const secondPartId = `clip-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+          newlyCreatedSecondPartIds.push(secondPartId);
+          splitMap.set(clip.id, secondPartId);
+
+          const secondPart: Clip = {
+            ...clip,
+            id: secondPartId,
+            name: clip.name.includes('(Part') ? clip.name : `${clip.name} (Part 2)`,
+            startPositionSeconds: playhead,
+            startTimeMs: Math.round(playhead * 1000),
+            inPointSeconds: (clip.inPointSeconds || 0) + splitOffsetSec,
+            sourceOffsetMs: (clip.sourceOffsetMs || 0) + splitOffsetMs,
+            durationSeconds: remainingSec,
+            durationMs: remainingMs,
+            volumeKeyframes: secondKeyframes,
+            waveformPeaks: secondPeaks,
+          };
+
+          newClips.push(firstPart, secondPart);
+        }
+
+        if (!trackClipsModified) return track;
         return { ...track, clips: newClips };
       });
 
-      return { tracks: updatedTracks };
+      // Update transitions that originate from the split clips
+      const updatedTransitions = (state.transitions || []).map((t) => {
+        if (splitMap.has(t.fromClipId)) {
+          return { ...t, fromClipId: splitMap.get(t.fromClipId)! };
+        }
+        return t;
+      });
+
+      return {
+        tracks: updatedTracks,
+        transitions: updatedTransitions,
+        selectedClipIds: newlyCreatedSecondPartIds.length > 0 ? newlyCreatedSecondPartIds : state.selectedClipIds,
+        selectedClipId: newlyCreatedSecondPartIds.length > 0 ? newlyCreatedSecondPartIds[0] : state.selectedClipId,
+        isDirty: true,
+      };
     });
   },
 
@@ -1720,6 +3871,9 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
       const targetClip = parentTrack.clips.find((c) => c.id === selectedClipId);
       const updates: any = { selectedTrackId: parentTrack.id };
       if (targetClip) {
+        if ((parentTrack.trackType || parentTrack.type) === 'text' || targetClip.textContent !== undefined) {
+          updates.inspectorTab = 'text';
+        }
         const startSec = targetClip.startPositionSeconds ?? (targetClip.startTimeMs ? targetClip.startTimeMs / 1000 : 0);
         const durSec = targetClip.durationSeconds ?? (targetClip.durationMs ? targetClip.durationMs / 1000 : 10);
         if (playhead < startSec || playhead >= startSec + durSec) {
@@ -2429,10 +4583,21 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
         ...track,
         clips: track.clips.map((clip) => {
           if (clip.id !== clipId) return clip;
-          return {
+          const updated = {
             ...clip,
             ...adjustments,
           };
+          if (adjustments.volumeDb !== undefined) {
+            updated.audioProcessing = {
+              gainDb: adjustments.volumeDb,
+              pan: updated.audioProcessing?.pan ?? updated.pan ?? 0,
+              bassGain: updated.audioProcessing?.bassGain ?? updated.bassGain ?? 0,
+              midGain: updated.audioProcessing?.midGain ?? updated.midGain ?? 0,
+              trebleGain: updated.audioProcessing?.trebleGain ?? updated.trebleGain ?? 0,
+              volumeKeyframes: updated.audioProcessing?.volumeKeyframes ?? updated.volumeKeyframes ?? [],
+            };
+          }
+          return updated;
         }),
       })),
     }));
@@ -2666,7 +4831,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
   currentProjectPath: null,
 
   pushHistory: () => {
-    const { tracks, transitions, playhead, selectedClipId, selectedClipIds, activeCameraTrackId, project, historyPast } = get();
+    const { tracks, transitions, playhead, selectedClipId, selectedClipIds, activeCameraTrackId, project, historyPast, masterGrading } = get();
     const snapshot: TimelineSnapshot = {
       tracks: JSON.parse(JSON.stringify(tracks)),
       transitions: JSON.parse(JSON.stringify(transitions || [])),
@@ -2675,6 +4840,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
       selectedClipIds: [...selectedClipIds],
       activeCameraTrackId,
       project: JSON.parse(JSON.stringify(project)),
+      masterGrading: masterGrading ? JSON.parse(JSON.stringify(masterGrading)) : null,
     };
     set({
       historyPast: [...historyPast.slice(-49), snapshot],
@@ -2688,7 +4854,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
   canRedo: () => get().historyFuture.length > 0,
 
   undo: () => {
-    const { historyPast, historyFuture, tracks, transitions, playhead, selectedClipId, selectedClipIds, activeCameraTrackId, project } = get();
+    const { historyPast, historyFuture, tracks, transitions, playhead, selectedClipId, selectedClipIds, activeCameraTrackId, project, masterGrading } = get();
     if (historyPast.length === 0) return;
 
     const currentSnapshot: TimelineSnapshot = {
@@ -2699,6 +4865,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
       selectedClipIds: [...selectedClipIds],
       activeCameraTrackId,
       project: JSON.parse(JSON.stringify(project)),
+      masterGrading: masterGrading ? JSON.parse(JSON.stringify(masterGrading)) : null,
     };
 
     const previous = historyPast[historyPast.length - 1];
@@ -2714,13 +4881,14 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
       selectedClipIds: previous.selectedClipIds || (previous.selectedClipId ? [previous.selectedClipId] : []),
       activeCameraTrackId: previous.activeCameraTrackId,
       project: previous.project,
+      masterGrading: previous.masterGrading || null,
       isDirty: true,
     });
     updateAppTitle(previous.project.name || 'Untitled Project', true, get().currentProjectPath);
   },
 
   redo: () => {
-    const { historyPast, historyFuture, tracks, transitions, playhead, selectedClipId, selectedClipIds, activeCameraTrackId, project } = get();
+    const { historyPast, historyFuture, tracks, transitions, playhead, selectedClipId, selectedClipIds, activeCameraTrackId, project, masterGrading } = get();
     if (historyFuture.length === 0) return;
 
     const currentSnapshot: TimelineSnapshot = {
@@ -2731,6 +4899,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
       selectedClipIds: [...selectedClipIds],
       activeCameraTrackId,
       project: JSON.parse(JSON.stringify(project)),
+      masterGrading: masterGrading ? JSON.parse(JSON.stringify(masterGrading)) : null,
     };
 
     const next = historyFuture[0];
@@ -2746,6 +4915,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
       selectedClipIds: next.selectedClipIds || (next.selectedClipId ? [next.selectedClipId] : []),
       activeCameraTrackId: next.activeCameraTrackId,
       project: next.project,
+      masterGrading: next.masterGrading || null,
       isDirty: true,
     });
     updateAppTitle(next.project.name || 'Untitled Project', true, get().currentProjectPath);
@@ -3299,6 +5469,204 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
   },
 
   updateClipTransform: (clipId, transform) => {
+    set((state) => {
+      const playhead = state.playhead;
+      const tracks = state.tracks.map((track) => ({
+        ...track,
+        clips: track.clips.map((clip) => {
+          if (clip.id !== clipId) return clip;
+
+          const newScale = transform.scale !== undefined ? transform.scale : clip.scale ?? 1.0;
+          const newPosX = transform.positionX !== undefined ? transform.positionX : clip.positionX ?? 0;
+          const newPosY = transform.positionY !== undefined ? transform.positionY : clip.positionY ?? 0;
+          const newRot = transform.rotation !== undefined ? transform.rotation : clip.rotation ?? 0;
+          const newOp = transform.opacity !== undefined ? transform.opacity : clip.opacity ?? 1.0;
+
+          const propsToUpdate: Record<string, number> = {};
+          if (transform.scale !== undefined) propsToUpdate['scale'] = transform.scale;
+          if (transform.positionX !== undefined) propsToUpdate['position_x'] = transform.positionX;
+          if (transform.positionY !== undefined) propsToUpdate['position_y'] = transform.positionY;
+          if (transform.rotation !== undefined) propsToUpdate['rotation'] = transform.rotation;
+          if (transform.opacity !== undefined) propsToUpdate['opacity'] = transform.opacity;
+
+          let updatedTracks = clip.keyframeTracks ? [...clip.keyframeTracks] : undefined;
+
+          // If clip has keyframes and playhead is on this clip, automatically record/update keyframe at playhead!
+          const startSec = clip.startPositionSeconds ?? (clip.startTimeMs / 1000);
+          const durSec = clip.durationSeconds ?? (clip.durationMs / 1000);
+
+          if (updatedTracks && updatedTracks.some((t) => t.keyframes.length > 0)) {
+            if (playhead >= startSec - 0.05 && playhead <= startSec + durSec + 0.05) {
+              const relTime = Math.max(0, Math.min(durSec, playhead - startSec));
+              const cleanTime = Number(relTime.toFixed(3));
+
+              const tracksCopy = updatedTracks.map((t) => ({ ...t, keyframes: [...t.keyframes] }));
+              for (const [property, val] of Object.entries(propsToUpdate)) {
+                let tIdx = tracksCopy.findIndex((t) => t.property === property);
+                if (tIdx >= 0) {
+                  // Property has an active keyframe track: update keyframe at this time or insert new keyframe
+                  const kfIdx = tracksCopy[tIdx].keyframes.findIndex((k) => Math.abs(k.time - cleanTime) < 0.08);
+                  if (kfIdx >= 0) {
+                    tracksCopy[tIdx].keyframes[kfIdx] = {
+                      ...tracksCopy[tIdx].keyframes[kfIdx],
+                      time: cleanTime,
+                      value: val,
+                    };
+                  } else {
+                    tracksCopy[tIdx].keyframes.push({ time: cleanTime, value: val, easing: 'linear' });
+                    tracksCopy[tIdx].keyframes.sort((a, b) => a.time - b.time);
+                  }
+                } else {
+                  // If other properties have keyframes at cleanTime, add keyframe for this property to override at this time
+                  const hasKeyframeAtThisTime = tracksCopy.some((t) =>
+                    t.keyframes.some((k) => Math.abs(k.time - cleanTime) < 0.08)
+                  );
+                  if (hasKeyframeAtThisTime) {
+                    tracksCopy.push({
+                      property,
+                      keyframes: [{ time: cleanTime, value: val, easing: 'linear' }],
+                    });
+                  }
+                }
+              }
+              updatedTracks = tracksCopy;
+            }
+          }
+
+          return {
+            ...clip,
+            scale: newScale,
+            positionX: newPosX,
+            positionY: newPosY,
+            rotation: newRot,
+            opacity: newOp,
+            keyframeTracks: updatedTracks,
+          };
+        }),
+      }));
+      return { tracks, isDirty: true };
+    });
+  },
+
+  addOrUpdateGlobalKeyframe: (clipId, time, transform) => {
+    set((state) => {
+      const tracks = state.tracks.map((track) => ({
+        ...track,
+        clips: track.clips.map((clip) => {
+          if (clip.id !== clipId) return clip;
+          const startSec = clip.startPositionSeconds ?? (clip.startTimeMs / 1000);
+          const durSec = clip.durationSeconds ?? (clip.durationMs / 1000);
+          const speed = clip.speedProfile?.speedMultiplier ?? 1.0;
+
+          const relTime = time !== undefined
+            ? time
+            : Math.max(0, Math.min(durSec, state.playhead - startSec));
+          const cleanTime = Number(relTime.toFixed(3));
+
+          const interp = getInterpolatedClipTransform(clip, startSec + cleanTime);
+          const finalScale = transform?.scale ?? interp.scale;
+          const finalPosX = transform?.positionX ?? interp.positionX;
+          const finalPosY = transform?.positionY ?? interp.positionY;
+          const finalRot = transform?.rotation ?? interp.rotation;
+          const finalOp = transform?.opacity ?? interp.opacity;
+
+          const propMap: Record<string, number> = {
+            scale: finalScale,
+            position_x: finalPosX,
+            position_y: finalPosY,
+            rotation: finalRot,
+            opacity: finalOp,
+          };
+
+          const currentTracks = clip.keyframeTracks
+            ? clip.keyframeTracks.map((t) => ({ ...t, keyframes: [...t.keyframes] }))
+            : [];
+
+          for (const [property, val] of Object.entries(propMap)) {
+            let tIdx = currentTracks.findIndex((t) => t.property === property);
+            if (tIdx < 0) {
+              currentTracks.push({ property, keyframes: [] });
+              tIdx = currentTracks.length - 1;
+            }
+            const existingKfs = currentTracks[tIdx].keyframes;
+            const kfIdx = existingKfs.findIndex((k) => Math.abs(k.time - cleanTime) < 0.08);
+            if (kfIdx >= 0) {
+              existingKfs[kfIdx] = { time: cleanTime, value: val, easing: 'linear' };
+            } else {
+              existingKfs.push({ time: cleanTime, value: val, easing: 'linear' });
+              existingKfs.sort((a, b) => a.time - b.time);
+            }
+          }
+
+          return {
+            ...clip,
+            scale: finalScale,
+            positionX: finalPosX,
+            positionY: finalPosY,
+            rotation: finalRot,
+            opacity: finalOp,
+            keyframeTracks: currentTracks,
+          };
+        }),
+      }));
+      return { tracks, isDirty: true };
+    });
+  },
+
+  removeGlobalKeyframe: (clipId, time) => {
+    set((state) => ({
+      tracks: state.tracks.map((track) => ({
+        ...track,
+        clips: track.clips.map((clip) => {
+          if (clip.id !== clipId || !clip.keyframeTracks) return clip;
+          const updatedTracks = clip.keyframeTracks
+            .map((t) => ({
+              ...t,
+              keyframes: t.keyframes.filter((k) => Math.abs(k.time - time) >= 0.08),
+            }))
+            .filter((t) => t.keyframes.length > 0);
+
+          return {
+            ...clip,
+            keyframeTracks: updatedTracks.length > 0 ? updatedTracks : undefined,
+          };
+        }),
+      })),
+      isDirty: true,
+    }));
+  },
+
+  moveGlobalKeyframe: (clipId, oldTime, newTime) => {
+    set((state) => ({
+      tracks: state.tracks.map((track) => ({
+        ...track,
+        clips: track.clips.map((clip) => {
+          if (clip.id !== clipId || !clip.keyframeTracks) return clip;
+          const durSec = clip.durationSeconds ?? (clip.durationMs / 1000);
+          const clampedNewTime = Math.max(0, Math.min(durSec, Number(newTime.toFixed(3))));
+
+          const updatedTracks = clip.keyframeTracks.map((t) => {
+            const kfs = t.keyframes.map((k) => {
+              if (Math.abs(k.time - oldTime) < 0.08) {
+                return { ...k, time: clampedNewTime };
+              }
+              return k;
+            });
+            kfs.sort((a, b) => a.time - b.time);
+            return { ...t, keyframes: kfs };
+          });
+
+          return {
+            ...clip,
+            keyframeTracks: updatedTracks,
+          };
+        }),
+      })),
+      isDirty: true,
+    }));
+  },
+
+  clearAllKeyframes: (clipId) => {
     set((state) => ({
       tracks: state.tracks.map((track) => ({
         ...track,
@@ -3306,11 +5674,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
           if (clip.id !== clipId) return clip;
           return {
             ...clip,
-            scale: transform.scale !== undefined ? transform.scale : clip.scale,
-            positionX: transform.positionX !== undefined ? transform.positionX : clip.positionX,
-            positionY: transform.positionY !== undefined ? transform.positionY : clip.positionY,
-            rotation: transform.rotation !== undefined ? transform.rotation : clip.rotation,
-            opacity: transform.opacity !== undefined ? transform.opacity : clip.opacity,
+            keyframeTracks: undefined,
           };
         }),
       })),
@@ -3326,23 +5690,32 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
           if (clip.id !== clipId) return clip;
           const currentTracks = clip.keyframeTracks ? [...clip.keyframeTracks] : [];
           const trackIdx = currentTracks.findIndex((t) => t.property === property);
+          const cleanTime = Number(time.toFixed(3));
 
           if (trackIdx >= 0) {
             const existingKfs = [...currentTracks[trackIdx].keyframes];
-            const kfIdx = existingKfs.findIndex((k) => Math.abs(k.time - time) < 0.05);
+            const kfIdx = existingKfs.findIndex((k) => Math.abs(k.time - cleanTime) < 0.08);
             if (kfIdx >= 0) {
-              existingKfs[kfIdx] = { time, value, easing };
+              existingKfs[kfIdx] = { time: cleanTime, value, easing };
             } else {
-              existingKfs.push({ time, value, easing });
+              existingKfs.push({ time: cleanTime, value, easing });
               existingKfs.sort((a, b) => a.time - b.time);
             }
             currentTracks[trackIdx] = { property, keyframes: existingKfs };
           } else {
-            currentTracks.push({ property, keyframes: [{ time, value, easing }] });
+            currentTracks.push({ property, keyframes: [{ time: cleanTime, value, easing }] });
           }
+
+          const propUpdates: Partial<Clip> = {};
+          if (property === 'scale') propUpdates.scale = value;
+          if (property === 'position_x') propUpdates.positionX = value;
+          if (property === 'position_y') propUpdates.positionY = value;
+          if (property === 'rotation') propUpdates.rotation = value;
+          if (property === 'opacity') propUpdates.opacity = value;
 
           return {
             ...clip,
+            ...propUpdates,
             keyframeTracks: currentTracks,
           };
         }),
@@ -3362,7 +5735,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
               if (t.property !== property) return t;
               return {
                 ...t,
-                keyframes: t.keyframes.filter((k) => Math.abs(k.time - time) >= 0.05),
+                keyframes: t.keyframes.filter((k) => Math.abs(k.time - time) >= 0.08),
               };
             })
             .filter((t) => t.keyframes.length > 0);
@@ -3404,6 +5777,15 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
             adjustedPlayhead = clipStart + ratio * newDurSec;
           }
 
+          const kfRatio = oldDur > 0 ? (newDurSec / oldDur) : 1;
+          const updatedKeyframeTracks = clip.keyframeTracks?.map((track) => ({
+            ...track,
+            keyframes: track.keyframes.map((k) => ({
+              ...k,
+              time: Number((k.time * kfRatio).toFixed(3)),
+            })),
+          }));
+
           return {
             ...clip,
             durationSeconds: newDurSec,
@@ -3412,6 +5794,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
               speedMultiplier,
               pitchCorrection,
             },
+            ...(updatedKeyframeTracks ? { keyframeTracks: updatedKeyframeTracks } : {}),
           };
         }),
       })),
@@ -3436,6 +5819,31 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
             lensEffects: {
               ...current,
               ...lensUpdates,
+            },
+          };
+        }),
+      })),
+      isDirty: true,
+    }));
+  },
+
+  updateClipStabilization: (clipId, settingsUpdates) => {
+    set((state) => ({
+      tracks: state.tracks.map((track) => ({
+        ...track,
+        clips: track.clips.map((clip) => {
+          if (clip.id !== clipId) return clip;
+          const current = clip.stabilization ?? {
+            enabled: false,
+            intensity: 0.5,
+            smoothness: 15,
+            tripodMode: false,
+          };
+          return {
+            ...clip,
+            stabilization: {
+              ...current,
+              ...settingsUpdates,
             },
           };
         }),

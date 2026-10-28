@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   X,
   Settings as SettingsIcon,
@@ -11,12 +11,16 @@ import {
   Info,
   Film,
   Zap,
+  Mic,
+  Volume2,
+  RefreshCw,
 } from 'lucide-react';
 import {
   useShortcutStore,
   SHORTCUT_DEFINITIONS,
   normalizeKeyEvent,
 } from '../../store/shortcutStore';
+import { useTimelineStore } from '../../store/timelineStore';
 
 const CATEGORIES = ['All', 'Playback', 'Timeline', 'Project', 'Multicam'] as const;
 type CategoryType = (typeof CATEGORIES)[number];
@@ -39,10 +43,88 @@ export const SettingsModal: React.FC = () => {
     setProxyCodec,
   } = useShortcutStore();
 
-  const [activeTab, setActiveTab] = useState<'shortcuts' | 'general' | 'media'>('shortcuts');
+  const {
+    availableAudioDevices,
+    fetchAudioInputDevices,
+    voiceoverSelectedDeviceId,
+    setVoiceoverSelectedDeviceId,
+    voiceoverMuteTimeline,
+    setVoiceoverMuteTimeline,
+    voiceoverUseCountdown,
+    setVoiceoverUseCountdown,
+  } = useTimelineStore();
+
+  const [activeTab, setActiveTab] = useState<'shortcuts' | 'audio' | 'general' | 'media'>('shortcuts');
   const [selectedCat, setSelectedCat] = useState<CategoryType>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [recordedNotice, setRecordedNotice] = useState<string | null>(null);
+
+  const [testLevel, setTestLevel] = useState<number>(0);
+  const testStreamRef = useRef<MediaStream | null>(null);
+  const testAnimRef = useRef<number | null>(null);
+
+  // Live mic test when Audio tab is open
+  useEffect(() => {
+    if (isSettingsModalOpen && activeTab === 'audio') {
+      fetchAudioInputDevices();
+
+      let isMounted = true;
+      async function startTest() {
+        try {
+          if (!navigator.mediaDevices?.getUserMedia) return;
+          const constraints: MediaStreamConstraints = {
+            audio:
+              voiceoverSelectedDeviceId && voiceoverSelectedDeviceId !== 'default'
+                ? { deviceId: { exact: voiceoverSelectedDeviceId } }
+                : true,
+          };
+          const stream = await navigator.mediaDevices.getUserMedia(constraints);
+          if (!isMounted) {
+            stream.getTracks().forEach((t) => t.stop());
+            return;
+          }
+          testStreamRef.current = stream;
+          const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+          const ctx = new AudioContextClass();
+          const source = ctx.createMediaStreamSource(stream);
+          const analyser = ctx.createAnalyser();
+          analyser.fftSize = 256;
+          source.connect(analyser);
+          const data = new Uint8Array(analyser.frequencyBinCount);
+
+          const loop = () => {
+            if (!isMounted) return;
+            analyser.getByteFrequencyData(data);
+            let sum = 0;
+            for (let i = 0; i < data.length; i++) sum += data[i];
+            const avg = sum / data.length;
+            setTestLevel(Math.min(1.0, avg / 128));
+            testAnimRef.current = requestAnimationFrame(loop);
+          };
+          loop();
+        } catch (e) {
+          console.warn('Mic test error:', e);
+        }
+      }
+
+      startTest();
+
+      return () => {
+        isMounted = false;
+        if (testAnimRef.current) cancelAnimationFrame(testAnimRef.current);
+        if (testStreamRef.current) {
+          testStreamRef.current.getTracks().forEach((t) => t.stop());
+          testStreamRef.current = null;
+        }
+      };
+    } else {
+      if (testStreamRef.current) {
+        testStreamRef.current.getTracks().forEach((t) => t.stop());
+        testStreamRef.current = null;
+      }
+      setTestLevel(0);
+    }
+  }, [isSettingsModalOpen, activeTab, voiceoverSelectedDeviceId, fetchAudioInputDevices]);
 
   // Key recording listener
   useEffect(() => {
@@ -121,6 +203,17 @@ export const SettingsModal: React.FC = () => {
             >
               <Keyboard size={14} />
               <span>Keyboard Shortcuts</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('audio')}
+              className={`flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-t border-t border-x transition-all cursor-pointer ${
+                activeTab === 'audio'
+                  ? 'bg-[#14161B] text-[#00F0FF] border-[#222630] border-b-[#14161B] -mb-[1px]'
+                  : 'text-[#8A92A6] border-transparent hover:text-[#F0F3F8]'
+              }`}
+            >
+              <Mic size={14} />
+              <span>Audio & Recording</span>
             </button>
             <button
               onClick={() => setActiveTab('general')}
@@ -253,6 +346,123 @@ export const SettingsModal: React.FC = () => {
                   </div>
                 );
               })}
+            </div>
+          </div>
+        ) : activeTab === 'audio' ? (
+          <div className="flex-1 p-5 space-y-4 overflow-y-auto text-xs">
+            {/* Microphone Input Device Configuration */}
+            <div className="p-4 rounded-lg bg-[#0D0E11] border border-[#222630] space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-bold text-[#F0F3F8] flex items-center gap-2">
+                    <Mic size={14} className="text-[#00F0FF]" />
+                    <span>Microphone Input Device</span>
+                  </h3>
+                  <p className="text-[11px] text-[#8A92A6] mt-0.5 leading-relaxed">
+                    Select the audio input source for direct voiceover and live mic recording.
+                  </p>
+                </div>
+                <button
+                  onClick={() => fetchAudioInputDevices()}
+                  className="p-1.5 rounded bg-[#181B22] hover:bg-[#222630] text-[#8A92A6] hover:text-[#00F0FF] transition-colors cursor-pointer"
+                  title="Refresh Audio Device List"
+                >
+                  <RefreshCw size={13} />
+                </button>
+              </div>
+
+              <div className="space-y-1.5 pt-1">
+                <select
+                  value={voiceoverSelectedDeviceId || 'default'}
+                  onChange={(e) => setVoiceoverSelectedDeviceId(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#14161B] border border-[#222630] rounded-md text-xs text-[#F0F3F8] focus:outline-none focus:border-[#00F0FF]/50"
+                >
+                  <option value="default">Default System Microphone</option>
+                  {(availableAudioDevices || [])
+                    .filter((d) => d.id !== 'default')
+                    .map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name} ({d.channels || 2} ch)
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              {/* Live Input Level Test Meter */}
+              <div className="p-3 rounded bg-[#14161B] border border-[#222630] space-y-1.5">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-[#8A92A6] flex items-center gap-1.5">
+                    <Volume2 size={12} className="text-[#10B981]" />
+                    <span>Live Input Level Test</span>
+                  </span>
+                  <span className="font-mono text-[10px] text-[#10B981]">
+                    {testLevel > 0.01 ? `${(20 * Math.log10(testLevel)).toFixed(1)} dBFS` : '-∞ dBFS'}
+                  </span>
+                </div>
+                <div className="w-full h-2 bg-[#0D0E11] rounded overflow-hidden relative">
+                  <div
+                    style={{ width: `${Math.min(100, Math.max(0, testLevel * 100))}%` }}
+                    className={`h-full transition-all duration-75 ${
+                      testLevel > 0.8 ? 'bg-red-500' : testLevel > 0.5 ? 'bg-amber-400' : 'bg-[#10B981]'
+                    }`}
+                  />
+                </div>
+                <span className="text-[10px] text-[#525D73]">
+                  Speak into your microphone to verify hardware input sensitivity.
+                </span>
+              </div>
+            </div>
+
+            {/* Recording Behavior Preferences */}
+            <div className="p-4 rounded-lg bg-[#0D0E11] border border-[#222630] space-y-3">
+              <h3 className="font-bold text-[#F0F3F8]">Recording Options</h3>
+
+              <div className="flex items-center justify-between py-1 border-b border-[#1C202B]">
+                <div>
+                  <span className="font-semibold text-[#F0F3F8] block">Mute Timeline Audio During Recording</span>
+                  <span className="text-[10px] text-[#64748B]">
+                    Prevents feedback, acoustic bleed, and echo when recording without studio headphones.
+                  </span>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                  <input
+                    type="checkbox"
+                    checked={voiceoverMuteTimeline}
+                    onChange={(e) => setVoiceoverMuteTimeline(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-8 h-4 bg-[#222630] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3.5 after:transition-all peer-checked:bg-[#00F0FF]"></div>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between py-1">
+                <div>
+                  <span className="font-semibold text-[#F0F3F8] block">3-Second Countdown Before Recording</span>
+                  <span className="text-[10px] text-[#64748B]">
+                    Provide a visual 3-2-1 cue before arming recording track.
+                  </span>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                  <input
+                    type="checkbox"
+                    checked={voiceoverUseCountdown}
+                    onChange={(e) => setVoiceoverUseCountdown(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-8 h-4 bg-[#222630] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3.5 after:transition-all peer-checked:bg-[#00F0FF]"></div>
+                </label>
+              </div>
+            </div>
+
+            {/* Storage and Format Specifications */}
+            <div className="p-3.5 rounded-lg bg-[#0D0E11] border border-[#222630] space-y-1.5">
+              <span className="font-bold text-[#F0F3F8]">Audio Capture Specifications</span>
+              <p className="text-[11px] text-[#64748B] leading-relaxed">
+                Recordings are captured in uncompressed 48.0 kHz 16-bit PCM RIFF WAV format and saved to{' '}
+                <code className="text-white bg-[#1A1D24] px-1 py-0.5 rounded font-mono">
+                  %LOCALAPPDATA%/idts-video-editor/recordings/
+                </code>.
+              </p>
             </div>
           </div>
         ) : activeTab === 'media' ? (

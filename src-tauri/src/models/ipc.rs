@@ -6,7 +6,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// Track media type: Video or Audio
+/// Track media type: Video, Audio, or Text
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum TrackType {
@@ -14,6 +14,8 @@ pub enum TrackType {
     Video,
     #[serde(alias = "Audio", alias = "audio")]
     Audio,
+    #[serde(alias = "Text", alias = "text")]
+    Text,
 }
 
 impl Default for TrackType {
@@ -32,6 +34,8 @@ pub enum MediaType {
     Audio,
     #[serde(alias = "image", alias = "Image")]
     Image,
+    #[serde(alias = "adjustment", alias = "adjustment_layer", alias = "AdjustmentLayer")]
+    AdjustmentLayer,
 }
 
 impl Default for MediaType {
@@ -125,6 +129,167 @@ impl Default for SpeedProfile {
     }
 }
 
+/// Native audio input device info
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AudioDeviceInfo {
+    pub id: String,
+    pub name: String,
+    pub is_default: bool,
+    pub channels: u16,
+    pub sample_rates: Vec<u32>,
+}
+
+/// Keyframed volume rubber-band envelope point
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct VolumeKeyframePoint {
+    pub time: f64,       // seconds relative to clip start
+    pub value: f32,      // gain in dB (-60 to +12) or multiplier
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub easing: Option<String>,
+}
+
+fn default_reduction_intensity() -> f32 {
+    12.0
+}
+fn default_ambient_fill_intensity() -> f32 {
+    0.25
+}
+fn default_silence_cut_threshold() -> f32 {
+    -35.0
+}
+fn default_silence_min_duration() -> f32 {
+    0.6
+}
+fn default_cut_margin_padding() -> u32 {
+    50
+}
+fn default_sensitivity() -> f32 {
+    6.0
+}
+fn default_smoothing_bands() -> u32 {
+    6
+}
+
+/// Spectral noise profiling, denoise and intelligent ambient noise fill configuration
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct NoiseDenoiseAndFillProfile {
+    #[serde(default)]
+    pub noise_reduction_enabled: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub noise_profile_path: Option<String>,
+    #[serde(default = "default_reduction_intensity")]
+    pub reduction_intensity_db: f32, // 0.0 to 48.0 dB, default 12.0
+    #[serde(default = "default_sensitivity")]
+    pub sensitivity: f32, // 0.5 to 12.0, default 6.0 (Audacity style)
+    #[serde(default = "default_smoothing_bands")]
+    pub frequency_smoothing_bands: u32, // 0 to 12, default 6
+    #[serde(default)]
+    pub audition_residue: bool, // Clean Output vs Audition Noise Residue
+    #[serde(default)]
+    pub ambient_recovery_enabled: bool,
+    #[serde(default = "default_ambient_fill_intensity")]
+    pub ambient_fill_intensity: f32, // 0.0 to 1.0, default 0.25
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub room_tone_loop_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_duration_sec: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub denoised_audio_path: Option<String>,
+    #[serde(default = "default_silence_cut_threshold")]
+    pub silence_cut_threshold_db: f32, // -60.0 to -20.0, default -35.0
+    #[serde(default = "default_silence_min_duration")]
+    pub silence_min_duration_sec: f32, // 0.2 to 2.0, default 0.6
+    #[serde(default = "default_cut_margin_padding")]
+    pub cut_margin_padding_ms: u32, // default: 50ms
+}
+
+impl Default for NoiseDenoiseAndFillProfile {
+    fn default() -> Self {
+        Self {
+            noise_reduction_enabled: false,
+            noise_profile_path: None,
+            reduction_intensity_db: 12.0,
+            sensitivity: 6.0,
+            frequency_smoothing_bands: 6,
+            audition_residue: false,
+            ambient_recovery_enabled: false,
+            ambient_fill_intensity: 0.25,
+            room_tone_loop_path: None,
+            profile_duration_sec: None,
+            denoised_audio_path: None,
+            silence_cut_threshold_db: -35.0,
+            silence_min_duration_sec: 0.6,
+            cut_margin_padding_ms: 50,
+        }
+    }
+}
+
+/// Comprehensive audio processing settings (EQ, Pan, Volume Keyframes, Denoise & Ambient Fill)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct AudioProcessingSettings {
+    #[serde(default)]
+    pub gain_db: f32,
+    #[serde(default)]
+    pub pan: f32,
+    #[serde(default)]
+    pub bass_gain: f32,
+    #[serde(default)]
+    pub mid_gain: f32,
+    #[serde(default)]
+    pub treble_gain: f32,
+    #[serde(default)]
+    pub volume_keyframes: Vec<VolumeKeyframePoint>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub noise_profile: Option<NoiseDenoiseAndFillProfile>,
+}
+
+/// Multi-track dynamic sidechain ducking configuration
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DuckingConfig {
+    #[serde(default)]
+    pub ducking_enabled: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_track_index: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_track_id: Option<String>,
+    #[serde(default = "default_ducking_attenuation")]
+    pub attenuation_db: f32, // -6.0 to -30.0 dB
+    #[serde(default = "default_ducking_attack")]
+    pub attack_ms: u32,
+    #[serde(default = "default_ducking_release")]
+    pub release_ms: u32,
+}
+
+fn default_ducking_attenuation() -> f32 {
+    -14.0
+}
+
+fn default_ducking_attack() -> u32 {
+    50
+}
+
+fn default_ducking_release() -> u32 {
+    300
+}
+
+impl Default for DuckingConfig {
+    fn default() -> Self {
+        Self {
+            ducking_enabled: false,
+            target_track_index: None,
+            target_track_id: None,
+            attenuation_db: -14.0,
+            attack_ms: 50,
+            release_ms: 300,
+        }
+    }
+}
+
 /// Optical lens distortion and blur parameters
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
@@ -135,6 +300,158 @@ pub struct LensEffects {
     pub defish_strength: f32, // -1.0 to 1.0
     #[serde(default)]
     pub gaussian_blur: f32,   // 0.0 to 50.0
+}
+
+/// Video stabilization and motion smoothing settings
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct StabilizationSettings {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_stabilization_intensity")]
+    pub intensity: f32, // 0.0 to 1.0 (0% to 100%)
+    #[serde(default = "default_stabilization_smoothness")]
+    pub smoothness: u32, // 1 to 50 frame smoothing window
+    #[serde(default)]
+    pub tripod_mode: bool, // Lock camera movement completely
+}
+
+fn default_stabilization_intensity() -> f32 {
+    0.5
+}
+
+fn default_stabilization_smoothness() -> u32 {
+    15
+}
+
+impl Default for StabilizationSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            intensity: 0.5,
+            smoothness: 15,
+            tripod_mode: false,
+        }
+    }
+}
+
+/// Structured caption token block from speech recognition
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CaptionSegment {
+    pub id: String,
+    pub start_ms: i64,
+    pub end_ms: i64,
+    pub text: String,
+}
+
+/// Text styling parameters for title layers and captions
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TextClipStyle {
+    #[serde(default = "default_font_family")]
+    pub font_family: String,
+    #[serde(default = "default_font_size")]
+    pub font_size: f32,
+    #[serde(default = "default_font_color")]
+    pub font_color: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stroke_color: Option<String>,
+    #[serde(default)]
+    pub stroke_width: f32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub background_color: Option<String>,
+    #[serde(default = "default_bg_padding")]
+    pub background_padding: f32,
+    #[serde(default)]
+    pub position_x: f32,
+    #[serde(default)]
+    pub position_y: f32,
+    #[serde(default = "default_alignment")]
+    pub alignment: String, // "left", "center", "right"
+    #[serde(default = "default_line_height")]
+    pub line_height: f32,
+    #[serde(default = "default_font_weight")]
+    pub font_weight: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preset_style: Option<String>,
+}
+
+fn default_font_family() -> String {
+    "Inter".to_string()
+}
+
+fn default_font_size() -> f32 {
+    48.0
+}
+
+fn default_font_color() -> String {
+    "#FFFFFF".to_string()
+}
+
+fn default_bg_padding() -> f32 {
+    8.0
+}
+
+fn default_alignment() -> String {
+    "center".to_string()
+}
+
+fn default_line_height() -> f32 {
+    1.2
+}
+
+fn default_font_weight() -> String {
+    "bold".to_string()
+}
+
+impl Default for TextClipStyle {
+    fn default() -> Self {
+        Self {
+            font_family: default_font_family(),
+            font_size: default_font_size(),
+            font_color: default_font_color(),
+            stroke_color: Some("#000000".to_string()),
+            stroke_width: 2.0,
+            background_color: None,
+            background_padding: default_bg_padding(),
+            position_x: 0.0,
+            position_y: 0.0,
+            alignment: default_alignment(),
+            line_height: default_line_height(),
+            font_weight: default_font_weight(),
+            preset_style: None,
+        }
+    }
+}
+
+/// A text or title overlay clip on the timeline
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TextClip {
+    pub id: String,
+    pub text: String,
+    pub start_time: f64,
+    pub duration: f64,
+    pub track_index: usize,
+    #[serde(default)]
+    pub style: TextClipStyle,
+}
+
+/// Dedicated timeline track for text / subtitle overlay layers
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TextTrack {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub muted: bool,
+    #[serde(default)]
+    pub locked: bool,
+    #[serde(default = "default_visible")]
+    pub visible: bool,
+    #[serde(default)]
+    pub clips: Vec<TextClip>,
 }
 
 /// A media clip placed on a timeline track
@@ -216,6 +533,46 @@ pub struct Clip {
     pub speed_profile: Option<SpeedProfile>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lens_effects: Option<LensEffects>,
+
+    // Phase 9: Text Overlays, Title Styling & Auto-Captions
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text_content: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text_style: Option<TextClipStyle>,
+
+    // Phase 10: Audio Mastering Suite, EQ, Pan & Volume Envelopes
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pan: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bass_gain: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mid_gain: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub treble_gain: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub volume_keyframes: Option<Vec<VolumeKeyframePoint>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audio_processing: Option<AudioProcessingSettings>,
+
+    // Phase 7: Hierarchical Color Grading & Adjustment Layers
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color_grading: Option<ColorGradingProfile>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub is_adjustment_layer: Option<bool>,
+
+    // Video Stabilization & Motion Smoothing
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stabilization: Option<StabilizationSettings>,
+
+    // Phase 11: Dedicated Filters & 3D LUTs Explorer
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filter_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filter_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filter_intensity: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filter_recipe: Option<crate::models::filters::ShaderRecipe>,
 }
 
 impl Clip {
@@ -271,6 +628,21 @@ impl Clip {
             keyframe_tracks: None,
             speed_profile: None,
             lens_effects: None,
+            text_content: None,
+            text_style: None,
+            pan: None,
+            bass_gain: None,
+            mid_gain: None,
+            treble_gain: None,
+            volume_keyframes: None,
+            audio_processing: None,
+            color_grading: None,
+            is_adjustment_layer: None,
+            stabilization: None,
+            filter_id: None,
+            filter_name: None,
+            filter_intensity: None,
+            filter_recipe: None,
         }
     }
 }
@@ -304,6 +676,14 @@ pub struct MediaTrack {
     pub time_offset_seconds: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub transitions: Option<Vec<Transition>>,
+
+    // Phase 10: Multi-Track Dynamic Ducking
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ducking: Option<DuckingConfig>,
+
+    // Phase 7: Hierarchical Track-Level Color Grading
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub track_grading: Option<ColorGradingProfile>,
 }
 
 fn default_visible() -> bool {
@@ -326,6 +706,8 @@ impl MediaTrack {
             pan: Some(0.0),
             time_offset_seconds: Some(0.0),
             transitions: None,
+            ducking: None,
+            track_grading: None,
         }
     }
 }
@@ -362,6 +744,255 @@ impl Default for ColorCorrection {
             saturation: 1.0,
             temperature: 0.0,
             lut_path: None,
+        }
+    }
+}
+
+/// Normalized chromatic vector and luminance slider for 3-way color wheels
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ColorWheel {
+    #[serde(default)]
+    pub r: f32, // -1.0 to 1.0 chromatic offset
+    #[serde(default)]
+    pub g: f32,
+    #[serde(default)]
+    pub b: f32,
+    #[serde(default)]
+    pub luma: f32, // -1.0 to 1.0 luminance slider
+}
+
+impl Default for ColorWheel {
+    fn default() -> Self {
+        Self {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+            luma: 0.0,
+        }
+    }
+}
+
+/// Spline Curves control points (normalized [0.0, 1.0]) for Master, Red, Green, Blue
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SplineCurves {
+    #[serde(default)]
+    pub master: Vec<(f32, f32)>,
+    #[serde(default)]
+    pub red: Vec<(f32, f32)>,
+    #[serde(default)]
+    pub green: Vec<(f32, f32)>,
+    #[serde(default)]
+    pub blue: Vec<(f32, f32)>,
+}
+
+/// HSL Secondary Qualifier for targeted color isolation and adjustment
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HslQualifier {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_hue_center")]
+    pub hue_center: f32, // 0.0 to 360.0 degrees
+    #[serde(default = "default_hue_width")]
+    pub hue_width: f32, // 0.0 to 180.0 degrees
+    #[serde(default = "default_hue_softness")]
+    pub hue_softness: f32, // 0.0 to 50.0 degrees
+    #[serde(default = "default_sat_center")]
+    pub sat_center: f32, // 0.0 to 1.0
+    #[serde(default = "default_sat_width")]
+    pub sat_width: f32, // 0.0 to 1.0
+    #[serde(default = "default_sat_softness")]
+    pub sat_softness: f32, // 0.0 to 1.0
+    #[serde(default = "default_lum_center")]
+    pub lum_center: f32, // 0.0 to 1.0
+    #[serde(default = "default_lum_width")]
+    pub lum_width: f32, // 0.0 to 1.0
+    #[serde(default = "default_lum_softness")]
+    pub lum_softness: f32, // 0.0 to 1.0
+    #[serde(default)]
+    pub isolated_hue_shift: f32, // -180.0 to +180.0 degrees
+    #[serde(default = "default_isolated_sat")]
+    pub isolated_sat: f32, // 0.0 to 2.0 (1.0 = unchanged)
+    #[serde(default = "default_isolated_gain")]
+    pub isolated_gain: f32, // 0.0 to 2.0 (1.0 = unchanged)
+    #[serde(default)]
+    pub show_matte: bool, // Highlight isolation mask in viewport
+}
+
+fn default_hue_center() -> f32 { 180.0 }
+fn default_hue_width() -> f32 { 60.0 }
+fn default_hue_softness() -> f32 { 20.0 }
+fn default_sat_center() -> f32 { 0.5 }
+fn default_sat_width() -> f32 { 0.5 }
+fn default_sat_softness() -> f32 { 0.2 }
+fn default_lum_center() -> f32 { 0.5 }
+fn default_lum_width() -> f32 { 0.5 }
+fn default_lum_softness() -> f32 { 0.2 }
+fn default_isolated_sat() -> f32 { 1.0 }
+fn default_isolated_gain() -> f32 { 1.0 }
+
+impl Default for HslQualifier {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            hue_center: 180.0,
+            hue_width: 60.0,
+            hue_softness: 20.0,
+            sat_center: 0.5,
+            sat_width: 0.5,
+            sat_softness: 0.2,
+            lum_center: 0.5,
+            lum_width: 0.5,
+            lum_softness: 0.2,
+            isolated_hue_shift: 0.0,
+            isolated_sat: 1.0,
+            isolated_gain: 1.0,
+            show_matte: false,
+        }
+    }
+}
+
+/// Split-Toning color styling for shadows and highlights
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SplitToning {
+    #[serde(default)]
+    pub shadow_hue: f32, // 0 to 360 deg
+    #[serde(default)]
+    pub shadow_sat: f32, // 0 to 100%
+    #[serde(default)]
+    pub highlight_hue: f32, // 0 to 360 deg
+    #[serde(default)]
+    pub highlight_sat: f32, // 0 to 100%
+    #[serde(default)]
+    pub balance: f32, // -100 to +100
+}
+
+/// Individual color band adjustment (Hue, Saturation, Brightness) for selective color grading
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SelectiveColorAdjustment {
+    #[serde(default)]
+    pub hue: f32, // -100.0 to 100.0
+    #[serde(default)]
+    pub saturation: f32, // -100.0 to 100.0
+    #[serde(default)]
+    pub brightness: f32, // -100.0 to 100.0
+}
+
+/// Comprehensive Phase 7 Hierarchical Color Grading Profile
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ColorGradingProfile {
+    // Primaries & Balance
+    #[serde(default)]
+    pub exposure: f32, // -4.0 to +4.0 EV, default 0.0
+    #[serde(default = "default_contrast")]
+    pub contrast: f32, // 0.0 to 2.0, default 1.0
+    #[serde(default)]
+    pub highlights: f32, // -1.0 to 1.0, default 0.0
+    #[serde(default)]
+    pub shadows: f32, // -1.0 to 1.0, default 0.0
+    #[serde(default)]
+    pub whites: f32, // -1.0 to 1.0, default 0.0
+    #[serde(default)]
+    pub blacks: f32, // -1.0 to 1.0, default 0.0
+    #[serde(default)]
+    pub brilliance: f32, // -1.0 to 1.0, default 0.0
+    #[serde(default)]
+    pub temperature: f32, // -100.0 to 100.0, default 0.0
+    #[serde(default)]
+    pub tint: f32, // -100.0 to 100.0, default 0.0
+    #[serde(default = "default_saturation")]
+    pub saturation: f32, // 0.0 to 3.0, default 1.0
+    #[serde(default)]
+    pub vibrance: f32, // -1.0 to 1.0, default 0.0
+
+    // Effects
+    #[serde(default)]
+    pub sharpen: f32, // 0.0 to 100.0
+    #[serde(default)]
+    pub clarity: f32, // -100.0 to 100.0
+    #[serde(default)]
+    pub particles: f32, // 0.0 to 100.0 (film grain)
+    #[serde(default)]
+    pub fade: f32, // 0.0 to 100.0
+    #[serde(default)]
+    pub vignette: f32, // 0.0 to 100.0
+
+    // Selective 8-Color Adjustments
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selective_colors: Option<std::collections::HashMap<String, SelectiveColorAdjustment>>,
+
+    // 3-Way Color Wheels
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lift: Option<ColorWheel>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gamma: Option<ColorWheel>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gain: Option<ColorWheel>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub offset: Option<ColorWheel>,
+
+    // Spline Curves
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub curves: Option<SplineCurves>,
+
+    // HSL Secondary Qualifier
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hsl_qualifier: Option<HslQualifier>,
+
+    // Split-Toning
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub split_toning: Option<SplitToning>,
+
+    // 3D LUT & Opacity
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lut_path: Option<String>,
+    #[serde(default = "default_lut_intensity")]
+    pub lut_intensity: f32, // 0.0 to 1.0, default 1.0
+
+    // Keyframed adjustments
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keyframe_tracks: Option<Vec<KeyframeTrack>>,
+}
+
+fn default_lut_intensity() -> f32 {
+    1.0
+}
+
+impl Default for ColorGradingProfile {
+    fn default() -> Self {
+        Self {
+            exposure: 0.0,
+            contrast: 1.0,
+            highlights: 0.0,
+            shadows: 0.0,
+            whites: 0.0,
+            blacks: 0.0,
+            brilliance: 0.0,
+            temperature: 0.0,
+            tint: 0.0,
+            saturation: 1.0,
+            vibrance: 0.0,
+            sharpen: 0.0,
+            clarity: 0.0,
+            particles: 0.0,
+            fade: 0.0,
+            vignette: 0.0,
+            selective_colors: None,
+            lift: None,
+            gamma: None,
+            gain: None,
+            offset: None,
+            curves: None,
+            hsl_qualifier: None,
+            split_toning: None,
+            lut_path: None,
+            lut_intensity: 1.0,
+            keyframe_tracks: None,
         }
     }
 }
@@ -479,6 +1110,8 @@ pub struct TimelineProject {
     pub assets: Vec<MediaAsset>,
     #[serde(default)]
     pub current_time_ms: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub master_grading: Option<ColorGradingProfile>,
 }
 
 fn default_fps() -> f64 {
@@ -512,6 +1145,7 @@ impl Default for TimelineProject {
             bins: Vec::new(),
             assets: Vec::new(),
             current_time_ms: 0,
+            master_grading: None,
         }
     }
 }

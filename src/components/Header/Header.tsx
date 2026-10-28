@@ -17,7 +17,9 @@ import {
   SaveAll,
   CheckCircle2,
   AlertCircle,
+  RotateCcw,
 } from 'lucide-react';
+import { PanelLeft, PanelRight } from '@/components/Icons';
 import { useShallow } from 'zustand/react/shallow';
 import { useTimelineStore } from '../../store/timelineStore';
 import { useShortcutStore } from '../../store/shortcutStore';
@@ -35,6 +37,11 @@ export const Header: React.FC = () => {
     saveProject,
     openProject,
     createNewProject,
+    isMediaPoolCollapsed,
+    isInspectorCollapsed,
+    toggleMediaPoolCollapsed,
+    toggleInspectorCollapsed,
+    resetWorkspaceLayout,
   } = useTimelineStore(
     useShallow((state) => ({
       project: state.project,
@@ -48,6 +55,11 @@ export const Header: React.FC = () => {
       saveProject: state.saveProject,
       openProject: state.openProject,
       createNewProject: state.createNewProject,
+      isMediaPoolCollapsed: state.isMediaPoolCollapsed,
+      isInspectorCollapsed: state.isInspectorCollapsed,
+      toggleMediaPoolCollapsed: state.toggleMediaPoolCollapsed,
+      toggleInspectorCollapsed: state.toggleInspectorCollapsed,
+      resetWorkspaceLayout: state.resetWorkspaceLayout,
     }))
   );
 
@@ -242,6 +254,39 @@ export const Header: React.FC = () => {
             {syncedCount}/{allClips.length}
           </span>
         </button>
+
+        {/* Workspace Layout Quick Toggles */}
+        <div className="flex items-center gap-0.5 bg-[#0D0E11] p-0.5 rounded-md border border-[#222630]">
+          <button
+            onClick={toggleMediaPoolCollapsed}
+            className={`p-1.5 rounded transition-all cursor-pointer ${
+              !isMediaPoolCollapsed
+                ? 'bg-[#1E222D] text-[#00F0FF] shadow-xs'
+                : 'text-[#64748B] hover:text-[#F0F3F8]'
+            }`}
+            title={isMediaPoolCollapsed ? 'Show Media Pool (Ctrl+B)' : 'Hide Media Pool to maximize preview monitor'}
+          >
+            <PanelLeft size={13} />
+          </button>
+          <button
+            onClick={toggleInspectorCollapsed}
+            className={`p-1.5 rounded transition-all cursor-pointer ${
+              !isInspectorCollapsed
+                ? 'bg-[#1E222D] text-[#00F0FF] shadow-xs'
+                : 'text-[#64748B] hover:text-[#F0F3F8]'
+            }`}
+            title={isInspectorCollapsed ? 'Show Inspector' : 'Hide Inspector to maximize preview monitor'}
+          >
+            <PanelRight size={13} />
+          </button>
+          <button
+            onClick={resetWorkspaceLayout}
+            className="p-1.5 rounded text-[#64748B] hover:text-[#00F0FF] hover:bg-[#1E222D] transition-colors cursor-pointer"
+            title="Reset Workspace Layout & Track Heights to Default"
+          >
+            <RotateCcw size={12} />
+          </button>
+        </div>
 
         {/* Preferences & Shortcuts Modal Button */}
         <button

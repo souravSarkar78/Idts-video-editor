@@ -212,6 +212,33 @@ fn open_lut_dialog() -> Result<Option<String>, String> {
     }
 }
 
+/// Extracts a 16:9 downscaled preview frame at timestamp_sec and returns base64 data URI
+#[tauri::command]
+fn capture_preview_frame(source_path: String, timestamp_sec: f64) -> Result<String, String> {
+    crate::engine::thumbnail::capture_preview_frame(source_path, timestamp_sec)
+}
+
+/// Retrieves the complete built-in filter and 3D LUT category hierarchy
+#[tauri::command]
+fn get_filter_catalog() -> Result<Vec<crate::models::filters::FilterCategory>, String> {
+    Ok(crate::models::filters::get_built_in_categories(0))
+}
+
+/// Retrieves filter presets, optionally filtered by category
+#[tauri::command]
+fn get_filter_presets(category: Option<String>) -> Result<Vec<crate::models::filters::FilterPreset>, String> {
+    let presets = crate::models::filters::get_built_in_presets();
+    if let Some(cat) = category {
+        if cat == "all" || cat.is_empty() {
+            Ok(presets)
+        } else {
+            Ok(presets.into_iter().filter(|p| p.category == cat).collect())
+        }
+    } else {
+        Ok(presets)
+    }
+}
+
 /// Probes metadata for a list of file paths using ffprobe sidecar
 #[tauri::command]
 fn get_clip_metadata(paths: Vec<String>) -> Vec<ClipMetadata> {
@@ -463,6 +490,142 @@ fn detect_track_silence(
     crate::engine::silence::detect_track_silence(path, threshold_db, duration_sec)
 }
 
+/// Detects audio silence intervals returning structured SilenceInterval items
+#[tauri::command]
+fn detect_track_silence_intervals(
+    path: String,
+    threshold_db: f32,
+    duration_sec: f32,
+) -> Result<Vec<models::ipc::SilenceInterval>, String> {
+    crate::engine::silence::detect_track_silence_intervals(path, threshold_db, duration_sec)
+}
+
+/// Captures two-pass spectral noise profile from media audio sample and synthesizes seamless room tone tile
+#[tauri::command]
+fn capture_noise_profile(
+    source_path: String,
+    start_sec: f64,
+    duration_sec: f64,
+) -> Result<(String, String), String> {
+    crate::engine::audio_denoise::capture_noise_profile(source_path, start_sec, duration_sec)
+}
+
+/// Renders a fast preview snippet of clean denoised audio
+#[tauri::command]
+fn preview_spectral_denoise(
+    source_path: String,
+    profile_path: Option<String>,
+    start_sec: f64,
+    duration_sec: f64,
+    reduction_db: f32,
+    sensitivity: Option<f32>,
+    smoothing_bands: Option<u32>,
+    audition_noise: bool,
+) -> Result<String, String> {
+    let mode = if audition_noise { Some("n".to_string()) } else { Some("o".to_string()) };
+    crate::engine::audio_denoise::preview_spectral_denoise(
+        source_path,
+        profile_path,
+        start_sec,
+        duration_sec,
+        reduction_db,
+        sensitivity,
+        smoothing_bands,
+        mode,
+    )
+}
+
+/// Applies spectral FFT noise reduction using FFmpeg's afftdn filter
+#[tauri::command]
+fn apply_spectral_denoise(
+    input_path: String,
+    profile_path: String,
+    reduction_db: f32,
+    sensitivity: Option<f32>,
+    smoothing_bands: Option<u32>,
+    audition_noise: bool,
+) -> Result<String, String> {
+    let mode = if audition_noise { Some("n".to_string()) } else { Some("o".to_string()) };
+    crate::engine::audio_denoise::apply_spectral_denoise(
+        input_path,
+        profile_path,
+        reduction_db,
+        sensitivity,
+        smoothing_bands,
+        mode,
+    )
+}
+
+/// Auto-cuts silence with edge padding margin and intelligent ambient noise fill bridging
+#[tauri::command]
+fn auto_cut_silence_with_ambient_fill(
+    source_path: String,
+    total_duration_sec: f64,
+    threshold_db: f32,
+    min_duration_sec: f32,
+    padding_ms: u32,
+    ambient_recovery: bool,
+    ambient_fill_intensity: f32,
+    room_tone_path: Option<String>,
+) -> Result<crate::engine::audio_denoise::AutoCutResult, String> {
+    let raw_silences = crate::engine::silence::detect_track_silence_intervals(
+        source_path,
+        threshold_db,
+        min_duration_sec,
+    )?;
+    Ok(crate::engine::audio_denoise::plan_auto_cut_silence_with_ambient(
+        total_duration_sec,
+        raw_silences,
+        padding_ms,
+        ambient_recovery,
+        ambient_fill_intensity,
+        room_tone_path,
+    ))
+}
+
+/// Transcribes track audio using local Whisper speech recognition or acoustic cadence engine
+#[tauri::command]
+fn transcribe_track_audio(path: String, model: String) -> Result<Vec<models::ipc::CaptionSegment>, String> {
+    crate::engine::transcribe::transcribe_audio_file(&path, &model)
+}
+
+/// Enumerates available native audio input devices
+#[tauri::command]
+fn get_audio_input_devices() -> Result<Vec<models::ipc::AudioDeviceInfo>, String> {
+    Ok(crate::engine::audio_capture::enumerate_audio_input_devices())
+}
+
+/// Begins streaming voiceover audio recording
+#[tauri::command]
+fn start_audio_recording(
+    app: tauri::AppHandle,
+    device_id: Option<String>,
+    sample_rate: Option<u32>,
+) -> Result<(), String> {
+    crate::engine::audio_capture::start_recording(&app, device_id, sample_rate)
+}
+
+/// Appends a chunk of audio samples during recording
+#[tauri::command]
+fn append_audio_recording_chunk(chunk_base64: String) -> Result<(), String> {
+    crate::engine::audio_capture::append_recording_chunk(&chunk_base64)
+}
+
+/// Stops voiceover audio recording and flushes a clean 48kHz WAV file
+#[tauri::command]
+fn stop_audio_recording(
+    output_filename: Option<String>,
+    audio_data_base64: Option<String>,
+) -> Result<String, String> {
+    crate::engine::audio_capture::stop_recording(output_filename, audio_data_base64)
+}
+
+/// Reads an audio or media file directly from disk into raw binary bytes
+#[tauri::command]
+fn read_audio_file(path: String) -> Result<Vec<u8>, String> {
+    std::fs::read(&path).map_err(|e| format!("Failed to read file '{}': {}", path, e))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg(target_os = "windows")]
@@ -538,7 +701,21 @@ pub fn run() {
             cancel_clip_proxy,
             delete_clip_proxy,
             check_clip_proxy,
-            detect_track_silence
+            detect_track_silence,
+            detect_track_silence_intervals,
+            capture_noise_profile,
+            preview_spectral_denoise,
+            apply_spectral_denoise,
+            auto_cut_silence_with_ambient_fill,
+            transcribe_track_audio,
+            get_audio_input_devices,
+            start_audio_recording,
+            append_audio_recording_chunk,
+            stop_audio_recording,
+            read_audio_file,
+            capture_preview_frame,
+            get_filter_catalog,
+            get_filter_presets
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

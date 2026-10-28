@@ -33,14 +33,17 @@ import {
   Music,
   Maximize2,
   Film,
+  Type,
 } from 'lucide-react';
- import { Diamond } from '@/components/Icons';
+import { Diamond, Subtitles, Waves } from '@/components/Icons';
 import { useShallow } from 'zustand/react/shallow';
 import { useTimelineStore } from '../../store/timelineStore';
 import { formatTimecode, formatDeltaSeconds } from '../../utils/timecode';
 import { MediaTrack, Clip, Transition } from '../../types/ipc';
 import { ClipAudioWaveform } from './ClipAudioWaveform';
 import { ClipVideoFilmstrip } from './ClipVideoFilmstrip';
+import { MasterPeakMeter } from './MasterPeakMeter';
+import { LiveRecordingWaveform } from './LiveRecordingWaveform';
 import { getNearestCachedFrame } from '../../utils/frameCacheService';
 
 interface TimelinePlayheadProps {
@@ -145,10 +148,26 @@ export const Timeline: React.FC = () => {
     updateTransition,
     removeTransition,
     activeDragTransition,
+    addOrUpdateGlobalKeyframe,
+    removeGlobalKeyframe,
+    moveGlobalKeyframe,
     addOrUpdateKeyframe,
     removeKeyframe,
     expandedKeyframeClipIds,
     toggleKeyframeLane,
+    addTextClip,
+    setIsAutoCaptionModalOpen,
+    setIsVoiceoverModalOpen,
+    isRecordingVoiceover,
+    startVoiceoverRecording,
+    stopVoiceoverRecording,
+    setInspectorTab,
+    addAdjustmentLayer,
+    captureNoiseProfile,
+    setIsNoiseModalOpen,
+    trackHeights,
+    setTrackHeight,
+    resetTrackHeight,
   } = useTimelineStore(
     useShallow((state) => ({
       project: state.project,
@@ -168,6 +187,13 @@ export const Timeline: React.FC = () => {
       toggleSolo: state.toggleSolo,
       toggleLock: state.toggleLock,
       addTrack: state.addTrack,
+      addTextClip: state.addTextClip,
+      setIsAutoCaptionModalOpen: state.setIsAutoCaptionModalOpen,
+      setIsVoiceoverModalOpen: state.setIsVoiceoverModalOpen,
+      isRecordingVoiceover: state.isRecordingVoiceover,
+      startVoiceoverRecording: state.startVoiceoverRecording,
+      stopVoiceoverRecording: state.stopVoiceoverRecording,
+      setInspectorTab: state.setInspectorTab,
       removeTrack: state.removeTrack,
       moveClip: state.moveClip,
       moveMultipleClips: state.moveMultipleClips,
@@ -213,18 +239,73 @@ export const Timeline: React.FC = () => {
       updateTransition: state.updateTransition,
       removeTransition: state.removeTransition,
       activeDragTransition: state.activeDragTransition,
+      addOrUpdateGlobalKeyframe: state.addOrUpdateGlobalKeyframe,
+      removeGlobalKeyframe: state.removeGlobalKeyframe,
+      moveGlobalKeyframe: state.moveGlobalKeyframe,
       addOrUpdateKeyframe: state.addOrUpdateKeyframe,
       removeKeyframe: state.removeKeyframe,
       expandedKeyframeClipIds: state.expandedKeyframeClipIds,
       toggleKeyframeLane: state.toggleKeyframeLane,
+      addAdjustmentLayer: state.addAdjustmentLayer,
+      captureNoiseProfile: state.captureNoiseProfile,
+      setIsNoiseModalOpen: state.setIsNoiseModalOpen,
+      trackHeights: state.trackHeights || {},
+      setTrackHeight: state.setTrackHeight,
+      resetTrackHeight: state.resetTrackHeight,
     }))
   );
 
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const trackHeadersScrollRef = useRef<HTMLDivElement>(null);
+  const isSyncingScrollRef = useRef(false);
   const tracksContainerRef = useRef<HTMLDivElement>(null);
   const [isScrubbing, setIsScrubbing] = useState(false);
   const [syncToast, setSyncToast] = useState<string | null>(null);
+
+  // Synchronize vertical scrolling between track headers and timeline track lanes
+  const handleRightScroll = () => {
+    if (isSyncingScrollRef.current) return;
+    if (scrollContainerRef.current && trackHeadersScrollRef.current) {
+      isSyncingScrollRef.current = true;
+      trackHeadersScrollRef.current.scrollTop = scrollContainerRef.current.scrollTop;
+      requestAnimationFrame(() => {
+        isSyncingScrollRef.current = false;
+      });
+    }
+  };
+
+  const handleLeftScroll = () => {
+    if (isSyncingScrollRef.current) return;
+    if (scrollContainerRef.current && trackHeadersScrollRef.current) {
+      isSyncingScrollRef.current = true;
+      scrollContainerRef.current.scrollTop = trackHeadersScrollRef.current.scrollTop;
+      requestAnimationFrame(() => {
+        isSyncingScrollRef.current = false;
+      });
+    }
+  };
+
+  // Real-time track height resizing handler
+  const handleStartTrackResize = (trackId: string, e: React.MouseEvent, initialHeight: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startY = e.clientY;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const deltaY = moveEvent.clientY - startY;
+      const newHeight = Math.max(36, Math.min(380, Math.round(initialHeight + deltaY)));
+      setTrackHeight(trackId, newHeight);
+    };
+
+    const onMouseUp = () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
   const [gapContextMenu, setGapContextMenu] = useState<{
     x: number;
     y: number;
@@ -290,10 +371,9 @@ export const Timeline: React.FC = () => {
     isSlowMo: boolean;
   } | null>(null);
 
-  // Keyframe diamond drag interaction state
+  // Global Keyframe diamond drag interaction state
   const [draggingKeyframe, setDraggingKeyframe] = useState<{
     clipId: string;
-    property: string;
     originalTime: number;
     initialMouseX: number;
     clipDurationSec: number;
@@ -301,14 +381,12 @@ export const Timeline: React.FC = () => {
 
   const handleStartKeyframeDrag = (
     clipId: string,
-    property: string,
     time: number,
     mouseX: number,
     clipDurationSec: number
   ) => {
     setDraggingKeyframe({
       clipId,
-      property,
       originalTime: time,
       initialMouseX: mouseX,
       clipDurationSec,
@@ -326,30 +404,10 @@ export const Timeline: React.FC = () => {
         Math.min(draggingKeyframe.clipDurationSec, draggingKeyframe.originalTime + deltaSec)
       );
 
-      const allTracks = useTimelineStore.getState().tracks;
-      let targetKf: any = null;
-      for (const t of allTracks) {
-        const c = t.clips.find((item) => item.id === draggingKeyframe.clipId);
-        if (c) {
-          const kfTrack = c.keyframeTracks?.find((kt) => kt.property === draggingKeyframe.property);
-          targetKf = kfTrack?.keyframes.find((k) => Math.abs(k.time - draggingKeyframe.originalTime) < 0.08);
-          break;
-        }
-      }
-
-      if (targetKf) {
-        removeKeyframe(draggingKeyframe.clipId, draggingKeyframe.property, draggingKeyframe.originalTime);
-        addOrUpdateKeyframe(
-          draggingKeyframe.clipId,
-          draggingKeyframe.property,
-          Number(newTime.toFixed(3)),
-          targetKf.value,
-          targetKf.easing
-        );
-        setDraggingKeyframe((prev) =>
-          prev ? { ...prev, originalTime: Number(newTime.toFixed(3)), initialMouseX: e.clientX } : null
-        );
-      }
+      moveGlobalKeyframe(draggingKeyframe.clipId, draggingKeyframe.originalTime, newTime);
+      setDraggingKeyframe((prev) =>
+        prev ? { ...prev, originalTime: Number(newTime.toFixed(3)), initialMouseX: e.clientX } : null
+      );
     };
 
     const onMouseUp = () => {
@@ -362,7 +420,7 @@ export const Timeline: React.FC = () => {
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
     };
-  }, [draggingKeyframe, zoom]);
+  }, [draggingKeyframe, zoom, moveGlobalKeyframe]);
 
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -817,6 +875,29 @@ export const Timeline: React.FC = () => {
       targetSec = Math.max(0, dropX / zoom);
     }
 
+    // Check if dropped item is a filter preset or 3D LUT
+    try {
+      const rawJson = e.dataTransfer.getData('application/json');
+      if (rawJson) {
+        const payload = JSON.parse(rawJson);
+        if (payload?.type === 'filter-preset' && payload.preset) {
+          const clipUnderDrop = allClips.find((c) => {
+            const start = c.startPositionSeconds ?? (c.startTimeMs / 1000);
+            const dur = c.durationSeconds ?? (c.durationMs / 1000);
+            return targetSec >= start && targetSec <= start + dur;
+          });
+          if (clipUnderDrop) {
+            useTimelineStore.getState().applyFilterPreset(payload.preset, clipUnderDrop.id);
+          } else {
+            useTimelineStore.getState().applyFilterPreset(payload.preset);
+          }
+          return;
+        }
+      }
+    } catch {
+      // ignore
+    }
+
     // 1. Files dropped directly from Windows Explorer
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const files = Array.from(e.dataTransfer.files);
@@ -863,6 +944,29 @@ export const Timeline: React.FC = () => {
       const scrollLeft = scrollContainerRef.current.scrollLeft;
       const dropX = e.clientX - rect.left + scrollLeft;
       targetSec = Math.max(0, dropX / zoom);
+    }
+
+    // Check if dropped item is a filter preset or 3D LUT
+    try {
+      const rawJson = e.dataTransfer.getData('application/json');
+      if (rawJson) {
+        const payload = JSON.parse(rawJson);
+        if (payload?.type === 'filter-preset' && payload.preset) {
+          const clipUnderDrop = allClips.find((c) => {
+            const start = c.startPositionSeconds ?? (c.startTimeMs / 1000);
+            const dur = c.durationSeconds ?? (c.durationMs / 1000);
+            return targetSec >= start && targetSec <= start + dur;
+          });
+          if (clipUnderDrop) {
+            useTimelineStore.getState().applyFilterPreset(payload.preset, clipUnderDrop.id);
+          } else {
+            useTimelineStore.getState().applyFilterPreset(payload.preset);
+          }
+          return;
+        }
+      }
+    } catch {
+      // ignore
     }
 
     // 1. Files dropped directly from Windows Explorer
@@ -912,6 +1016,22 @@ export const Timeline: React.FC = () => {
     useTimelineStore.getState().setDraggedAsset(null);
     useTimelineStore.getState().setActiveDragAsset(null);
   };
+
+  const handleSelectClip = useCallback(
+    (clipId: string, isShift?: boolean) => {
+      selectClip(clipId, isShift);
+      // Auto-switch Inspector to 'audio' if selecting an audio clip or clip on audio track
+      for (const t of tracks) {
+        if (t.clips?.some((c) => c.id === clipId)) {
+          if (t.trackType === 'audio' || t.type === 'audio') {
+            setInspectorTab('audio');
+          }
+          break;
+        }
+      }
+    },
+    [selectClip, tracks, setInspectorTab]
+  );
 
   // Ruler ticks generator
   const totalRulerSeconds = Math.max(durationSeconds, 60);
@@ -1007,7 +1127,11 @@ export const Timeline: React.FC = () => {
           {/* 4. Split Clip */}
           <button
             onClick={() => splitClipAtPlayhead()}
-            title="Split Clip at Playhead (C)"
+            title={
+              selectedClipIds.length > 1
+                ? `Split ${selectedClipIds.length} Selected Clips at Playhead (C)`
+                : 'Split at Playhead (C)'
+            }
             className="w-7 h-7 flex items-center justify-center rounded-md bg-[#1C202B] hover:bg-[#252B3A] text-[#8A92A6] hover:text-[#00F0FF] transition-colors border border-[#222630] cursor-pointer"
           >
             <Scissors size={13} />
@@ -1111,6 +1235,46 @@ export const Timeline: React.FC = () => {
             <Plus size={10} strokeWidth={3} className="text-[#F59E0B]" />
             <Mic size={13} className="text-[#F59E0B]" />
           </button>
+
+          <button
+            onClick={() => addTextClip()}
+            className="h-7 px-2 flex items-center gap-1 rounded-md bg-[#1A1D24] hover:bg-[#222630] border border-[#222630] text-[#8A92A6] hover:text-[#A855F7] transition-colors cursor-pointer"
+            title="Add Title / Text Overlay Track (T)"
+          >
+            <Plus size={10} strokeWidth={3} className="text-[#A855F7]" />
+            <Type size={13} className="text-[#A855F7]" />
+          </button>
+
+          <button
+            onClick={() => setIsAutoCaptionModalOpen(true)}
+            className="h-7 px-2.5 flex items-center gap-1.5 rounded-md bg-[#1C202B] hover:bg-[#A855F7]/20 border border-[#222630] hover:border-[#A855F7]/50 text-[#A855F7] text-xs font-semibold transition-all cursor-pointer shadow-xs"
+            title="Auto Captions: Generate local Whisper AI speech-to-text subtitles"
+          >
+            <Subtitles size={13} />
+            <span className="hidden sm:inline text-[11px] font-bold">Captions</span>
+          </button>
+
+          <button
+            onClick={(e) => {
+              (e.currentTarget as HTMLElement)?.blur();
+              if (isRecordingVoiceover) {
+                stopVoiceoverRecording();
+              } else {
+                startVoiceoverRecording();
+              }
+            }}
+            className={`w-7 h-7 flex items-center justify-center rounded-md border transition-all cursor-pointer relative group ${
+              isRecordingVoiceover
+                ? 'bg-red-500/25 border-red-500 text-red-400 animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.4)]'
+                : 'bg-[#1C202B] hover:bg-red-500/20 border-[#222630] hover:border-red-500/50 text-[#8A92A6] hover:text-red-400'
+            }`}
+            title={isRecordingVoiceover ? 'Stop Recording' : 'Record'}
+          >
+            <Mic size={13} className={isRecordingVoiceover ? 'text-red-400 animate-bounce' : ''} />
+            <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-[#14161B] border border-[#222630] text-[10px] font-bold text-white px-2 py-0.5 rounded shadow-lg whitespace-nowrap z-50">
+              {isRecordingVoiceover ? 'Stop Recording' : 'Record'}
+            </span>
+          </button>
         </div>
 
         {/* Right Section: Sync Actions (before zoom slider), Zoom controls & FPS */}
@@ -1180,6 +1344,8 @@ export const Timeline: React.FC = () => {
             </button>
           </div>
 
+          <MasterPeakMeter />
+
           <span
             className="text-[10px] font-mono text-[#64748B] px-1.5 py-1 rounded-md bg-[#0D0E11] border border-[#222630] h-7 flex items-center"
             title="Project Framerate"
@@ -1200,8 +1366,13 @@ export const Timeline: React.FC = () => {
           </div>
 
           {/* Dynamic Track Header Items */}
-          <div className="flex-1 overflow-y-auto">
+          <div ref={trackHeadersScrollRef} onScroll={handleLeftScroll} className="flex-1 overflow-y-auto no-scrollbar">
             {tracks.map((track) => {
+              const isVideo = track.trackType === 'video' || track.type === 'video';
+              const isText = track.trackType === 'text' || track.type === 'text';
+              const defaultHeight = isVideo ? 80 : isText ? 64 : 64;
+              const trackHeight = trackHeights[track.id] ?? defaultHeight;
+
               const isHeaderHoveredByPointer = Boolean(
                 activeDragAsset &&
                   document
@@ -1213,6 +1384,9 @@ export const Timeline: React.FC = () => {
                 <DynamicTrackHeader
                   key={track.id}
                   track={track}
+                  trackHeight={trackHeight}
+                  onStartResize={(e) => handleStartTrackResize(track.id, e, trackHeight)}
+                  onResetHeight={() => resetTrackHeight(track.id)}
                   isDragOver={dragOverTrackId === track.id || isHeaderHoveredByPointer}
                   onDragOver={(e) => handleLaneDragOver(e, track.id)}
                   onDragLeave={(e) => handleLaneDragLeave(e, track.id)}
@@ -1231,6 +1405,7 @@ export const Timeline: React.FC = () => {
         {/* RIGHT COLUMN: Timecode Ruler + Track Lanes + Laser Playhead */}
         <div
           ref={scrollContainerRef}
+          onScroll={handleRightScroll}
           data-timeline-scroll="true"
           className="flex-1 flex flex-col overflow-x-auto overflow-y-auto relative bg-[#0D0E11]"
         >
@@ -1325,10 +1500,18 @@ export const Timeline: React.FC = () => {
                   : rawSec;
               }
 
+              const isVideo = track.trackType === 'video' || track.type === 'video';
+              const isText = track.trackType === 'text' || track.type === 'text';
+              const defaultHeight = isVideo ? 80 : isText ? 64 : 64;
+              const trackHeight = trackHeights[track.id] ?? defaultHeight;
+
               return (
                 <DynamicTrackLane
                   key={track.id}
                   track={track}
+                  trackHeight={trackHeight}
+                  onStartResize={(e) => handleStartTrackResize(track.id, e, trackHeight)}
+                  onResetHeight={() => resetTrackHeight(track.id)}
                   zoom={zoom}
                   selectedClipId={selectedClipId}
                   selectedClipIds={selectedClipIds}
@@ -1344,7 +1527,7 @@ export const Timeline: React.FC = () => {
                   updateTransition={updateTransition}
                   removeTransition={removeTransition}
                   activeDragTransition={activeDragTransition}
-                  onSelectClip={selectClip}
+                  onSelectClip={handleSelectClip}
                   onDragOver={(e) => handleLaneDragOver(e, track.id)}
                   onDragLeave={(e) => handleLaneDragLeave(e, track.id)}
                   onDrop={(e) => handleLaneDrop(e, track.id)}
@@ -1355,7 +1538,7 @@ export const Timeline: React.FC = () => {
                     let activeIds = selectedClipIds;
                     if (!selectedClipIds.includes(clipId)) {
                       activeIds = [clipId];
-                      selectClip(clipId);
+                      handleSelectClip(clipId);
                     }
 
                     const clipPositions = new Map<string, number>();
@@ -1430,7 +1613,8 @@ export const Timeline: React.FC = () => {
                   fps={project.fps}
                   onContextMenu={setContextMenu}
                   onStartKeyframeDrag={handleStartKeyframeDrag}
-                  onRemoveKeyframe={removeKeyframe}
+                  onRemoveKeyframe={removeGlobalKeyframe}
+                  onSeekToKeyframe={setPlayhead}
                   onTrackGapContextMenu={(e, trackId) => {
                     const scrollContainer = scrollContainerRef.current;
                     if (!scrollContainer) return;
@@ -1496,6 +1680,18 @@ export const Timeline: React.FC = () => {
             </div>
           )}
 
+          <button
+            onClick={() => {
+              setIsNoiseModalOpen(true, contextMenu.clipId);
+              setInspectorTab('audio');
+              setContextMenu(null);
+            }}
+            className="w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-[#1C202B] text-[#00F0FF] hover:text-[#3bf1ff] transition-colors cursor-pointer text-left"
+          >
+            <Waves size={13} className="text-[#00F0FF]" />
+            <span>Capture Room Tone Profile...</span>
+          </button>
+
           <div className="h-[1px] bg-[#222630] my-1" />
 
           <button
@@ -1507,7 +1703,11 @@ export const Timeline: React.FC = () => {
           >
             <div className="flex items-center gap-2.5">
               <Scissors size={13} className="text-[#8A92A6]" />
-              <span>Split at Playhead</span>
+              <span>
+                {selectedClipIds.length > 1 && selectedClipIds.includes(contextMenu.clipId)
+                  ? `Split All ${selectedClipIds.length} Selected Clips at Playhead`
+                  : 'Split at Playhead'}
+              </span>
             </div>
             <span className="text-[10px] font-mono text-[#64748B]">C</span>
           </button>
@@ -1576,6 +1776,16 @@ export const Timeline: React.FC = () => {
             <Scissors size={13} />
             <span>Delete Gap (Ripple Pull)</span>
           </button>
+          <button
+            onClick={() => {
+              addAdjustmentLayer(gapContextMenu.trackId, gapContextMenu.timeSec, 5);
+              setGapContextMenu(null);
+            }}
+            className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-[#8B5CF6]/20 text-[#C4B5FD] hover:text-white transition-colors cursor-pointer text-left"
+          >
+            <Sparkles size={13} className="text-[#A78BFA]" />
+            <span>New Adjustment Layer Here</span>
+          </button>
         </div>
       )}
 
@@ -1600,6 +1810,9 @@ export const Timeline: React.FC = () => {
 // DYNAMIC TRACK HEADER COMPONENT
 interface DynamicTrackHeaderProps {
   track: MediaTrack;
+  trackHeight: number;
+  onStartResize?: (e: React.MouseEvent) => void;
+  onResetHeight?: () => void;
   isDragOver?: boolean;
   onToggleVisibility: () => void;
   onToggleMute: () => void;
@@ -1613,6 +1826,9 @@ interface DynamicTrackHeaderProps {
 
 const DynamicTrackHeader: React.FC<DynamicTrackHeaderProps> = ({
   track,
+  trackHeight,
+  onStartResize,
+  onResetHeight,
   isDragOver,
   onToggleVisibility,
   onToggleMute,
@@ -1624,21 +1840,42 @@ const DynamicTrackHeader: React.FC<DynamicTrackHeaderProps> = ({
   onDrop,
 }) => {
   const isVideo = track.trackType === 'video' || track.type === 'video';
+  const isText = track.trackType === 'text' || track.type === 'text';
   const isVisible = track.visible !== false && track.isVisible !== false;
+  const isRecordingVoiceover = useTimelineStore((state) => state.isRecordingVoiceover);
+  const voiceoverTargetTrackId = useTimelineStore((state) => state.voiceoverTargetTrackId);
+  const startVoiceoverRecording = useTimelineStore((state) => state.startVoiceoverRecording);
+  const stopVoiceoverRecording = useTimelineStore((state) => state.stopVoiceoverRecording);
+  const setInspectorTab = useTimelineStore((state) => state.setInspectorTab);
+  const selectedGradingScope = useTimelineStore((state) => state.selectedGradingScope);
+  const activeGradingTrackId = useTimelineStore((state) => state.activeGradingTrackId);
+  const isGradingSelected = isVideo && selectedGradingScope === 'track' && activeGradingTrackId === track.id;
   const isMuted = track.muted || track.isMuted;
   const isSolo = track.solo || track.isSolo;
   const isLocked = track.locked || track.isLocked;
-  const color = track.color || '#00F0FF';
+  const color = track.color || (isText ? '#A855F7' : isVideo ? '#00F0FF' : '#F59E0B');
   const offsetSec = track.timeOffsetSeconds ?? 0;
 
   return (
     <div
       data-track-header-id={track.id}
+      style={{ height: `${trackHeight}px` }}
+      onClick={() => {
+        if (!isVideo && !isText) {
+          setInspectorTab('audio');
+        } else if (isVideo) {
+          useTimelineStore.getState().setSelectedGradingScope('track', track.id);
+        }
+      }}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
-      className={`${isVideo ? 'h-20' : 'h-16'} border-b border-[#222630] px-3 py-1.5 flex flex-col justify-between bg-[#14161B] transition-colors relative group ${
-        isDragOver ? 'bg-[#00F0FF]/15 border-l-4 border-l-[#00F0FF]' : 'hover:bg-[#181B22]'
+      className={`border-b border-[#222630] px-3 py-1.5 flex flex-col justify-between bg-[#14161B] transition-colors relative group cursor-pointer ${
+        isGradingSelected
+          ? 'ring-2 ring-[#8B5CF6] border-l-4 border-l-[#8B5CF6] bg-[#8B5CF6]/15'
+          : isDragOver
+          ? 'bg-[#00F0FF]/15 border-l-4 border-l-[#00F0FF]'
+          : 'hover:bg-[#181B22]'
       }`}
     >
       {/* Track Color Left Accent Tab */}
@@ -1647,7 +1884,9 @@ const DynamicTrackHeader: React.FC<DynamicTrackHeaderProps> = ({
       {/* Top Row: Track Name & Offset Badge */}
       <div className="flex items-center justify-between pl-1">
         <div className="flex items-center gap-1.5 truncate">
-          {isVideo ? (
+          {isText ? (
+            <Type size={13} style={{ color }} />
+          ) : isVideo ? (
             <Video size={13} style={{ color }} />
           ) : (
             <Mic size={13} style={{ color }} />
@@ -1655,6 +1894,14 @@ const DynamicTrackHeader: React.FC<DynamicTrackHeaderProps> = ({
           <span className="text-xs font-semibold text-[#F0F3F8] truncate" title={track.name}>
             {track.name}
           </span>
+          {track.trackGrading && (
+            <span
+              className="px-1 py-0.2 rounded text-[8px] font-mono font-bold bg-[#8B5CF6]/30 text-[#DDD6FE] border border-[#8B5CF6]/50"
+              title="Track-level color grade active"
+            >
+              GRADE
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-1">
@@ -1681,14 +1928,16 @@ const DynamicTrackHeader: React.FC<DynamicTrackHeaderProps> = ({
       {/* Controls Row: Visibility, Mute, Solo, Lock Controls */}
       <div className="flex items-center justify-between pl-1">
         <div className="flex items-center gap-1">
-          {/* Eye / Visibility button for Video */}
-          {isVideo && (
+          {/* Eye / Visibility button for Video & Text */}
+          {(isVideo || isText) && (
             <button
               onClick={onToggleVisibility}
-              title={isVisible ? 'Hide Video Track' : 'Show Video Track'}
+              title={isVisible ? 'Hide Track' : 'Show Track'}
               className={`w-5 h-5 rounded text-[10px] flex items-center justify-center transition-colors ${
                 isVisible
-                  ? 'bg-[#222630] text-[#00F0FF]'
+                  ? isText
+                    ? 'bg-[#222630] text-[#A855F7]'
+                    : 'bg-[#222630] text-[#00F0FF]'
                   : 'bg-zinc-800 text-[#525D73]'
               }`}
             >
@@ -1734,6 +1983,33 @@ const DynamicTrackHeader: React.FC<DynamicTrackHeaderProps> = ({
           >
             {isLocked ? <Lock size={10} /> : <Unlock size={10} />}
           </button>
+
+          {/* Quick Direct Record button for Audio Tracks */}
+          {!isVideo && !isText && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                (e.currentTarget as HTMLElement)?.blur();
+                if (isRecordingVoiceover && voiceoverTargetTrackId === track.id) {
+                  stopVoiceoverRecording();
+                } else {
+                  startVoiceoverRecording(track.id);
+                }
+              }}
+              title={
+                isRecordingVoiceover && voiceoverTargetTrackId === track.id
+                  ? 'Stop Recording'
+                  : 'Record directly to this track'
+              }
+              className={`w-5 h-5 rounded text-[10px] flex items-center justify-center transition-colors cursor-pointer ${
+                isRecordingVoiceover && voiceoverTargetTrackId === track.id
+                  ? 'bg-red-500 text-white animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.6)]'
+                  : 'bg-[#222630] text-[#8A92A6] hover:text-red-400 hover:bg-red-500/20'
+              }`}
+            >
+              <Mic size={10} />
+            </button>
+          )}
         </div>
 
         <span className="text-[10px] font-mono text-[#525D73]">
@@ -1742,7 +2018,7 @@ const DynamicTrackHeader: React.FC<DynamicTrackHeaderProps> = ({
       </div>
 
       {/* Sub-track indicator for video tracks */}
-      {isVideo && (
+      {isVideo && trackHeight >= 64 && (
         <div className="flex items-center justify-between pl-1 text-[9px] font-mono text-[#64748B] pt-0.5 border-t border-[#1F232D]">
           <div className="flex items-center gap-1">
             <Volume2 size={9} className="text-[#00F0FF]/70" />
@@ -1751,6 +2027,19 @@ const DynamicTrackHeader: React.FC<DynamicTrackHeaderProps> = ({
           <span className="text-[8px] text-[#525D73]">Linked</span>
         </div>
       )}
+
+      {/* Bottom Track Resizer Handle */}
+      <div
+        onMouseDown={(e) => onStartResize?.(e)}
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          onResetHeight?.();
+        }}
+        className="absolute bottom-0 left-0 right-0 h-1.5 cursor-row-resize z-40 group/resizer hover:bg-[#00F0FF]/60 active:bg-[#00F0FF] flex items-center justify-center transition-colors"
+        title="Hold and drag to resize track height (Double-click to reset)"
+      >
+        <div className="w-8 h-[2px] bg-transparent group-hover/resizer:bg-[#00F0FF] rounded-full transition-colors" />
+      </div>
     </div>
   );
 };
@@ -1758,6 +2047,9 @@ const DynamicTrackHeader: React.FC<DynamicTrackHeaderProps> = ({
 // DYNAMIC TRACK LANE COMPONENT
 interface DynamicTrackLaneProps {
   track: MediaTrack;
+  trackHeight: number;
+  onStartResize?: (e: React.MouseEvent) => void;
+  onResetHeight?: () => void;
   zoom: number;
   selectedClipId: string | null;
   selectedClipIds?: string[];
@@ -1800,17 +2092,20 @@ interface DynamicTrackLaneProps {
   onTrackGapContextMenu?: (e: React.MouseEvent, trackId: string) => void;
   onStartKeyframeDrag?: (
     clipId: string,
-    property: string,
     time: number,
     mouseX: number,
     clipDurationSec: number
   ) => void;
-  onRemoveKeyframe?: (clipId: string, property: string, time: number) => void;
+  onRemoveKeyframe?: (clipId: string, time: number) => void;
+  onSeekToKeyframe?: (time: number) => void;
   fps?: number;
 }
 
 const DynamicTrackLane: React.FC<DynamicTrackLaneProps> = ({
   track,
+  trackHeight,
+  onStartResize,
+  onResetHeight,
   zoom,
   selectedClipId,
   selectedClipIds = [],
@@ -1838,15 +2133,33 @@ const DynamicTrackLane: React.FC<DynamicTrackLaneProps> = ({
   onTrackGapContextMenu,
   onStartKeyframeDrag,
   onRemoveKeyframe,
+  onSeekToKeyframe,
   fps = 30,
 }) => {
   const isVideo = track.trackType === 'video' || track.type === 'video';
-  const color = track.color || '#00F0FF';
+  const isText = track.trackType === 'text' || track.type === 'text';
+  const color = track.color || (isText ? '#A855F7' : isVideo ? '#00F0FF' : '#F59E0B');
+
+  const isRecordingVoiceover = useTimelineStore((state) => state.isRecordingVoiceover);
+  const voiceoverRecordingStartSec = useTimelineStore((state) => state.voiceoverRecordingStartSec);
+  const voiceoverTargetTrackId = useTimelineStore((state) => state.voiceoverTargetTrackId);
+  const playhead = useTimelineStore((state) => state.playhead);
+  const liveRecordingPeaks = useTimelineStore((state) => state.liveRecordingPeaks);
+  const setInspectorTab = useTimelineStore((state) => state.setInspectorTab);
 
   return (
     <div
       data-track-id={track.id}
       data-track-type={track.trackType || track.type}
+      style={{ height: `${trackHeight}px` }}
+      onClick={(e) => {
+        const target = e.target as HTMLElement;
+        if (!target.closest('[data-clip-id]')) {
+          if (!isVideo && !isText) {
+            setInspectorTab('audio');
+          }
+        }
+      }}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
@@ -1858,7 +2171,7 @@ const DynamicTrackLane: React.FC<DynamicTrackLaneProps> = ({
           onTrackGapContextMenu?.(e, track.id);
         }
       }}
-      className={`${isVideo ? 'h-20' : 'h-16'} border-b border-[#222630] relative transition-colors ${
+      className={`border-b border-[#222630] relative transition-colors ${
         isDragOver
           ? 'bg-[#00F0FF]/10 ring-1 ring-[#00F0FF]/50 border-[#00F0FF]/40'
           : track.locked
@@ -1883,6 +2196,25 @@ const DynamicTrackLane: React.FC<DynamicTrackLaneProps> = ({
         </div>
       )}
 
+      {/* Live Voiceover Recording Block Overlay with Real-Time Audio Waveform */}
+      {isRecordingVoiceover && voiceoverTargetTrackId === track.id && (
+        <div
+          style={{
+            left: `${voiceoverRecordingStartSec * zoom}px`,
+            width: `${Math.max(28, (Math.max(playhead, voiceoverRecordingStartSec + 0.05) - voiceoverRecordingStartSec) * zoom)}px`,
+          }}
+          className="absolute top-1 bottom-1 z-30 select-none pointer-events-none"
+        >
+          <LiveRecordingWaveform
+            peaks={liveRecordingPeaks}
+            widthPx={Math.max(28, (Math.max(playhead, voiceoverRecordingStartSec + 0.05) - voiceoverRecordingStartSec) * zoom)}
+            heightPx={isVideo ? Math.max(30, trackHeight - 20) : Math.max(24, trackHeight - 16)}
+            durationSec={Math.max(0, playhead - voiceoverRecordingStartSec)}
+            fps={fps}
+          />
+        </div>
+      )}
+
       {track.clips.map((clip) => {
         const isSelected = selectedClipIds && selectedClipIds.length > 0
           ? selectedClipIds.includes(clip.id)
@@ -1893,6 +2225,12 @@ const DynamicTrackLane: React.FC<DynamicTrackLaneProps> = ({
         const widthPx = durSec * zoom;
         const leftPx = startSec * zoom;
         const hasAttachedAudio = isVideo && !clip.audioExtracted && clip.hasAudio !== false;
+        const isAdjustment = Boolean(
+          clip.isAdjustmentLayer ||
+          clip.mediaType === 'adjustment' ||
+          clip.filePath === 'adjustment_layer' ||
+          (clip.name && clip.name.toLowerCase().includes('adjustment layer'))
+        );
 
         return (
           <div
@@ -1943,22 +2281,101 @@ const DynamicTrackLane: React.FC<DynamicTrackLaneProps> = ({
               isDragging
                 ? 'ring-2 ring-[#00F0FF] border-white z-30 shadow-[0_0_16px_rgba(0,240,255,0.6)] opacity-95'
                 : isSelected
-                ? 'border-white ring-2 ring-[#00F0FF] z-20 shadow-[0_0_12px_rgba(0,240,255,0.4)]'
+                ? isAdjustment
+                  ? 'border-white ring-2 ring-[#8B5CF6] z-20 shadow-[0_0_12px_rgba(139,92,246,0.5)]'
+                  : 'border-white ring-2 ring-[#00F0FF] z-20 shadow-[0_0_12px_rgba(0,240,255,0.4)]'
+                : isAdjustment
+                ? 'border-[#8B5CF6]/50 hover:border-[#8B5CF6] z-10'
                 : 'border-[#222630] hover:border-[#00F0FF]/80 z-10'
             }`}
           >
             {/* Inner Clip Graphic Container */}
             <div className="absolute inset-0 rounded overflow-hidden">
-              {isVideo ? (
+              {isAdjustment ? (
+                /* Dedicated Adjustment Layer / LUT Grade FX Clip */
+                <div className="relative h-full w-full bg-gradient-to-r from-[#2E1065] via-[#3B0764] to-[#1E1B4B] overflow-hidden select-none border border-[#8B5CF6]/50 shadow-inner">
+                  {/* Top Color Accent Line */}
+                  <div className="absolute top-0 left-0 right-0 h-1 z-10 bg-[#8B5CF6]" />
+
+                  {/* Header Info */}
+                  <div className="absolute top-1.5 left-2 right-2 flex items-center justify-between text-[10px] font-semibold text-white drop-shadow-md truncate pointer-events-none z-10">
+                    <div className="flex items-center gap-1.5 truncate">
+                      <Sparkles size={11} className="text-[#C4B5FD] shrink-0" />
+                      <span className="truncate bg-black/60 px-1.5 py-0.5 rounded backdrop-blur-xs font-mono text-[#DDD6FE]">
+                        {clip.name || 'Adjustment Layer'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="text-[9px] font-mono font-bold bg-[#8B5CF6] text-white px-1.5 py-0.2 rounded shadow-xs">
+                        LUT / GRADE FX
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Center FX indicator */}
+                  <div className="absolute inset-0 flex items-center justify-center px-4 pointer-events-none opacity-40">
+                    <span className="text-[10px] font-mono font-semibold tracking-wider text-[#A78BFA] uppercase truncate">
+                      Adjustment Layer - Grades All Tracks Below
+                    </span>
+                  </div>
+
+                  {/* Bottom Duration info */}
+                  <div className="absolute bottom-1 right-2 text-[9px] font-mono text-[#C4B5FD] font-bold bg-black/60 px-1 rounded pointer-events-none">
+                    {durSec.toFixed(2)}s
+                  </div>
+                </div>
+              ) : isText || clip.textContent !== undefined ? (
+                /* Dedicated Text / Title Clip */
+                <div className="relative h-full w-full bg-gradient-to-r from-[#211233] via-[#1A0E29] to-[#140C1F] overflow-hidden select-none border border-[#A855F7]/40 shadow-inner">
+                  {/* Top Color Accent Line */}
+                  <div className="absolute top-0 left-0 right-0 h-1 z-10 bg-[#A855F7]" />
+
+                  {/* Header Info */}
+                  <div className="absolute top-1.5 left-2 right-2 flex items-center justify-between text-[10px] font-semibold text-white drop-shadow-md truncate pointer-events-none z-10">
+                    <div className="flex items-center gap-1.5 truncate">
+                      <Type size={11} className="text-[#A855F7] shrink-0" />
+                      <span className="truncate bg-black/60 px-1.5 py-0.5 rounded backdrop-blur-xs font-mono">
+                        {clip.name || clip.textContent || 'Text'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="text-[9px] font-mono font-bold bg-[#A855F7]/80 text-white px-1.5 py-0.2 rounded shadow-xs">
+                        {clip.textStyle?.presetStyle ? clip.textStyle.presetStyle.toUpperCase() : 'TEXT'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Centered Preview of Text Content */}
+                  <div className="absolute inset-0 flex items-center justify-center px-4 pointer-events-none">
+                    <span
+                      style={{
+                        color: clip.textStyle?.fontColor || '#FFFFFF',
+                        fontFamily: clip.textStyle?.fontFamily || 'Inter',
+                        textShadow: clip.textStyle?.strokeWidth
+                          ? `0 0 ${clip.textStyle.strokeWidth * 2}px ${clip.textStyle.strokeColor || '#000000'}`
+                          : '0 2px 4px rgba(0,0,0,0.8)',
+                      }}
+                      className="text-xs font-bold truncate max-w-full drop-shadow-md"
+                    >
+                      "{clip.textContent || clip.name}"
+                    </span>
+                  </div>
+
+                  {/* Bottom Duration info */}
+                  <div className="absolute bottom-1 right-2 text-[9px] font-mono text-[#A855F7] font-bold bg-black/60 px-1 rounded pointer-events-none">
+                    {durSec.toFixed(2)}s
+                  </div>
+                </div>
+              ) : isVideo ? (
                 hasAttachedAudio ? (
                   /* Video Clip with Attached Sub Audio Track */
                   <div className="flex flex-col h-full w-full">
                     {/* Video Lane: Filmstrip & Title */}
-                    <div className="relative flex-1 min-h-[46px] overflow-hidden bg-[#111319]">
+                    <div className="relative flex-1 min-h-[22px] overflow-hidden bg-[#111319]">
                       <ClipVideoFilmstrip
                         filePath={clip.filePath}
                         widthPx={widthPx}
-                        heightPx={46}
+                        heightPx={Math.max(22, trackHeight - Math.min(32, Math.max(18, Math.round(trackHeight * 0.32))) - 8)}
                         inPointSeconds={clip.inPointSeconds || 0}
                         durationSeconds={durSec}
                         totalDurationSeconds={clip.metadata?.durationSeconds || durSec}
@@ -1980,7 +2397,16 @@ const DynamicTrackLane: React.FC<DynamicTrackLaneProps> = ({
                               <span>[{clip.speedProfile.speedMultiplier}x]</span>
                             </div>
                           )}
-                          {(clip.hasProxy || clip.proxyPath) && (
+                          {(clip.filterName || clip.filterId) && (
+                            <div
+                              className="flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-[#00F0FF]/90 text-black shadow-xs shrink-0"
+                              title={`Active Filter: ${clip.filterName || clip.filterId} (${Math.round((clip.filterIntensity ?? 1) * 100)}%)`}
+                            >
+                              <Sparkles size={8} />
+                              <span className="truncate max-w-[65px]">{clip.filterName || 'FX'}</span>
+                            </div>
+                          )}
+                        {(clip.hasProxy || clip.proxyPath) && (
                             <div
                               className="flex items-center px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-[#10B981]/90 text-[#0D0E11] shadow-xs"
                               title="Low-res editing proxy active"
@@ -2017,21 +2443,33 @@ const DynamicTrackLane: React.FC<DynamicTrackLaneProps> = ({
                           hasAttachedAudio: true,
                         });
                       }}
-                      className="relative h-[26px] bg-[#0A0D14] border-t border-[#222630] overflow-hidden select-none"
+                      style={{ height: `${Math.min(32, Math.max(18, Math.round(trackHeight * 0.32)))}px` }}
+                      className="relative bg-[#0A0D14] border-t border-[#222630] overflow-hidden select-none"
                       title="Attached Audio Subtrack (Right-click to Extract Audio)"
                     >
                       <div className="absolute left-1.5 top-0 bottom-0 flex items-center gap-1 z-10 pointer-events-none text-[8px] font-mono font-bold text-[#00F0FF]/80">
                         <Volume2 size={9} />
-                        <span>Audio</span>
+                        <span>{clip.audioProcessing?.noiseProfile?.noiseReductionEnabled ? 'Audio (Clean)' : 'Audio'}</span>
                       </div>
                       <ClipAudioWaveform
-                        filePath={clip.filePath}
+                        filePath={
+                          (clip.audioProcessing?.noiseProfile?.noiseReductionEnabled &&
+                            clip.audioProcessing?.noiseProfile?.denoisedAudioPath)
+                            ? clip.audioProcessing.noiseProfile.denoisedAudioPath
+                            : clip.filePath
+                        }
+                        clipId={clip.id}
+                        volumeDb={clip.volumeDb ?? 0}
+                        volumeKeyframes={clip.volumeKeyframes}
                         color="#FFFFFF"
                         widthPx={widthPx}
-                        heightPx={26}
+                        heightPx={Math.max(16, Math.min(30, Math.round(trackHeight * 0.32) - 2))}
                         inPointSeconds={clip.inPointSeconds || 0}
                         durationSeconds={durSec}
                         totalDurationSeconds={clip.metadata?.durationSeconds || durSec}
+                        noiseReductionEnabled={clip.audioProcessing?.noiseProfile?.noiseReductionEnabled}
+                        reductionIntensityDb={clip.audioProcessing?.noiseProfile?.reductionIntensityDb}
+                        sensitivity={clip.audioProcessing?.noiseProfile?.sensitivity}
                       />
                     </div>
                   </div>
@@ -2041,7 +2479,7 @@ const DynamicTrackLane: React.FC<DynamicTrackLaneProps> = ({
                     <ClipVideoFilmstrip
                       filePath={clip.filePath}
                       widthPx={widthPx}
-                      heightPx={72}
+                      heightPx={Math.max(28, trackHeight - 8)}
                       inPointSeconds={clip.inPointSeconds || 0}
                       durationSeconds={durSec}
                       totalDurationSeconds={clip.metadata?.durationSeconds || durSec}
@@ -2067,6 +2505,15 @@ const DynamicTrackLane: React.FC<DynamicTrackLaneProps> = ({
                             title={`Speed Ramping: ${clip.speedProfile.speedMultiplier}x`}
                           >
                             <span>[{clip.speedProfile.speedMultiplier}x]</span>
+                          </div>
+                        )}
+                        {(clip.filterName || clip.filterId) && (
+                          <div
+                            className="flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-[#00F0FF]/90 text-black shadow-xs shrink-0"
+                            title={`Active Filter: ${clip.filterName || clip.filterId} (${Math.round((clip.filterIntensity ?? 1) * 100)}%)`}
+                          >
+                            <Sparkles size={8} />
+                            <span className="truncate max-w-[65px]">{clip.filterName || 'FX'}</span>
                           </div>
                         )}
                         {(clip.hasProxy || clip.proxyPath) && (
@@ -2126,13 +2573,24 @@ const DynamicTrackLane: React.FC<DynamicTrackLaneProps> = ({
                   {/* White Continuous Oscillating Waveform (Reference image style) */}
                   <div className="absolute inset-0 pt-3">
                     <ClipAudioWaveform
-                      filePath={clip.filePath}
+                      filePath={
+                        (clip.audioProcessing?.noiseProfile?.noiseReductionEnabled &&
+                          clip.audioProcessing?.noiseProfile?.denoisedAudioPath)
+                          ? clip.audioProcessing.noiseProfile.denoisedAudioPath
+                          : clip.filePath
+                      }
+                      clipId={clip.id}
+                      volumeDb={clip.volumeDb ?? 0}
+                      volumeKeyframes={clip.volumeKeyframes}
                       color="#FFFFFF"
                       widthPx={widthPx}
-                      heightPx={52}
+                      heightPx={Math.max(24, trackHeight - 16)}
                       inPointSeconds={clip.inPointSeconds || 0}
                       durationSeconds={durSec}
                       totalDurationSeconds={clip.metadata?.durationSeconds || durSec}
+                      noiseReductionEnabled={clip.audioProcessing?.noiseProfile?.noiseReductionEnabled}
+                      reductionIntensityDb={clip.audioProcessing?.noiseProfile?.reductionIntensityDb}
+                      sensitivity={clip.audioProcessing?.noiseProfile?.sensitivity}
                     />
                   </div>
                 </div>
@@ -2168,38 +2626,63 @@ const DynamicTrackLane: React.FC<DynamicTrackLaneProps> = ({
               {clip.keyframeTracks && clip.keyframeTracks.some((t) => t.keyframes.length > 0) && (
                 <div
                   onClick={(e) => e.stopPropagation()}
-                  className="absolute bottom-0 left-0 right-0 h-4 bg-black/85 border-t border-[#00F0FF]/40 z-20 flex items-center px-1 select-none"
-                  title="Keyframe Track Sub-Lane: Drag diamond to adjust animation timing, double-click to delete"
+                  className="absolute bottom-0 left-0 right-0 h-4 bg-black/85 border-t border-[#00F0FF]/40 z-20 select-none overflow-hidden"
+                  title="Global Keyframe Sub-Lane: Click to seek playhead, drag diamond to adjust timing, double-click to delete"
                 >
-                  <div className="flex items-center gap-1 text-[8px] font-mono font-bold text-[#00F0FF] shrink-0 pointer-events-none mr-1.5">
-                    <Diamond size={8} fill="currentColor" />
+                  {/* Floating KF indicator */}
+                  <div className="absolute left-1 top-0 bottom-0 flex items-center gap-0.5 text-[8px] font-mono font-bold text-[#00F0FF]/70 pointer-events-none z-10">
+                    <Diamond size={7} fill="currentColor" />
                     <span>KF</span>
                   </div>
 
-                  {/* Keyframe Diamond Points */}
-                  <div className="relative flex-1 h-full">
-                    {clip.keyframeTracks.flatMap((track) =>
-                      track.keyframes.map((kf, kfIdx) => {
-                        const kfPct = Math.min(100, Math.max(0, (kf.time / durSec) * 100));
+                  {/* Keyframe Diamond Points across full 100% width of clip */}
+                  <div className="absolute inset-0 pointer-events-none">
+                    {Array.from(
+                      new Set(
+                        clip.keyframeTracks.flatMap((track) =>
+                          track.keyframes.map((k) => Number(k.time.toFixed(3)))
+                        )
+                      )
+                    )
+                      .sort((a, b) => a - b)
+                      .map((kfTime) => {
+                        const kfPct = Math.min(100, Math.max(0, (kfTime / durSec) * 100));
+                        const kfProps = clip.keyframeTracks
+                          ?.filter((track) => track.keyframes.some((k) => Math.abs(k.time - kfTime) < 0.08))
+                          .map((t) => {
+                            switch (t.property) {
+                              case 'position_x': return 'Pos X';
+                              case 'position_y': return 'Pos Y';
+                              case 'scale': return 'Scale';
+                              case 'rotation': return 'Rotation';
+                              case 'opacity': return 'Opacity';
+                              default: return t.property;
+                            }
+                          }) || [];
+                        const isMaster = kfProps.length >= 5;
+
                         return (
                           <div
-                            key={`${track.property}-${kfIdx}-${kf.time}`}
+                            key={`global-kf-${clip.id}-${kfTime}`}
                             style={{ left: `${kfPct}%` }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSeekToKeyframe?.(startSec + kfTime);
+                            }}
                             onMouseDown={(e) => {
                               e.stopPropagation();
                               e.preventDefault();
-                              onStartKeyframeDrag?.(clip.id, track.property, kf.time, e.clientX, durSec);
+                              onStartKeyframeDrag?.(clip.id, kfTime, e.clientX, durSec);
                             }}
                             onDoubleClick={(e) => {
                               e.stopPropagation();
-                              onRemoveKeyframe?.(clip.id, track.property, kf.time);
+                              onRemoveKeyframe?.(clip.id, kfTime);
                             }}
-                            title={`${track.property}: ${kf.value} at ${kf.time.toFixed(2)}s\n(Drag to move, double-click to delete)`}
-                            className="absolute top-1/2 -mt-1.5 -ml-1.5 w-3 h-3 rotate-45 bg-[#00F0FF] border border-black shadow-[0_0_6px_#00F0FF] hover:scale-130 transition-transform cursor-ew-resize z-30"
+                            title={`Keyframe at ${kfTime.toFixed(2)}s [${isMaster ? 'Master (All Properties)' : kfProps.join(', ')}]\n• Click: Seek playhead here\n• Drag: Shift timing\n• Double-click: Delete`}
+                            className="absolute top-1/2 -mt-1.5 -ml-1.5 w-3 h-3 rotate-45 bg-[#00F0FF] border border-black shadow-[0_0_6px_#00F0FF] hover:scale-130 transition-transform cursor-ew-resize z-30 pointer-events-auto"
                           />
                         );
-                      })
-                    )}
+                      })}
                   </div>
                 </div>
               )}
@@ -2548,6 +3031,19 @@ const DynamicTrackLane: React.FC<DynamicTrackLaneProps> = ({
           );
         });
       })()}
+
+      {/* Bottom Track Resizer Handle */}
+      <div
+        onMouseDown={(e) => onStartResize?.(e)}
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          onResetHeight?.();
+        }}
+        className="absolute bottom-0 left-0 right-0 h-1.5 cursor-row-resize z-40 group/resizer hover:bg-[#00F0FF]/60 active:bg-[#00F0FF] flex items-center justify-center transition-colors pointer-events-auto"
+        title="Hold and drag to resize track height (Double-click to reset)"
+      >
+        <div className="w-16 h-[2px] bg-transparent group-hover/resizer:bg-[#00F0FF] rounded-full transition-colors" />
+      </div>
     </div>
   );
 };

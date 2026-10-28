@@ -27,6 +27,10 @@ import { useTimelineStore, isTauri, tauriInvoke } from '../../store/timelineStor
 import { MediaAsset } from '../../types/ipc';
 import { MediaThumbnail } from './MediaThumbnail';
 import { TransitionsPanel } from '../Transitions/TransitionsPanel';
+import { FiltersPanel } from '../Filters/FiltersPanel';
+import { TextTemplatesPanel } from './TextTemplatesPanel';
+import { AudioLibraryPanel } from './AudioLibraryPanel';
+import { Type } from '@/components/Icons';
 
 export const MediaPool: React.FC = () => {
   const {
@@ -53,6 +57,7 @@ export const MediaPool: React.FC = () => {
     deleteClipProxy,
     proxyProgress,
     proxyStatus,
+    addAdjustmentLayer,
   } = useTimelineStore(
     useShallow((state) => ({
       activeTab: state.activeTab,
@@ -78,6 +83,7 @@ export const MediaPool: React.FC = () => {
       deleteClipProxy: state.deleteClipProxy,
       proxyProgress: state.proxyProgress,
       proxyStatus: state.proxyStatus,
+      addAdjustmentLayer: state.addAdjustmentLayer,
     }))
   );
 
@@ -322,50 +328,32 @@ export const MediaPool: React.FC = () => {
     }
   };
 
+  if (activeTab === 'audio') {
+    return <AudioLibraryPanel />;
+  }
+
+  if (activeTab === 'text') {
+    return <TextTemplatesPanel />;
+  }
+
   if (activeTab === 'transitions') {
     return (
       <div className="flex-1 flex flex-col overflow-hidden bg-[#14161B] border-r border-[#222630] select-none">
-        <div className="h-9 px-2 bg-[#101217] border-b border-[#222630] flex items-center gap-1 shrink-0">
-          <button
-            onClick={() => setActiveTab('media')}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold text-[#8A92A6] hover:text-[#F0F3F8] hover:bg-[#1A1D24] transition-colors cursor-pointer"
-          >
-            <Film size={12} />
-            <span>Media Pool</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('transitions')}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold bg-[#1C212B] text-[#A855F7] border border-[#A855F7]/30 transition-colors cursor-pointer"
-          >
-            <Split size={12} />
-            <span>Transitions</span>
-          </button>
-        </div>
         <TransitionsPanel />
+      </div>
+    );
+  }
+
+  if (activeTab === 'filters') {
+    return (
+      <div className="flex-1 flex flex-col overflow-hidden bg-[#14161B] border-r border-[#222630] select-none">
+        <FiltersPanel />
       </div>
     );
   }
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-[#14161B] border-r border-[#222630] select-none">
-      {/* Top Tab Bar: Media Pool vs Transitions */}
-      <div className="h-9 px-2 bg-[#101217] border-b border-[#222630] flex items-center gap-1 shrink-0">
-        <button
-          onClick={() => setActiveTab('media')}
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold bg-[#1C212B] text-[#00F0FF] border border-[#00F0FF]/30 transition-colors cursor-pointer"
-        >
-          <Film size={12} />
-          <span>Media Pool</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('transitions')}
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold text-[#8A92A6] hover:text-[#F0F3F8] hover:bg-[#1A1D24] transition-colors cursor-pointer"
-        >
-          <Split size={12} />
-          <span>Transitions</span>
-        </button>
-      </div>
-
       <div className="flex-1 flex overflow-hidden">
         {/* Hidden File Inputs for Web Fallback Action */}
         <input
@@ -548,7 +536,7 @@ export const MediaPool: React.FC = () => {
               title="Open Native Windows File Picker"
             >
               <Plus size={14} strokeWidth={3} />
-              <span>{isImporting ? 'Probing...' : 'Import Files'}</span>
+              <span>{isImporting ? 'Probing...' : 'Import'}</span>
             </button>
 
             <button

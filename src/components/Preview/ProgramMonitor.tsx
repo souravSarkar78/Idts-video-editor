@@ -15,12 +15,38 @@ import {
   Scissors,
   Zap,
   Move,
+  Split,
 } from 'lucide-react';
-import { RotateCw } from '@/components/Icons';
+import { RotateCw, Activity, Shield } from '@/components/Icons';
 import { useShallow } from 'zustand/react/shallow';
 import { useTimelineStore, isTauri, getInterpolatedClipTransform } from '../../store/timelineStore';
 import { formatTimecode } from '../../utils/timecode';
-import { Clip } from '../../types/ipc';
+import { Clip, ColorGradingProfile } from '../../types/ipc';
+import { getActiveAudioClock } from '../Audio/TimelineAudioPlayer';
+import { getInterpolatedVolumeDb, getSharedAudioContext } from '../../utils/audioMastering';
+import { VideoScopes } from './VideoScopes';
+import { compileShaderRecipeToCssFilter } from '../../utils/filterRecipe';
+
+function getCleanMediaUrl(rawPath: string): string {
+  if (!rawPath) return '';
+  if (
+    rawPath.startsWith('blob:') ||
+    rawPath.startsWith('http:') ||
+    rawPath.startsWith('https:') ||
+    rawPath.startsWith('data:')
+  ) {
+    return rawPath;
+  }
+  if (typeof window !== 'undefined') {
+    try {
+      const internals = (window as any).__TAURI_INTERNALS__;
+      if (internals?.convertFileSrc) {
+        return internals.convertFileSrc(rawPath, 'asset');
+      }
+    } catch {}
+  }
+  return rawPath;
+}
 
 export const ProgramMonitor: React.FC = () => {
   const {
@@ -43,6 +69,24 @@ export const ProgramMonitor: React.FC = () => {
     transitions,
     selectedClipId,
     updateClipTransform,
+    inspectorTab,
+    selectClip,
+    updateTextClipContent,
+    updateTextClipStyle,
+    masterGrading,
+    isScopesDrawerOpen,
+    setIsScopesDrawerOpen,
+    activeScopeType,
+    setActiveScopeType,
+    isSplitComparisonOpen,
+    setSplitComparisonOpen,
+    splitComparisonMode,
+    setSplitComparisonMode,
+    splitComparisonPosition,
+    setSplitComparisonPosition,
+    referenceSnapshotUrl,
+    setReferenceSnapshotUrl,
+    autoMatchLook,
   } = useTimelineStore(
     useShallow((state) => ({
       playhead: state.playhead,
@@ -64,12 +108,31 @@ export const ProgramMonitor: React.FC = () => {
       transitions: state.transitions,
       selectedClipId: state.selectedClipId,
       updateClipTransform: state.updateClipTransform,
+      inspectorTab: state.inspectorTab,
+      selectClip: state.selectClip,
+      updateTextClipContent: state.updateTextClipContent,
+      updateTextClipStyle: state.updateTextClipStyle,
+      masterGrading: state.masterGrading,
+      isScopesDrawerOpen: state.isScopesDrawerOpen,
+      setIsScopesDrawerOpen: state.setIsScopesDrawerOpen,
+      activeScopeType: state.activeScopeType,
+      setActiveScopeType: state.setActiveScopeType,
+      isSplitComparisonOpen: state.isSplitComparisonOpen,
+      setSplitComparisonOpen: state.setSplitComparisonOpen,
+      splitComparisonMode: state.splitComparisonMode,
+      setSplitComparisonMode: state.setSplitComparisonMode,
+      splitComparisonPosition: state.splitComparisonPosition,
+      setSplitComparisonPosition: state.setSplitComparisonPosition,
+      referenceSnapshotUrl: state.referenceSnapshotUrl,
+      setReferenceSnapshotUrl: state.setReferenceSnapshotUrl,
+      autoMatchLook: state.autoMatchLook,
     }))
   );
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const incomingVideoRef = useRef<HTMLVideoElement>(null);
+  const denoisedAudioPlayerRef = useRef<HTMLAudioElement>(null);
   const [player1Clip, setPlayer1Clip] = useState<Clip | null>(() => getActiveVideoClip()?.clip || null);
   const [player2Clip, setPlayer2Clip] = useState<Clip | null>(null);
   const [activePlayer, setActivePlayer] = useState<'player1' | 'player2'>('player1');
@@ -436,55 +499,319 @@ export const ProgramMonitor: React.FC = () => {
     return Math.min(inPoint + sourceDur, inPoint + sourceElapsed);
   };
 
-  // Compute real-time CSS filter style from clip's inspector adjustments & temperature
-  const getInspectorFilterStyle = (clip?: any) => {
-    const targetClip = clip || activeLayer?.clip;
-    if (!targetClip) return undefined;
-    const b = targetClip.color?.brightness ?? targetClip.brightness ?? 0;
-    const c = targetClip.color?.contrast ?? targetClip.contrast ?? 1.0;
-    const s = targetClip.color?.saturation ?? targetClip.saturation ?? 1.0;
-    const temp = targetClip.color?.temperature ?? targetClip.temperature ?? 0;
+  // Helper function: Compiles a ColorGradingProfile into standard CSS filter expression tokens
+  const compileColorProfileToCssFilter = (profile?: ColorGradingProfile | null, legacyColor?: any) => {
+    if (!profile && !legacyColor) return '';
 
-    const brightnessVal = Math.max(0, 1 + b);
-    const contrastVal = Math.max(0, c);
-    const saturateVal = Math.max(0, s);
+    // 1. Exposure & Dynamic Brightness
+    const exp = profile?.exposure ?? 0;
+    const expFactor = exp !== 0 ? Math.pow(2, exp * 0.65) : 1.0;
+    const whites = profile?.whites ?? 0;
+    const blacks = profile?.blacks ?? 0;
+    const highlights = profile?.highlights ?? 0;
+    const shadows = profile?.shadows ?? 0;
+    const legacyB = legacyColor?.brightness ?? 0;
+
+    // 3-Way Color Wheels Luma contributions
+    const liftLuma = (profile?.lift?.luma ?? 0) * 0.35;
+    const gammaLuma = (profile?.gamma?.luma ?? 0) * 0.35;
+    const gainLuma = (profile?.gain?.luma ?? 0) * 0.45;
+    const offsetLuma = (profile?.offset?.luma ?? 0) * 0.4;
+
+    // Spline Curves curvature evaluation across all channels
+    let curveBrightness = 0;
+    let curveContrast = 1.0;
+    let curveWarmth = 0;
+    let curveTint = 0;
+
+    if (profile?.curves) {
+      if (profile.curves.master && profile.curves.master.length >= 2) {
+        const pts = profile.curves.master;
+        const pFirst = pts[0];
+        const pLast = pts[pts.length - 1];
+        const endLift = (pFirst[1] - pFirst[0]) * 0.8;
+        const endDrop = (pLast[1] - pLast[0]) * 0.8;
+
+        const sumX = pts.reduce((acc, p) => acc + p[0], 0);
+        const sumY = pts.reduce((acc, p) => acc + p[1], 0);
+        const avgX = sumX / pts.length;
+        const avgY = sumY / pts.length;
+        const midDelta = (avgY - avgX) * 1.5;
+
+        curveBrightness += endLift + endDrop + midDelta;
+        curveContrast += Math.abs(midDelta) * 0.5;
+      }
+
+      if (profile.curves.red && profile.curves.red.length >= 2) {
+        const pts = profile.curves.red;
+        const avgX = pts.reduce((acc, p) => acc + p[0], 0) / pts.length;
+        const avgY = pts.reduce((acc, p) => acc + p[1], 0) / pts.length;
+        curveWarmth += (avgY - avgX) * 50;
+      }
+
+      if (profile.curves.blue && profile.curves.blue.length >= 2) {
+        const pts = profile.curves.blue;
+        const avgX = pts.reduce((acc, p) => acc + p[0], 0) / pts.length;
+        const avgY = pts.reduce((acc, p) => acc + p[1], 0) / pts.length;
+        curveWarmth -= (avgY - avgX) * 50;
+      }
+
+      if (profile.curves.green && profile.curves.green.length >= 2) {
+        const pts = profile.curves.green;
+        const avgX = pts.reduce((acc, p) => acc + p[0], 0) / pts.length;
+        const avgY = pts.reduce((acc, p) => acc + p[1], 0) / pts.length;
+        curveTint += (avgY - avgX) * 50;
+      }
+    }
+
+    const brilliance = profile?.brilliance ?? 0;
+
+    let brightnessVal = Math.max(
+      0.01,
+      expFactor *
+        (1 +
+          legacyB +
+          whites * 0.35 +
+          highlights * 0.35 +
+          blacks * 0.3 +
+          shadows * 0.3 +
+          brilliance * 0.25 +
+          liftLuma +
+          gainLuma +
+          offsetLuma +
+          curveBrightness)
+    );
+
+    // 2. Contrast & Fade
+    const baseContrast = profile?.contrast ?? legacyColor?.contrast ?? 1.0;
+    const fade = (profile?.fade ?? 0) / 100;
+    let contrastVal = Math.max(
+      0.01,
+      baseContrast *
+        (1 +
+          (whites - blacks) * 0.25 +
+          (highlights - shadows) * 0.2 +
+          (gammaLuma !== 0 ? -gammaLuma * 0.3 : 0)) *
+        curveContrast *
+        (fade > 0.01 ? Math.max(0.4, 1 - fade * 0.35) : 1.0)
+    );
+
+    // 3. Saturation & Vibrance
+    const baseSat = profile?.saturation ?? legacyColor?.saturation ?? 1.0;
+    const vibranceVal = profile?.vibrance ?? 0;
+    let saturateVal = Math.max(0, baseSat * (1 + vibranceVal * 0.5));
+
+    // Selective 8-color adjustments
+    let selHueShift = 0;
+    if (profile?.selectiveColors) {
+      const entries = Object.values(profile.selectiveColors);
+      for (const e of entries) {
+        if (Math.abs(e.hue) > 0.1) selHueShift += (e.hue / 100) * 15;
+        if (Math.abs(e.saturation) > 0.1) saturateVal *= (1 + (e.saturation / 100) * 0.25);
+        if (Math.abs(e.brightness) > 0.1) brightnessVal *= (1 + (e.brightness / 100) * 0.2);
+      }
+    }
+
+    // 4. Temperature, Tint & Color Wheels Chromatic Shift
+    const temp = profile?.temperature ?? legacyColor?.temperature ?? 0;
+    const tint = profile?.tint ?? 0;
+
+    const liftR = (profile?.lift?.r || 0) * 0.6;
+    const liftB = (profile?.lift?.b || 0) * 0.6;
+    const liftG = (profile?.lift?.g || 0) * 0.6;
+
+    const gammaR = (profile?.gamma?.r || 0) * 0.8;
+    const gammaB = (profile?.gamma?.b || 0) * 0.8;
+    const gammaG = (profile?.gamma?.g || 0) * 0.8;
+
+    const gainR = (profile?.gain?.r || 0) * 1.0;
+    const gainB = (profile?.gain?.b || 0) * 1.0;
+    const gainG = (profile?.gain?.g || 0) * 1.0;
+
+    const offsetR = (profile?.offset?.r || 0) * 0.8;
+    const offsetB = (profile?.offset?.b || 0) * 0.8;
+    const offsetG = (profile?.offset?.g || 0) * 0.8;
+
+    const wheelWarmth = (liftR - liftB + gammaR - gammaB + gainR - gainB + offsetR - offsetB) * 55;
+    const wheelTint =
+      ((liftG + gammaG + gainG + offsetG) -
+        (liftR + liftB + gammaR + gammaB + gainR + gainB + offsetR + offsetB) / 2) *
+      50;
+
+    const netWarmth = temp + wheelWarmth + curveWarmth;
+    const netTint = tint + wheelTint + curveTint;
 
     let tempFilter = '';
-    if (temp > 0) {
-      const warmFactor = (temp / 100) * 0.35;
-      tempFilter = ` sepia(${warmFactor}) hue-rotate(-${temp * 0.12}deg)`;
-    } else if (temp < 0) {
-      tempFilter = ` hue-rotate(${Math.abs(temp) * 0.22}deg)`;
+    if (netWarmth > 1) {
+      const warmFactor = Math.min(0.85, (netWarmth / 100) * 0.55);
+      const warmHueRotate = -(netWarmth / 100) * 35;
+      tempFilter = ` sepia(${warmFactor.toFixed(3)}) hue-rotate(${warmHueRotate.toFixed(1)}deg)`;
+    } else if (netWarmth < -1) {
+      const coolHueRotate = (Math.abs(netWarmth) / 100) * 45;
+      const coolDesat = Math.max(0.7, 1 - (Math.abs(netWarmth) / 100) * 0.2);
+      tempFilter = ` hue-rotate(${coolHueRotate.toFixed(1)}deg) saturate(${coolDesat.toFixed(3)})`;
     }
 
+    let tintFilter = '';
+    if (Math.abs(netTint) > 1) {
+      const tintHueRotate = (netTint / 100) * 35;
+      tintFilter = ` hue-rotate(${tintHueRotate.toFixed(1)}deg)`;
+    }
+
+    // 5. Split-Toning Emulation
+    let splitFilter = '';
+    if (profile?.splitToning) {
+      const st = profile.splitToning;
+      if ((st.shadowSat && st.shadowSat > 3) || (st.highlightSat && st.highlightSat > 3)) {
+        const shadowShift = (st.shadowHue || 0) * 0.08;
+        const hlShift = (st.highlightHue || 0) * 0.08;
+        splitFilter = ` hue-rotate(${((hlShift - shadowShift) * 0.7).toFixed(1)}deg)`;
+      }
+    }
+
+    // 6. 3D LUT emulation
     let lutFilter = '';
-    const lut = (targetClip.color?.lutPath || targetClip.lutPath || '').toLowerCase();
-    if (lut.includes('teal_orange')) {
-      lutFilter = ' hue-rotate(-12deg) saturate(1.25) contrast(1.15)';
-    } else if (lut.includes('warm_film')) {
-      lutFilter = ' sepia(0.22) saturate(1.1) brightness(1.04)';
-    } else if (lut.includes('clean_cool')) {
-      lutFilter = ' hue-rotate(15deg) saturate(0.92) contrast(1.05)';
-    } else if (lut.includes('vintage')) {
-      lutFilter = ' sepia(0.35) contrast(1.2) brightness(0.95)';
-    } else if (lut.includes('vibrant')) {
-      lutFilter = ' saturate(1.35) contrast(1.1)';
-    } else if (lut.includes('monochrome') || lut.includes('bw')) {
-      lutFilter = ' grayscale(1) contrast(1.15)';
-    } else if (lut.length > 0) {
-      lutFilter = ' contrast(1.08)';
+    const lut = (profile?.lutPath || legacyColor?.lutPath || '').toLowerCase();
+    const lutIntensity = profile?.lutIntensity ?? 1.0;
+    if (lutIntensity > 0.01) {
+      if (lut.includes('teal_orange')) {
+        lutFilter = ` hue-rotate(-${(22 * lutIntensity).toFixed(1)}deg) saturate(${(1 + 0.35 * lutIntensity).toFixed(3)}) contrast(${(1 + 0.25 * lutIntensity).toFixed(3)})`;
+      } else if (lut.includes('warm_film')) {
+        lutFilter = ` sepia(${(0.35 * lutIntensity).toFixed(3)}) saturate(${(1 + 0.15 * lutIntensity).toFixed(3)}) brightness(${(1 + 0.08 * lutIntensity).toFixed(3)}) contrast(${(1 + 0.12 * lutIntensity).toFixed(3)})`;
+      } else if (lut.includes('clean_cool')) {
+        lutFilter = ` hue-rotate(${(25 * lutIntensity).toFixed(1)}deg) saturate(${(1 - 0.12 * lutIntensity).toFixed(3)}) contrast(${(1 + 0.15 * lutIntensity).toFixed(3)})`;
+      } else if (lut.includes('vintage')) {
+        lutFilter = ` sepia(${(0.45 * lutIntensity).toFixed(3)}) contrast(${(1 + 0.28 * lutIntensity).toFixed(3)}) brightness(${(1 - 0.08 * lutIntensity).toFixed(3)})`;
+      } else if (lut.includes('vibrant')) {
+        lutFilter = ` saturate(${(1 + 0.65 * lutIntensity).toFixed(3)}) contrast(${(1 + 0.22 * lutIntensity).toFixed(3)})`;
+      } else if (lut.includes('monochrome') || lut.includes('bw')) {
+        lutFilter = ` grayscale(${lutIntensity.toFixed(2)}) contrast(${(1 + 0.3 * lutIntensity).toFixed(3)})`;
+      } else if (lut.length > 0) {
+        lutFilter = ` contrast(${(1 + 0.18 * lutIntensity).toFixed(3)}) saturate(${(1 + 0.15 * lutIntensity).toFixed(3)})`;
+      }
     }
 
+    // 7. HSL Secondary Qualifier adjustments
+    let hslFilter = '';
+    let hslMatteFilter = '';
+    const hsl = profile?.hslQualifier;
+    if (hsl && hsl.enabled) {
+      if (hsl.showMatte) {
+        hslMatteFilter = 'grayscale(100%) contrast(500%) invert(100%)';
+      } else {
+        const shift = hsl.isolatedHueShift ?? 0;
+        const sat = hsl.isolatedSat ?? 1.0;
+        const gain = hsl.isolatedGain ?? 1.0;
+        if (Math.abs(shift) > 0.5) hslFilter += ` hue-rotate(${shift.toFixed(1)}deg)`;
+        if (Math.abs(sat - 1.0) > 0.01) saturateVal *= sat;
+        if (Math.abs(gain - 1.0) > 0.01) brightnessVal *= Math.max(0.05, gain);
+      }
+    }
+
+    // Build optimized filter tokens - only include active transforms
+    const tokens: string[] = [];
+    if (hslMatteFilter) {
+      tokens.push(hslMatteFilter);
+    }
+    if (Math.abs(brightnessVal - 1.0) > 0.005) tokens.push(`brightness(${brightnessVal.toFixed(3)})`);
+    if (Math.abs(contrastVal - 1.0) > 0.005) tokens.push(`contrast(${contrastVal.toFixed(3)})`);
+    if (Math.abs(saturateVal - 1.0) > 0.005) tokens.push(`saturate(${saturateVal.toFixed(3)})`);
+    if (tempFilter) tokens.push(tempFilter.trim());
+    if (tintFilter) tokens.push(tintFilter.trim());
+    if (Math.abs(selHueShift) > 0.5) tokens.push(`hue-rotate(${selHueShift.toFixed(1)}deg)`);
+    if (splitFilter) tokens.push(splitFilter.trim());
+    if (lutFilter) tokens.push(lutFilter.trim());
+    if (hslFilter) tokens.push(hslFilter.trim());
+
+    return tokens.join(' ');
+  };
+
+  // Phase 7: Hierarchical Multi-Pass Color Grading Pipeline
+  // Clip Pass -> Track Pass -> Adjustment Layer Pass -> Master Pass
+  const getInspectorFilterStyle = (clip?: any) => {
+    const rawTarget = clip || activeLayer?.clip;
+    const targetClip = rawTarget ? getFreshClip(rawTarget) || rawTarget : null;
+
+    // Check if HSL qualifier showMatte is enabled on clip, track, adjustment layer, or master
+    const isShowMatte = Boolean(
+      (targetClip?.colorGrading?.hslQualifier?.enabled && targetClip.colorGrading.hslQualifier.showMatte) ||
+        (activeLayer?.track?.trackGrading?.hslQualifier?.enabled &&
+          activeLayer.track.trackGrading.hslQualifier.showMatte) ||
+        (masterGrading?.hslQualifier?.enabled && masterGrading.hslQualifier.showMatte) ||
+        targetClip?.colorGrading?.hslQualifier?.showMatte ||
+        activeLayer?.track?.trackGrading?.hslQualifier?.showMatte ||
+        masterGrading?.hslQualifier?.showMatte
+    );
+
+    if (isShowMatte) {
+      return 'grayscale(1) contrast(5) invert(1)';
+    }
+
+    if (!targetClip) {
+      const masterFilter = compileColorProfileToCssFilter(masterGrading);
+      return masterFilter || undefined;
+    }
+
+    // 1. Clip Pass
+    const clipFilter = compileColorProfileToCssFilter(
+      targetClip.colorGrading,
+      targetClip.color || targetClip
+    );
+
+    // 2. Track Pass (lookup containing track for accurate track grade)
+    const clipTrack =
+      (tracks || []).find((t) => t.clips?.some((c) => c.id === targetClip.id)) || activeLayer?.track;
+    const trackFilter = compileColorProfileToCssFilter(clipTrack?.trackGrading);
+
+    // 3. Adjustment Layer Pass (active adjustment layers on timeline covering playhead)
+    let adjFilter = '';
+    const activeAdjustmentLayers = (tracks || [])
+      .flatMap((t) => t.clips || [])
+      .filter((c) => {
+        if (!c.isAdjustmentLayer && c.mediaType !== 'adjustment' && c.filePath !== 'adjustment_layer')
+          return false;
+        const start = c.startPositionSeconds ?? 0;
+        const dur = c.durationSeconds ?? 0;
+        return playhead >= start && playhead <= start + dur;
+      });
+
+    for (const adj of activeAdjustmentLayers) {
+      const f = compileColorProfileToCssFilter(adj.colorGrading);
+      if (f) adjFilter += ` ${f}`;
+      if (adj.filterRecipe) {
+        const pf = compileShaderRecipeToCssFilter(
+          adj.filterRecipe,
+          adj.filterIntensity ?? 1.0
+        );
+        if (pf && pf !== 'none') adjFilter += ` ${pf}`;
+      }
+    }
+
+    // 4. Preset Filter / 3D LUT Pass on Clip
+    let presetFilter = '';
+    if (targetClip.filterRecipe) {
+      const pf = compileShaderRecipeToCssFilter(
+        targetClip.filterRecipe,
+        targetClip.filterIntensity ?? 1.0
+      );
+      if (pf && pf !== 'none') presetFilter = ` ${pf}`;
+    }
+
+    // 5. Master Pass
+    const masterFilter = compileColorProfileToCssFilter(masterGrading);
+
+    // Lens Gaussian Blur
     let blurFilter = '';
     const blur = targetClip.lensEffects?.gaussianBlur ?? 0;
     if (blur > 0.05) {
       blurFilter = ` blur(${Math.min(25, blur * 0.5)}px)`;
     }
 
-    return `brightness(${brightnessVal}) contrast(${contrastVal}) saturate(${saturateVal})${tempFilter}${lutFilter}${blurFilter}`;
+    const combined = `${clipFilter} ${trackFilter} ${adjFilter} ${presetFilter} ${masterFilter} ${blurFilter}`.trim();
+    return combined || undefined;
   };
 
-  // Sync audio volume levels
+  // Sync audio volume, ducking, and mute levels
   useEffect(() => {
     if (!currentActiveClip) {
       if (videoRef.current) {
@@ -499,27 +826,152 @@ export const ProgramMonitor: React.FC = () => {
     }
 
     const isMuted = Boolean(activeLayer?.track?.muted || activeLayer?.track?.isMuted);
-    const volumeDb = activeLayer?.clip?.volumeDb ?? 0;
-    const baseGain = isMuted || volumeDb <= -58 ? 0 : Math.min(1.0, Math.max(0.0, Math.pow(10, volumeDb / 20)));
+    const clip = activeLayer?.clip;
+    const clipStart = clip?.startPositionSeconds ?? 0;
+    const volumeDb = clip ? getInterpolatedVolumeDb(clip, playhead - clipStart) : 0;
+
+    // Check dialogue activity on speech tracks for auto-ducking
+    const isAnyDialogueActive = (tracks || []).some((t) => {
+      if (t.id === activeLayer?.track?.id) return false;
+      const isSpeechTrack =
+        (t.name || '').toLowerCase().includes('voice') ||
+        (t.name || '').toLowerCase().includes('dialogue') ||
+        (t.name || '').toLowerCase().includes('mic');
+      if (!isSpeechTrack) return false;
+      return (t.clips || []).some((c) => {
+        const s = c.startPositionSeconds ?? 0;
+        const d = c.durationSeconds ?? 10;
+        return playhead >= s && playhead < s + d;
+      });
+    });
+
+    const isDucked = Boolean(activeLayer?.track?.ducking?.duckingEnabled && isAnyDialogueActive);
+    const duckingDb = isDucked ? (activeLayer?.track?.ducking?.attenuationDb ?? -14) : 0;
+    const totalDb = volumeDb + duckingDb;
+    const linearGain = isMuted || totalDb <= -58 ? 0 : Math.pow(10, totalDb / 20);
 
     const activeVid = activePlayer === 'player1' ? videoRef.current : incomingVideoRef.current;
     const standbyVid = activePlayer === 'player1' ? incomingVideoRef.current : videoRef.current;
 
+    const np = activeLayer?.clip?.audioProcessing?.noiseProfile;
+    const hasDenoised = Boolean(np?.noiseReductionEnabled && np?.denoisedAudioPath);
+
     if (activeVid) {
-      activeVid.muted = isMuted;
-      activeVid.volume = baseGain;
+      if (hasDenoised) {
+        activeVid.muted = true;
+        activeVid.volume = 0;
+      } else {
+        activeVid.muted = isMuted || linearGain === 0;
+        activeVid.volume = isMuted ? 0 : Math.max(0, Math.min(1.0, linearGain));
+      }
     }
     if (standbyVid) {
       standbyVid.muted = true;
       standbyVid.volume = 0;
     }
+
+    if (denoisedAudioPlayerRef.current) {
+      if (hasDenoised && np?.denoisedAudioPath) {
+        const cleanSrc = getCleanMediaUrl(np.denoisedAudioPath);
+        if (denoisedAudioPlayerRef.current.src !== cleanSrc) {
+          denoisedAudioPlayerRef.current.src = cleanSrc;
+        }
+        denoisedAudioPlayerRef.current.muted = isMuted || linearGain === 0;
+        denoisedAudioPlayerRef.current.volume = isMuted ? 0 : Math.max(0, Math.min(1.0, linearGain));
+      } else {
+        denoisedAudioPlayerRef.current.muted = true;
+        denoisedAudioPlayerRef.current.volume = 0;
+      }
+    }
   }, [
     activePlayer,
     currentActiveClip,
     activeLayer?.clip?.volumeDb,
+    activeLayer?.clip?.audioProcessing,
     activeLayer?.track?.muted,
     activeLayer?.track?.isMuted,
+    activeLayer?.track?.ducking,
+    playhead,
+    tracks,
   ]);
+
+  // Real-Time Web Audio Preview: Simulate low-gain ambient bed when Ambient Recovery is active
+  const ambientBedRef = useRef<{ ctx: AudioContext; node: AudioBufferSourceNode | null; gain: GainNode | null } | null>(null);
+
+  useEffect(() => {
+    const np = activeLayer?.clip?.audioProcessing?.noiseProfile;
+    const shouldPlayBed = Boolean(isPlaying && np?.ambientRecoveryEnabled && (np.ambientFillIntensity ?? 0.25) > 0);
+
+    if (!shouldPlayBed) {
+      if (ambientBedRef.current?.node) {
+        try {
+          ambientBedRef.current.node.stop();
+          ambientBedRef.current.node.disconnect();
+        } catch {}
+        ambientBedRef.current.node = null;
+      }
+      return;
+    }
+
+    try {
+      const ctx = getSharedAudioContext();
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
+
+      if (!ambientBedRef.current) {
+        ambientBedRef.current = { ctx, node: null, gain: null };
+      }
+
+      if (!ambientBedRef.current.gain) {
+        const gain = ctx.createGain();
+        gain.connect(ctx.destination);
+        ambientBedRef.current.gain = gain;
+      }
+
+      const intensity = Math.max(0, Math.min(1.0, np?.ambientFillIntensity ?? 0.25));
+      ambientBedRef.current.gain.gain.setTargetAtTime(intensity * 0.03, ctx.currentTime, 0.05);
+
+      if (!ambientBedRef.current.node) {
+        // Generate 3s loop of filtered ambient pink noise for real-time room tone bed
+        const bufferSize = ctx.sampleRate * 3;
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        let b0 = 0, b1 = 0, b2 = 0;
+        for (let i = 0; i < bufferSize; i++) {
+          const white = Math.random() * 2 - 1;
+          b0 = 0.99765 * b0 + white * 0.0990460;
+          b1 = 0.96300 * b1 + white * 0.1243680;
+          b2 = 0.86650 * b2 + white * 0.2636820;
+          data[i] = (b0 + b1 + b2) * 0.04;
+        }
+
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.loop = true;
+
+        const bandFilter = ctx.createBiquadFilter();
+        bandFilter.type = 'bandpass';
+        bandFilter.frequency.value = 250;
+        bandFilter.Q.value = 0.8;
+
+        source.connect(bandFilter);
+        bandFilter.connect(ambientBedRef.current.gain);
+        source.start(0);
+        ambientBedRef.current.node = source;
+      }
+    } catch {}
+
+    return () => {
+      if (ambientBedRef.current?.node) {
+        try {
+          ambientBedRef.current.node.stop();
+          ambientBedRef.current.node.disconnect();
+        } catch {}
+        ambientBedRef.current.node = null;
+      }
+    };
+  }, [isPlaying, activeLayer?.clip?.audioProcessing?.noiseProfile]);
 
   // Scrubbing / Seek synchronization (accurate frame seeking when paused)
   useEffect(() => {
@@ -551,6 +1003,17 @@ export const ProgramMonitor: React.FC = () => {
       const fresh2 = getFreshClip(player2Clip) || player2Clip;
       incomingVideoRef.current.currentTime = getClipSeekTime(fresh2, playhead);
     }
+    if (denoisedAudioPlayerRef.current && currentActiveClip) {
+      const fresh = getFreshClip(currentActiveClip) || currentActiveClip;
+      const np = fresh.audioProcessing?.noiseProfile;
+      if (np?.noiseReductionEnabled && np?.denoisedAudioPath) {
+        const dSrc = getCleanMediaUrl(np.denoisedAudioPath);
+        if (denoisedAudioPlayerRef.current.src !== dSrc) {
+          denoisedAudioPlayerRef.current.src = dSrc;
+        }
+        denoisedAudioPlayerRef.current.currentTime = getClipSeekTime(fresh, playhead);
+      }
+    }
   }, [playhead, isPlaying, player1Clip, player2Clip, activePlayer, currentActiveClip, tracks]);
 
   // Continuous smooth requestAnimationFrame playback loop driven by hardware decoder clock
@@ -560,6 +1023,7 @@ export const ProgramMonitor: React.FC = () => {
     if (!isPlaying) {
       if (videoRef.current && !videoRef.current.paused) videoRef.current.pause();
       if (incomingVideoRef.current && !incomingVideoRef.current.paused) incomingVideoRef.current.pause();
+      if (denoisedAudioPlayerRef.current && !denoisedAudioPlayerRef.current.paused) denoisedAudioPlayerRef.current.pause();
       return;
     }
 
@@ -576,9 +1040,23 @@ export const ProgramMonitor: React.FC = () => {
           curVid.play().catch(() => {});
         }
       }
+      const np = curClip.audioProcessing?.noiseProfile;
+      if (np?.noiseReductionEnabled && np?.denoisedAudioPath && denoisedAudioPlayerRef.current) {
+        const dAudio = denoisedAudioPlayerRef.current;
+        const dSrc = getCleanMediaUrl(np.denoisedAudioPath);
+        if (dAudio.src !== dSrc) dAudio.src = dSrc;
+        dAudio.playbackRate = curVid ? curVid.playbackRate : 1.0;
+        if (curVid && Math.abs(dAudio.currentTime - curVid.currentTime) > 0.15) {
+          dAudio.currentTime = curVid.currentTime;
+        }
+        if (dAudio.paused) dAudio.play().catch(() => {});
+      } else if (denoisedAudioPlayerRef.current && !denoisedAudioPlayerRef.current.paused) {
+        denoisedAudioPlayerRef.current.pause();
+      }
     } else {
       if (videoRef.current && !videoRef.current.paused) videoRef.current.pause();
       if (incomingVideoRef.current && !incomingVideoRef.current.paused) incomingVideoRef.current.pause();
+      if (denoisedAudioPlayerRef.current && !denoisedAudioPlayerRef.current.paused) denoisedAudioPlayerRef.current.pause();
     }
 
     let lastTime = performance.now();
@@ -592,21 +1070,34 @@ export const ProgramMonitor: React.FC = () => {
 
       let nextPlayhead = state.playhead + deltaSec;
 
-      // Master video clock is the active player (only if currently inside the active clip)
+      // Sync clock against audio or video hardware decoders to eliminate playhead-audio drift
+      const audioClock = getActiveAudioClock();
       const topClip = getTopClipAt(nextPlayhead);
       const masterVideo = activePlayerRef.current === 'player2' ? incomingVideoRef.current : videoRef.current;
       const rawMasterClip = activePlayerRef.current === 'player2' ? player2Clip : player1Clip;
       const masterClip = getFreshClip(rawMasterClip);
 
-      if (topClip && masterVideo && !masterVideo.paused && !masterVideo.seeking && masterClip && masterClip.id === topClip.id) {
+      if (
+        audioClock &&
+        !audioClock.audio.paused &&
+        !audioClock.audio.seeking &&
+        audioClock.audio.readyState >= 2
+      ) {
+        const audioElapsed = audioClock.audio.currentTime - audioClock.inPoint;
+        const targetTimelineSec = audioClock.clipStart + audioElapsed;
+        const drift = targetTimelineSec - state.playhead;
+        if (Math.abs(drift) > 0.02 && Math.abs(drift) < 1.0) {
+          nextPlayhead = targetTimelineSec;
+        }
+      } else if (topClip && masterVideo && !masterVideo.paused && !masterVideo.seeking && masterClip && masterClip.id === topClip.id) {
         const clipStart = masterClip.startPositionSeconds ?? (masterClip.startTimeMs ? masterClip.startTimeMs / 1000 : 0);
         const inPoint = masterClip.inPointSeconds ?? (masterClip.sourceOffsetMs ? masterClip.sourceOffsetMs / 1000 : 0);
         const speed = masterClip.speedProfile?.speedMultiplier ?? 1.0;
         const sourceElapsed = masterVideo.currentTime - inPoint;
         const calculatedPlayhead = clipStart + (sourceElapsed / speed);
         const drift = calculatedPlayhead - state.playhead;
-        if (Math.abs(drift) > 0.25 && Math.abs(drift) < 2.0) {
-          nextPlayhead = state.playhead + deltaSec + drift * 0.15;
+        if (Math.abs(drift) > 0.03 && Math.abs(drift) < 2.0) {
+          nextPlayhead = calculatedPlayhead;
         }
       }
 
@@ -1065,17 +1556,108 @@ export const ProgramMonitor: React.FC = () => {
     };
   }, [activeHandle]);
 
+  // On-Canvas Text Direct Manipulation Interaction State
+  const [editingTextClipId, setEditingTextClipId] = useState<string | null>(null);
+  const [textDragActive, setTextDragActive] = useState<boolean>(false);
+  const textDragRef = useRef<{
+    clipId: string;
+    mode: 'move' | 'resize';
+    startMouseX: number;
+    startMouseY: number;
+    initialPosX: number;
+    initialPosY: number;
+    initialFontSize: number;
+  } | null>(null);
+
+  const handleStartTextDrag = (
+    clipId: string,
+    mode: 'move' | 'resize',
+    e: React.MouseEvent
+  ) => {
+    e.stopPropagation();
+    e.preventDefault();
+    let currentClip: Clip | null = null;
+    for (const t of tracks) {
+      const c = t.clips.find((item) => item.id === clipId);
+      if (c) {
+        currentClip = c;
+        break;
+      }
+    }
+    if (!currentClip) return;
+
+    const style = currentClip.textStyle || {
+      fontFamily: 'Inter',
+      fontSize: 42,
+      fontColor: '#FFFFFF',
+      strokeColor: '#000000',
+      strokeWidth: 2,
+      positionX: 0,
+      positionY: 0,
+      alignment: 'center',
+    };
+
+    setTextDragActive(true);
+    textDragRef.current = {
+      clipId,
+      mode,
+      startMouseX: e.clientX,
+      startMouseY: e.clientY,
+      initialPosX: style.positionX || 0,
+      initialPosY: style.positionY || 0,
+      initialFontSize: style.fontSize || 42,
+    };
+  };
+
+  useEffect(() => {
+    if (!textDragActive || !textDragRef.current) return;
+
+    const onMouseMove = (e: MouseEvent) => {
+      const info = textDragRef.current;
+      if (!info) return;
+
+      const deltaX = e.clientX - info.startMouseX;
+      const deltaY = e.clientY - info.startMouseY;
+
+      if (info.mode === 'move') {
+        const newX = Math.round(info.initialPosX + deltaX);
+        const newY = Math.round(info.initialPosY + deltaY);
+        updateTextClipStyle(info.clipId, { positionX: newX, positionY: newY });
+      } else if (info.mode === 'resize') {
+        const newSize = Math.max(14, Math.min(180, Math.round(info.initialFontSize + deltaX * 0.4)));
+        updateTextClipStyle(info.clipId, { fontSize: newSize });
+      }
+    };
+
+    const onMouseUp = () => {
+      setTextDragActive(false);
+      textDragRef.current = null;
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, [textDragActive, updateTextClipStyle]);
+
   const getPlayerStyle = (player: 'player1' | 'player2'): React.CSSProperties => {
     const rawClip = player === 'player1' ? player1Clip : player2Clip;
     const thisClip = getFreshClip(rawClip);
     const transform = thisClip ? getInterpolatedClipTransform(thisClip, playhead) : null;
+    const stabScale =
+      thisClip?.stabilization?.enabled && (thisClip.stabilization.intensity ?? 0) > 0.001
+        ? 1 + (thisClip.stabilization.intensity ?? 0.5) * 0.05
+        : 1.0;
     const dynamicTransformStyle: React.CSSProperties = transform
       ? {
-          transform: `translate(${transform.positionX}px, ${transform.positionY}px) rotate(${transform.rotation}deg) scale(${transform.scale})`,
+          transform: `translate(${transform.positionX}px, ${transform.positionY}px) rotate(${transform.rotation}deg) scale(${(transform.scale * stabScale).toFixed(3)})`,
           transformOrigin: 'center center',
           opacity: transform.opacity,
         }
       : {
+          transform: stabScale !== 1.0 ? `scale(${stabScale.toFixed(3)})` : undefined,
           transformOrigin: 'center center',
         };
 
@@ -1131,6 +1713,83 @@ export const ProgramMonitor: React.FC = () => {
 
         {/* Aspect Ratio, Angle, and GPU Hardware info */}
         <div className="flex items-center gap-2 text-[11px]">
+          {/* Video Scopes Toggle */}
+          <button
+            onClick={() => setIsScopesDrawerOpen(!isScopesDrawerOpen)}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-bold border transition-all cursor-pointer ${
+              isScopesDrawerOpen
+                ? 'bg-[#E11D48] text-[#FFFFFF] border-[#E11D48] shadow-[0_0_10px_rgba(225,29,72,0.4)]'
+                : 'bg-[#181B22] text-[#8A92A6] border-[#222630] hover:text-[#F0F3F8]'
+            }`}
+            title="Toggle Video Scopes (Waveform, RGB Parade, Vectorscope)"
+          >
+            <Activity size={12} />
+            <span>Scopes</span>
+          </button>
+
+          {/* Reference Comparison Split View Toggle */}
+          <button
+            onClick={() => setSplitComparisonOpen(!isSplitComparisonOpen)}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-bold border transition-all cursor-pointer ${
+              isSplitComparisonOpen
+                ? 'bg-[#8B5CF6] text-[#FFFFFF] border-[#8B5CF6] shadow-[0_0_10px_rgba(139,92,246,0.4)]'
+                : 'bg-[#181B22] text-[#8A92A6] border-[#222630] hover:text-[#F0F3F8]'
+            }`}
+            title="Toggle Reference Comparison Split View"
+          >
+            <Split size={12} />
+            <span>Compare</span>
+          </button>
+
+          {isSplitComparisonOpen && (
+            <div className="flex items-center gap-1.5 bg-[#181B22] px-2 py-0.5 rounded border border-[#222630]">
+              <button
+                onClick={() => {
+                  const source = videoRef.current || canvasRef.current;
+                  if (source) {
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = 1280;
+                    tempCanvas.height = 720;
+                    const ctx = tempCanvas.getContext('2d');
+                    if (ctx) {
+                      ctx.drawImage(source, 0, 0, 1280, 720);
+                      setReferenceSnapshotUrl(tempCanvas.toDataURL('image/jpeg', 0.85));
+                    }
+                  }
+                }}
+                className="text-[10px] font-bold text-[#8B5CF6] hover:text-[#A78BFA] transition-colors"
+                title="Capture current frame as Reference Still"
+              >
+                Capture Ref
+              </button>
+              <span className="text-[#3A3F50]">|</span>
+              <button
+                onClick={() => {
+                  const nextMode = splitComparisonMode === 'vertical' ? 'side-by-side' : 'vertical';
+                  setSplitComparisonMode(nextMode);
+                }}
+                className="text-[10px] text-[#8A92A6] hover:text-[#F0F3F8] transition-colors"
+                title="Switch between Split Slider and Side-by-Side"
+              >
+                {splitComparisonMode === 'vertical' ? 'Wipe' : 'Side'}
+              </button>
+              {referenceSnapshotUrl && (
+                <>
+                  <span className="text-[#3A3F50]">|</span>
+                  <button
+                    onClick={() => {
+                      autoMatchLook();
+                    }}
+                    className="text-[10px] font-bold text-[#10B981] hover:text-[#34D399] transition-colors"
+                    title="Auto-match exposure and color balance to Reference Still"
+                  >
+                    Match Look
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
           {/* Global Proxy Mode Toggle */}
           <button
             onClick={toggleProxyMode}
@@ -1200,6 +1859,15 @@ export const ProgramMonitor: React.FC = () => {
               {isProxyMode && activeLayer.clip.hasProxy && (
                 <span className="px-1 py-0.2 rounded text-[8px] font-bold bg-[#10B981] text-[#0D0E11] ml-0.5">
                   PROX
+                </span>
+              )}
+              {activeLayer.clip.stabilization?.enabled && (
+                <span
+                  title={`Stabilization Active: ${Math.round((activeLayer.clip.stabilization.intensity ?? 0.5) * 100)}%`}
+                  className="flex items-center gap-0.5 px-1 py-0.2 rounded text-[8px] font-bold bg-[#00F0FF] text-[#0D0E11] ml-0.5"
+                >
+                  <Shield size={9} />
+                  <span>STAB</span>
                 </span>
               )}
             </div>
@@ -1286,6 +1954,9 @@ export const ProgramMonitor: React.FC = () => {
             />
           )}
 
+          {/* Dedicated Denoised Audio Player for pristine background-hiss-free playback */}
+          <audio ref={denoisedAudioPlayerRef} playsInline preload="auto" className="hidden" />
+
           {/* Wipe Transition Laser Edge Guide (Optional, user configurable) */}
           {activeTransitionInfo?.isActive &&
             Boolean(activeTransitionInfo.transition?.showBorder) &&
@@ -1339,7 +2010,7 @@ export const ProgramMonitor: React.FC = () => {
           )}
 
           {/* Program Monitor Direct Manipulation Transform Bounding Box */}
-          {selectedClip && selectedClipTransform && currentActiveClip?.id === selectedClip.id && (
+          {selectedClip && selectedClipTransform && currentActiveClip?.id === selectedClip.id && inspectorTab === 'video' && (
             <div
               style={{
                 position: 'absolute',
@@ -1433,6 +2104,154 @@ export const ProgramMonitor: React.FC = () => {
             </div>
           )}
 
+          {/* On-Canvas Text Direct Manipulation Overlays */}
+          {(() => {
+            const activeTextClips: Clip[] = [];
+            for (const track of tracks) {
+              if (track.visible === false || track.isVisible === false) continue;
+              const isTextTrack = (track.trackType || track.type) === 'text';
+              for (const clip of track.clips) {
+                if (!isTextTrack && clip.textContent === undefined) continue;
+                const start = clip.startPositionSeconds ?? (clip.startTimeMs / 1000);
+                const dur = clip.durationSeconds ?? (clip.durationMs / 1000);
+                if (playhead >= start && playhead <= start + dur) {
+                  activeTextClips.push(clip);
+                }
+              }
+            }
+
+            return activeTextClips.map((textClip) => {
+              const isSelected = selectedClipId === textClip.id;
+              const transform = getInterpolatedClipTransform(textClip, playhead);
+              const style = textClip.textStyle || {
+                fontFamily: 'Inter',
+                fontSize: 42,
+                fontColor: '#FFFFFF',
+                strokeColor: '#000000',
+                strokeWidth: 2,
+                backgroundColor: 'rgba(0,0,0,0.6)',
+                backgroundPadding: 8,
+                positionX: 0,
+                positionY: 0,
+                alignment: 'center',
+                fontWeight: 'bold',
+                lineHeight: 1.2,
+              };
+
+              const totalX = (style.positionX || 0) + (transform.positionX || 0);
+              const totalY = (style.positionY || 0) + (transform.positionY || 0);
+              const scale = transform.scale ?? 1.0;
+              const rotation = transform.rotation ?? 0;
+              const opacity = transform.opacity ?? 1.0;
+
+              let alignClass = 'items-center justify-center';
+              if (style.alignment === 'left') alignClass = 'items-center justify-start pl-8';
+              else if (style.alignment === 'right') alignClass = 'items-center justify-end pr-8';
+              else if (style.alignment === 'top_left' || style.alignment === 'top-left') alignClass = 'items-start justify-start p-8';
+              else if (style.alignment === 'lower_third' || style.alignment === 'lower-third') alignClass = 'items-end justify-center pb-16';
+              else if (style.alignment === 'bottom_center' || style.alignment === 'bottom-center') alignClass = 'items-end justify-center pb-8';
+
+              const isEditing = editingTextClipId === textClip.id;
+
+              return (
+                <div
+                  key={textClip.id}
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    zIndex: isSelected ? 35 : 30,
+                    pointerEvents: 'none',
+                  }}
+                  className={`flex ${alignClass}`}
+                >
+                  <div
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      selectClip(textClip.id);
+                    }}
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      selectClip(textClip.id);
+                      setEditingTextClipId(textClip.id);
+                    }}
+                    onMouseDown={(e) => {
+                      if (e.target instanceof HTMLInputElement) return;
+                      e.stopPropagation();
+                      selectClip(textClip.id);
+                      handleStartTextDrag(textClip.id, 'move', e);
+                    }}
+                    style={{
+                      fontFamily: style.fontFamily || 'Inter, sans-serif',
+                      fontSize: `${style.fontSize || 42}px`,
+                      fontWeight: style.fontWeight || 'bold',
+                      lineHeight: style.lineHeight || 1.2,
+                      color: style.fontColor || '#FFFFFF',
+                      WebkitTextStroke:
+                        style.strokeWidth && style.strokeWidth > 0
+                          ? `${style.strokeWidth}px ${style.strokeColor || '#000000'}`
+                          : undefined,
+                      textShadow:
+                        style.strokeWidth && style.strokeWidth > 0
+                          ? `0 0 ${style.strokeWidth * 3}px ${style.strokeColor || '#000000'}`
+                          : '0 2px 8px rgba(0,0,0,0.8)',
+                      backgroundColor: style.backgroundColor || 'transparent',
+                      padding: style.backgroundPadding ? `${style.backgroundPadding}px` : undefined,
+                      transform: `translate(${totalX}px, ${totalY}px) rotate(${rotation}deg) scale(${scale})`,
+                      transformOrigin: 'center center',
+                      opacity: opacity,
+                      pointerEvents: 'auto',
+                    }}
+                    className={`relative rounded-md max-w-[85%] text-center cursor-move select-none transition-shadow ${
+                      isSelected
+                        ? 'ring-2 ring-[#A855F7] ring-offset-2 ring-offset-black/50 shadow-[0_0_16px_rgba(168,85,247,0.5)]'
+                        : 'hover:ring-1 hover:ring-[#A855F7]/60'
+                    }`}
+                  >
+                    {isEditing ? (
+                      <input
+                        autoFocus
+                        type="text"
+                        value={textClip.textContent || textClip.name}
+                        onChange={(e) => updateTextClipContent(textClip.id, e.target.value)}
+                        onBlur={() => setEditingTextClipId(null)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === 'Escape') {
+                            setEditingTextClipId(null);
+                          }
+                        }}
+                        className="bg-black/80 text-white px-2 py-1 rounded border border-[#A855F7] outline-none text-center min-w-[200px]"
+                      />
+                    ) : (
+                      <span>{textClip.textContent || textClip.name}</span>
+                    )}
+
+                    {/* Corner Resize Handles for Selected Text Clip */}
+                    {isSelected && !isEditing && (
+                      <>
+                        <div
+                          onMouseDown={(e) => {
+                            e.stopPropagation();
+                            handleStartTextDrag(textClip.id, 'resize', e);
+                          }}
+                          title="Drag to resize text font"
+                          className="absolute -right-2 -bottom-2 w-4 h-4 rounded-full bg-[#A855F7] border border-white cursor-nwse-resize shadow-[0_0_8px_#A855F7] hover:scale-125 transition-transform"
+                        />
+                        <div
+                          onMouseDown={(e) => {
+                            e.stopPropagation();
+                            handleStartTextDrag(textClip.id, 'resize', e);
+                          }}
+                          title="Drag to resize text font"
+                          className="absolute -left-2 -top-2 w-4 h-4 rounded-full bg-[#A855F7] border border-white cursor-nwse-resize shadow-[0_0_8px_#A855F7] hover:scale-125 transition-transform"
+                        />
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            });
+          })()}
+
           {/* Multicam Miniature PiP Angles Switcher Overlay */}
           {isMulticamActive && (
             <div className="absolute bottom-2 left-2 right-2 bg-[#0C0E12]/92 backdrop-blur-md border border-[#222630] rounded-lg p-2 flex items-center gap-2 overflow-x-auto z-20 shadow-2xl">
@@ -1512,6 +2331,66 @@ export const ProgramMonitor: React.FC = () => {
           {/* Center Safe Guides (hover visible) */}
           <div className="absolute inset-8 border border-white/5 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity" />
           <div className="absolute inset-16 border border-dashed border-white/5 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity" />
+
+          {/* Reference Comparison Split View Overlay */}
+          {isSplitComparisonOpen && referenceSnapshotUrl && (
+            <>
+              {splitComparisonMode === 'vertical' ? (
+                <>
+                  {/* Left Side: Reference Still clipped */}
+                  <img
+                    src={referenceSnapshotUrl}
+                    alt="Reference Still"
+                    className="absolute inset-0 w-full h-full object-contain pointer-events-none z-10"
+                    style={{
+                      clipPath: `polygon(0 0, ${splitComparisonPosition}% 0, ${splitComparisonPosition}% 100%, 0 100%)`,
+                    }}
+                  />
+                  {/* Vertical Divider Line with handle */}
+                  <div
+                    className="absolute top-0 bottom-0 w-0.5 bg-[#8B5CF6] shadow-[0_0_8px_#8B5CF6] z-20 pointer-events-none flex items-center justify-center"
+                    style={{ left: `${splitComparisonPosition}%` }}
+                  >
+                    <div className="w-5 h-5 -ml-[0.5px] rounded-full bg-[#8B5CF6] text-white flex items-center justify-center text-[8px] font-bold shadow-lg border border-white/30">
+                      VS
+                    </div>
+                  </div>
+                  {/* Draggable Slider Control on Bottom */}
+                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 bg-[#0D0E11]/80 backdrop-blur-sm border border-[#222630] rounded-full px-3 py-1 flex items-center gap-2">
+                    <span className="text-[9px] font-bold text-[#8B5CF6]">REF</span>
+                    <input
+                      type="range"
+                      min={5}
+                      max={95}
+                      value={splitComparisonPosition}
+                      onChange={(e) => setSplitComparisonPosition(Number(e.target.value))}
+                      className="w-32 h-1 accent-[#8B5CF6] cursor-ew-resize bg-[#222630] rounded"
+                    />
+                    <span className="text-[9px] font-bold text-[#00F0FF]">GRADE</span>
+                  </div>
+                </>
+              ) : (
+                /* Side-by-Side Mode */
+                <div className="absolute inset-0 z-10 flex pointer-events-none">
+                  <div className="w-1/2 h-full relative border-r-2 border-[#8B5CF6] bg-black/60 flex items-center justify-center overflow-hidden">
+                    <img
+                      src={referenceSnapshotUrl}
+                      alt="Reference Still"
+                      className="w-full h-full object-contain"
+                    />
+                    <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-[#8B5CF6] text-white text-[9px] font-bold tracking-wider">
+                      REFERENCE
+                    </span>
+                  </div>
+                  <div className="w-1/2 h-full relative">
+                    <span className="absolute top-2 right-2 px-1.5 py-0.5 rounded bg-[#00F0FF] text-[#0D0E11] text-[9px] font-bold tracking-wider">
+                      CURRENT
+                    </span>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
 
@@ -1606,6 +2485,16 @@ export const ProgramMonitor: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Live Video Scopes Floating Drawer */}
+      <VideoScopes
+        isOpen={isScopesDrawerOpen}
+        onClose={() => setIsScopesDrawerOpen(false)}
+        activeScope={activeScopeType}
+        onSelectScope={setActiveScopeType}
+        videoElement={videoRef.current}
+        canvasElement={canvasRef.current}
+      />
     </div>
   );
 };
