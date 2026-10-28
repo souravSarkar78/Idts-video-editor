@@ -595,4 +595,30 @@ export interface FilterCategory {
   description: string;
 }
 
+// Milestone 12: Production Recovery, Process Lifecycle & System Health
+export interface AutosaveSnapshotInfo {
+  projectId: string;
+  projectName: string;
+  timestamp: string;
+  filePath: string;
+  isDirtyExit: boolean;
+}
+
+export interface RecoveryCheckResult {
+  hasRecovery: boolean;
+  snapshot?: AutosaveSnapshotInfo | null;
+}
+
+export interface ProcessHealthStats {
+  activeSidecarPids: number[];
+  activeProcessCount: number;
+  totalSpawnedCount: number;
+}
+
+export interface AutosaveConfig {
+  enabled: boolean;
+  intervalSeconds: number;
+  backupDir?: string;
+}
+
 

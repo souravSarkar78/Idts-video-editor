@@ -1001,6 +1001,9 @@ fn run_ffmpeg_export_process<R: Runtime>(
         (false, format!("Failed to spawn ffmpeg ({}): {}", ffmpeg_bin.display(), e))
     })?;
 
+    let child_pid = child.id();
+    crate::engine::process_manager::register_process(child_pid, "ffmpeg export master");
+
     let stdout = child.stdout.take().ok_or_else(|| {
         (false, "Failed to capture ffmpeg stdout".to_string())
     })?;
@@ -1049,7 +1052,11 @@ fn run_ffmpeg_export_process<R: Runtime>(
         }
     }
 
-    let status = child.wait().map_err(|e| (false, format!("FFmpeg wait error: {}", e)))?;
+    let status = child.wait().map_err(|e| {
+        crate::engine::process_manager::unregister_process(child_pid);
+        (false, format!("FFmpeg wait error: {}", e))
+    })?;
+    crate::engine::process_manager::unregister_process(child_pid);
 
     if !status.success() {
         let stderr_out = child.stderr.take().map(|s| {

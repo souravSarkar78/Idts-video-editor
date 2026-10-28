@@ -40,6 +40,9 @@ import {
   FilterPreset,
   FilterCategory,
   ShaderRecipe,
+  AutosaveSnapshotInfo,
+  RecoveryCheckResult,
+  ProcessHealthStats,
 } from '../types/ipc';
 import { loadAudioBuffer, unlockAudioContext } from '../utils/audioMastering';
 import { BUILT_IN_FILTER_CATEGORIES, BUILT_IN_FILTER_PRESETS } from '../components/Filters/defaultPresets';
@@ -672,6 +675,15 @@ export interface TimelineState {
   openProject: (pathOverride?: string) => Promise<boolean>;
   createNewProject: () => void;
   loadProjectData: (data: ProjectData, filePath?: string) => void;
+
+  // Milestone 12: Production Recovery, Process Lifecycle & System Health
+  recoverySnapshot: AutosaveSnapshotInfo | null;
+  lastAutoSavedAt: Date | null;
+  checkCrashRecovery: () => Promise<void>;
+  restoreCrashSnapshot: () => Promise<void>;
+  discardCrashSnapshot: () => Promise<void>;
+  triggerAutoSave: () => Promise<boolean>;
+  initAutoSaveWorker: () => () => void;
 
   // Phase 6: Proxy Workflow & High-Performance Preview
   isProxyMode: boolean;
@@ -4829,6 +4841,8 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
   historyFuture: [],
   isDirty: false,
   currentProjectPath: null,
+  recoverySnapshot: null,
+  lastAutoSavedAt: null,
 
   pushHistory: () => {
     const { tracks, transitions, playhead, selectedClipId, selectedClipIds, activeCameraTrackId, project, historyPast, masterGrading } = get();
@@ -5090,6 +5104,104 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
       historyFuture: [],
     });
     updateAppTitle(data.metadata.name, false, filePath);
+  },
+
+  checkCrashRecovery: async () => {
+    if (!isTauri) return;
+    try {
+      const res = await tauriInvoke<RecoveryCheckResult>('check_recovery_snapshot');
+      if (res && res.hasRecovery && res.snapshot?.isDirtyExit) {
+        set({ recoverySnapshot: res.snapshot });
+      }
+    } catch (err) {
+      console.warn('Failed to check crash recovery snapshot:', err);
+    }
+  },
+
+  restoreCrashSnapshot: async () => {
+    const { recoverySnapshot, loadProjectData } = get();
+    if (!recoverySnapshot) return;
+    if (isTauri) {
+      try {
+        const recovered = await tauriInvoke<ProjectData>('restore_autosave_snapshot', {
+          filePath: recoverySnapshot.filePath,
+        });
+        if (recovered) {
+          loadProjectData(recovered, recoverySnapshot.filePath);
+          set({ recoverySnapshot: null });
+        }
+      } catch (err) {
+        console.error('Failed to restore crash snapshot:', err);
+      }
+    }
+  },
+
+  discardCrashSnapshot: async () => {
+    const { recoverySnapshot } = get();
+    if (isTauri && recoverySnapshot) {
+      try {
+        await tauriInvoke('discard_autosave_snapshot', {
+          filePath: recoverySnapshot.filePath,
+        });
+      } catch (err) {
+        console.warn('Failed to discard recovery snapshot:', err);
+      }
+    }
+    set({ recoverySnapshot: null });
+  },
+
+  triggerAutoSave: async () => {
+    const { project, tracks, assets, bins, playhead, activeCameraTrackId, isDirty } = get();
+    if (!isDirty || (tracks.length === 0 && (!assets || assets.length === 0))) {
+      return false;
+    }
+
+    const projectData: ProjectData = {
+      version: '1.0.0',
+      metadata: {
+        id: project.id || 'autosave_proj',
+        name: project.name || 'Untitled Project',
+        createdAt: new Date().toISOString(),
+        modifiedAt: new Date().toISOString(),
+        fps: project.fps || 30,
+        width: project.width || 1920,
+        height: project.height || 1080,
+        durationMs: project.durationMs || 120000,
+      },
+      mediaPool: {
+        bins: bins || [],
+        assets: assets || [],
+      },
+      timeline: {
+        tracks,
+        transitions: get().transitions || [],
+        playheadSec: playhead,
+        activeCameraTrackId: activeCameraTrackId || undefined,
+      },
+    };
+
+    if (isTauri) {
+      try {
+        await tauriInvoke('trigger_autosave', { projectData });
+        set({ lastAutoSavedAt: new Date() });
+        return true;
+      } catch (err) {
+        console.warn('Auto-save failed:', err);
+        return false;
+      }
+    } else {
+      localStorage.setItem('idts_autosave_backup', JSON.stringify(projectData));
+      set({ lastAutoSavedAt: new Date() });
+      return true;
+    }
+  },
+
+  initAutoSaveWorker: () => {
+    const timer = setInterval(() => {
+      get().triggerAutoSave();
+    }, 60000); // Periodic 60-second background worker
+
+    return () => clearInterval(timer);
   },
 
   deleteGapAtTime: (trackId, timeSec) => {

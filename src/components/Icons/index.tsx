@@ -692,6 +692,29 @@ export const PanelRight: React.FC<IconProps> = ({ size = 24, color = 'currentCol
   </svg>
 );
 
+export const Minus: React.FC<IconProps> = ({ size = 24, color = 'currentColor', strokeWidth = 2, className, ...props }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+    <line x1="5" y1="12" x2="19" y2="12" />
+  </svg>
+);
+
+export const ShieldCheck: React.FC<IconProps> = ({ size = 24, color = 'currentColor', strokeWidth = 2, className, ...props }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    <path d="m9 12 2 2 4-4" />
+  </svg>
+);
+
+export const Share2: React.FC<IconProps> = ({ size = 24, color = 'currentColor', strokeWidth = 2, className, ...props }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+    <circle cx="18" cy="5" r="3" />
+    <circle cx="6" cy="12" r="3" />
+    <circle cx="18" cy="19" r="3" />
+    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+  </svg>
+);
+
 const allIcons = {
   Play, Pause, SkipBack, SkipForward, ChevronLeft, ChevronRight, ChevronDown, ChevronUp,
   Volume2, VolumeX, Lock, Unlock, Eye, EyeOff, ZoomIn, ZoomOut, RefreshCw,
@@ -702,7 +725,7 @@ const allIcons = {
   FilePlus, Save, SaveAll, Keyboard, Command, Info, Undo2, Redo2,
   ArrowLeft, ArrowUp, ArrowDown, MoveRight, Sun, Moon, Palette, Thermometer,
   Diamond, RotateCw, Move, AlignLeft, AlignCenter, AlignRight, Subtitles, Loader2,
-  Radio, Square, MicOff, Activity, Pipette, BarChart2
+  Radio, Square, MicOff, Activity, Pipette, BarChart2, ShieldCheck
 };
 
 export default allIcons;

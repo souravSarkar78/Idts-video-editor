@@ -68,12 +68,19 @@ pub fn extract_audio_peaks(file_path: &str, points_per_sec: usize) -> Result<Vec
     }
 
     let mut child = cmd.spawn().map_err(|e| format!("Failed to spawn ffmpeg: {}", e))?;
-    let mut stdout = child.stdout.take().ok_or_else(|| "Failed to capture ffmpeg stdout".to_string())?;
+    let pid = child.id();
+    crate::engine::process_manager::register_process(pid, "ffmpeg waveform extraction");
+    let mut stdout = child.stdout.take().ok_or_else(|| {
+        crate::engine::process_manager::unregister_process(pid);
+        "Failed to capture ffmpeg stdout".to_string()
+    })?;
 
     // Read f32le raw bytes
     let mut raw_bytes = Vec::new();
-    stdout.read_to_end(&mut raw_bytes).map_err(|e| format!("Failed to read raw audio data: {}", e))?;
+    let read_res = stdout.read_to_end(&mut raw_bytes);
     let _ = child.wait();
+    crate::engine::process_manager::unregister_process(pid);
+    read_res.map_err(|e| format!("Failed to read raw audio data: {}", e))?;
 
     let sample_count = raw_bytes.len() / 4;
     if sample_count == 0 {

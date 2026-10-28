@@ -165,9 +165,9 @@ export const SettingsModal: React.FC = () => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4 animate-in fade-in duration-150 select-none">
-      <div className="w-full max-w-3xl bg-[#14161B] border border-[#222630] rounded-xl shadow-2xl overflow-hidden flex flex-col text-[#F0F3F8] max-h-[85vh]">
+      <div className="w-full max-w-3xl h-[620px] max-h-[90vh] bg-[#14161B] border border-[#222630] rounded-xl shadow-2xl overflow-hidden flex flex-col text-[#F0F3F8]">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#222630] bg-[#101217]">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#222630] bg-[#101217] shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="p-1.5 rounded-lg bg-[#00F0FF]/15 text-[#00F0FF] border border-[#00F0FF]/30">
               <SettingsIcon size={18} />
@@ -191,70 +191,58 @@ export const SettingsModal: React.FC = () => {
         </div>
 
         {/* Modal Navigation Tabs */}
-        <div className="flex items-center justify-between border-b border-[#222630] bg-[#0E1015] px-5 pt-2">
-          <div className="flex gap-2">
-            <button
-              onClick={() => setActiveTab('shortcuts')}
-              className={`flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-t border-t border-x transition-all cursor-pointer ${
-                activeTab === 'shortcuts'
-                  ? 'bg-[#14161B] text-[#00F0FF] border-[#222630] border-b-[#14161B] -mb-[1px]'
-                  : 'text-[#8A92A6] border-transparent hover:text-[#F0F3F8]'
-              }`}
-            >
-              <Keyboard size={14} />
-              <span>Keyboard Shortcuts</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('audio')}
-              className={`flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-t border-t border-x transition-all cursor-pointer ${
-                activeTab === 'audio'
-                  ? 'bg-[#14161B] text-[#00F0FF] border-[#222630] border-b-[#14161B] -mb-[1px]'
-                  : 'text-[#8A92A6] border-transparent hover:text-[#F0F3F8]'
-              }`}
-            >
-              <Mic size={14} />
-              <span>Audio & Recording</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('general')}
-              className={`flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-t border-t border-x transition-all cursor-pointer ${
-                activeTab === 'general'
-                  ? 'bg-[#14161B] text-[#00F0FF] border-[#222630] border-b-[#14161B] -mb-[1px]'
-                  : 'text-[#8A92A6] border-transparent hover:text-[#F0F3F8]'
-              }`}
-            >
-              <Command size={14} />
-              <span>General & Persistence</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('media')}
-              className={`flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-t border-t border-x transition-all cursor-pointer ${
-                activeTab === 'media'
-                  ? 'bg-[#14161B] text-[#00F0FF] border-[#222630] border-b-[#14161B] -mb-[1px]'
-                  : 'text-[#8A92A6] border-transparent hover:text-[#F0F3F8]'
-              }`}
-            >
-              <Film size={14} />
-              <span>Media / Performance</span>
-            </button>
-          </div>
-
-          {activeTab === 'shortcuts' && (
-            <button
-              onClick={resetDefaults}
-              className="flex items-center gap-1.5 text-[11px] font-mono text-[#8A92A6] hover:text-[#00F0FF] pb-2 cursor-pointer transition-colors"
-            >
-              <RotateCcw size={12} />
-              <span>Reset to Defaults</span>
-            </button>
-          )}
+        <div className="flex items-end border-b border-[#222630] bg-[#0E1015] px-5 pt-2.5 gap-2 shrink-0 h-11">
+          <button
+            onClick={() => setActiveTab('shortcuts')}
+            className={`flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-t border-t border-x transition-all cursor-pointer ${
+              activeTab === 'shortcuts'
+                ? 'bg-[#14161B] text-[#00F0FF] border-[#222630] border-b-[#14161B] -mb-[1px]'
+                : 'text-[#8A92A6] border-transparent hover:text-[#F0F3F8]'
+            }`}
+          >
+            <Keyboard size={14} />
+            <span>Keyboard Shortcuts</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('audio')}
+            className={`flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-t border-t border-x transition-all cursor-pointer ${
+              activeTab === 'audio'
+                ? 'bg-[#14161B] text-[#00F0FF] border-[#222630] border-b-[#14161B] -mb-[1px]'
+                : 'text-[#8A92A6] border-transparent hover:text-[#F0F3F8]'
+            }`}
+          >
+            <Mic size={14} />
+            <span>Audio & Recording</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('general')}
+            className={`flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-t border-t border-x transition-all cursor-pointer ${
+              activeTab === 'general'
+                ? 'bg-[#14161B] text-[#00F0FF] border-[#222630] border-b-[#14161B] -mb-[1px]'
+                : 'text-[#8A92A6] border-transparent hover:text-[#F0F3F8]'
+            }`}
+          >
+            <Command size={14} />
+            <span>General & Persistence</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('media')}
+            className={`flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-t border-t border-x transition-all cursor-pointer ${
+              activeTab === 'media'
+                ? 'bg-[#14161B] text-[#00F0FF] border-[#222630] border-b-[#14161B] -mb-[1px]'
+                : 'text-[#8A92A6] border-transparent hover:text-[#F0F3F8]'
+            }`}
+          >
+            <Film size={14} />
+            <span>Media / Performance</span>
+          </button>
         </div>
 
         {/* Modal Body */}
         {activeTab === 'shortcuts' ? (
-          <div className="flex-1 flex flex-col overflow-hidden p-5 gap-3.5">
-            {/* Search and Category Filter */}
-            <div className="flex items-center justify-between gap-3">
+          <div className="flex-1 flex flex-col overflow-hidden p-5 gap-3.5 min-h-0">
+            {/* Search and Category Filter Toolbar */}
+            <div className="flex items-center justify-between gap-3 shrink-0">
               <div className="relative flex-1">
                 <Search
                   size={14}
@@ -270,7 +258,7 @@ export const SettingsModal: React.FC = () => {
               </div>
 
               {/* Category Pills */}
-              <div className="flex items-center gap-1 bg-[#0D0E11] p-1 rounded-lg border border-[#222630]">
+              <div className="flex items-center gap-1 bg-[#0D0E11] p-1 rounded-lg border border-[#222630] shrink-0">
                 {CATEGORIES.map((cat) => (
                   <button
                     key={cat}
@@ -285,6 +273,16 @@ export const SettingsModal: React.FC = () => {
                   </button>
                 ))}
               </div>
+
+              {/* Reset to Defaults Button */}
+              <button
+                onClick={resetDefaults}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#222630] bg-[#0D0E11] text-[11px] font-mono text-[#8A92A6] hover:text-[#00F0FF] hover:border-[#00F0FF]/40 cursor-pointer transition-colors shrink-0"
+                title="Restore default shortcut keys"
+              >
+                <RotateCcw size={12} />
+                <span>Reset to Defaults</span>
+              </button>
             </div>
 
             {/* Notification Banner */}
@@ -349,7 +347,7 @@ export const SettingsModal: React.FC = () => {
             </div>
           </div>
         ) : activeTab === 'audio' ? (
-          <div className="flex-1 p-5 space-y-4 overflow-y-auto text-xs">
+          <div className="flex-1 p-5 space-y-4 overflow-y-auto text-xs min-h-0">
             {/* Microphone Input Device Configuration */}
             <div className="p-4 rounded-lg bg-[#0D0E11] border border-[#222630] space-y-3">
               <div className="flex items-center justify-between">
@@ -466,7 +464,7 @@ export const SettingsModal: React.FC = () => {
             </div>
           </div>
         ) : activeTab === 'media' ? (
-          <div className="flex-1 p-5 space-y-4 overflow-y-auto text-xs">
+          <div className="flex-1 p-5 space-y-4 overflow-y-auto text-xs min-h-0">
             {/* Auto Proxy Generation */}
             <div className="p-4 rounded-lg bg-[#0D0E11] border border-[#222630] space-y-3">
               <div className="flex items-start justify-between gap-4">
@@ -548,7 +546,7 @@ export const SettingsModal: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="flex-1 p-5 space-y-4 overflow-y-auto text-xs">
+          <div className="flex-1 p-5 space-y-4 overflow-y-auto text-xs min-h-0">
             <div className="p-3.5 rounded-lg bg-[#0D0E11] border border-[#222630] space-y-2">
               <span className="font-bold text-[#F0F3F8] flex items-center gap-1.5">
                 <Sparkles size={14} className="text-[#00F0FF]" />
@@ -572,7 +570,7 @@ export const SettingsModal: React.FC = () => {
         )}
 
         {/* Footer */}
-        <div className="px-5 py-3 border-t border-[#222630] bg-[#101217] flex items-center justify-between text-xs text-[#64748B]">
+        <div className="px-5 py-3 border-t border-[#222630] bg-[#101217] flex items-center justify-between text-xs text-[#64748B] shrink-0">
           <span className="flex items-center gap-1 font-mono text-[11px]">
             <Info size={13} className="text-[#00F0FF]" />
             Changes are automatically saved to disk

@@ -220,6 +220,7 @@ fn run_proxy_ffmpeg<R: Runtime>(
 
     let mut child = cmd.spawn().map_err(|e| format!("Failed to spawn ffmpeg: {}", e))?;
     let pid = child.id();
+    crate::engine::process_manager::register_process(pid, "ffmpeg proxy transcode");
     {
         let mut jobs = get_running_jobs().lock().unwrap();
         jobs.insert(source_path.to_string(), pid);
@@ -285,6 +286,7 @@ fn run_proxy_ffmpeg<R: Runtime>(
         let mut jobs = get_running_jobs().lock().unwrap();
         jobs.remove(source_path);
     }
+    crate::engine::process_manager::unregister_process(pid);
 
     let _ = progress_handle.join();
     let stderr_output = err_handle.join().unwrap_or_default();

@@ -92,6 +92,8 @@ declare module 'lucide-react' {
   export const ArrowUp: LucideIcon;
   export const ArrowDown: LucideIcon;
   export const MoveRight: LucideIcon;
+  export const Activity: LucideIcon;
+  export const ShieldCheck: LucideIcon;
   export const ChevronUp: LucideIcon;
 
   const icons: { [key: string]: LucideIcon };

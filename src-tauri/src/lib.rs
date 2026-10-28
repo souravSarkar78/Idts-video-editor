@@ -343,7 +343,52 @@ fn save_project(path: String, project_data: ProjectData) -> Result<(), String> {
     if !normalized_path.to_lowercase().ends_with(".idts") {
         normalized_path.push_str(".idts");
     }
+    crate::engine::recovery::update_cached_project_state(&project_data);
     project_data.save_to_file(Path::new(&normalized_path))
+}
+
+/// Triggers atomic auto-save of active project state to recovery folder
+#[tauri::command]
+fn trigger_autosave(project_data: ProjectData) -> Result<models::ipc::AutosaveSnapshotInfo, String> {
+    crate::engine::recovery::atomic_autosave(&project_data)
+}
+
+/// Checks if an unexpected crash/dirty exit occurred and locates latest recovery snapshot
+#[tauri::command]
+fn check_recovery_snapshot() -> Result<models::ipc::RecoveryCheckResult, String> {
+    Ok(crate::engine::recovery::check_for_recovery_snapshot())
+}
+
+/// Restores a project from an auto-save or emergency dump snapshot
+#[tauri::command]
+fn restore_autosave_snapshot(file_path: String) -> Result<ProjectData, String> {
+    crate::engine::recovery::restore_snapshot(&file_path)
+}
+
+/// Discards recovery state and cleans up snapshot files
+#[tauri::command]
+fn discard_autosave_snapshot(file_path: Option<String>) -> Result<(), String> {
+    crate::engine::recovery::discard_snapshot(file_path)
+}
+
+/// Marks session as cleanly exited
+#[tauri::command]
+fn mark_clean_exit() -> Result<(), String> {
+    crate::engine::recovery::mark_session_clean_exit();
+    Ok(())
+}
+
+/// Gets telemetry on currently active sidecar process PIDs
+#[tauri::command]
+fn get_process_health_stats() -> Result<models::ipc::ProcessHealthStats, String> {
+    Ok(crate::engine::process_manager::get_health_stats())
+}
+
+/// Terminates all running sidecar child processes immediately
+#[tauri::command]
+fn kill_all_sidecar_processes() -> Result<(), String> {
+    crate::engine::process_manager::kill_all_active_processes();
+    Ok(())
 }
 
 /// Loads a `.idts` project file from disk
@@ -676,8 +721,18 @@ pub fn run() {
         }
     }
 
+    // Milestone 12: Install panic crash recovery hook & mark active session
+    crate::engine::recovery::install_panic_hook();
+    crate::engine::recovery::mark_session_active();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .on_window_event(|_window, event| {
+            if let tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed = event {
+                crate::engine::recovery::mark_session_clean_exit();
+                crate::engine::process_manager::kill_all_active_processes();
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             open_file_dialog,
             open_folder_dialog,
@@ -697,6 +752,13 @@ pub fn run() {
             load_project,
             save_project_dialog,
             open_project_dialog,
+            trigger_autosave,
+            check_recovery_snapshot,
+            restore_autosave_snapshot,
+            discard_autosave_snapshot,
+            mark_clean_exit,
+            get_process_health_stats,
+            kill_all_sidecar_processes,
             create_clip_proxy,
             cancel_clip_proxy,
             delete_clip_proxy,

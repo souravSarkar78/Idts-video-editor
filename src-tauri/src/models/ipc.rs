@@ -1346,6 +1346,41 @@ pub struct ExportProgress {
     pub eta_seconds: Option<f32>,
 }
 
+/// Milestone 12: Production Recovery, Process Lifecycle & System Health
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AutosaveSnapshotInfo {
+    pub project_id: String,
+    pub project_name: String,
+    pub timestamp: String,
+    pub file_path: String,
+    pub is_dirty_exit: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct RecoveryCheckResult {
+    pub has_recovery: bool,
+    pub snapshot: Option<AutosaveSnapshotInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ProcessHealthStats {
+    pub active_sidecar_pids: Vec<u32>,
+    pub active_process_count: usize,
+    pub total_spawned_count: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AutosaveConfig {
+    pub enabled: bool,
+    pub interval_seconds: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub backup_dir: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

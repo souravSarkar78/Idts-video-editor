@@ -13,8 +13,9 @@ import { AutoCaptionModal } from './components/AutoCaption/AutoCaptionModal';
 import { VoiceoverModal } from './components/Voiceover/VoiceoverModal';
 import { NoiseProfileModal } from './components/Audio/NoiseProfileModal';
 import { TimelineAudioPlayer } from './components/Audio/TimelineAudioPlayer';
-import { Film, Music, Video, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
-import { useTimelineStore, updateAppTitle } from './store/timelineStore';
+import { ErrorBoundary } from './components/ErrorBoundary/ErrorBoundary';
+import { Film, Music, Video, Sparkles, ChevronLeft, ChevronRight, AlertCircle, RefreshCw } from 'lucide-react';
+import { useTimelineStore, updateAppTitle, isTauri } from './store/timelineStore';
 import { useShortcutStore, normalizeKeyEvent } from './store/shortcutStore';
 import { filePosterCache, getNearestCachedFrame } from './utils/frameCacheService';
 import { unlockAudioContext } from './utils/audioMastering';
@@ -52,6 +53,11 @@ export const App: React.FC = () => {
     setInspectorWidthPx,
     toggleMediaPoolCollapsed,
     toggleInspectorCollapsed,
+    recoverySnapshot,
+    checkCrashRecovery,
+    restoreCrashSnapshot,
+    discardCrashSnapshot,
+    initAutoSaveWorker,
   } = useTimelineStore(
     useShallow((state) => ({
       togglePlayPause: state.togglePlayPause,
@@ -85,6 +91,11 @@ export const App: React.FC = () => {
       setInspectorWidthPx: state.setInspectorWidthPx,
       toggleMediaPoolCollapsed: state.toggleMediaPoolCollapsed,
       toggleInspectorCollapsed: state.toggleInspectorCollapsed,
+      recoverySnapshot: state.recoverySnapshot,
+      checkCrashRecovery: state.checkCrashRecovery,
+      restoreCrashSnapshot: state.restoreCrashSnapshot,
+      discardCrashSnapshot: state.discardCrashSnapshot,
+      initAutoSaveWorker: state.initAutoSaveWorker,
     }))
   );
 
@@ -159,11 +170,28 @@ export const App: React.FC = () => {
 
   const { loadPreferences } = useShortcutStore();
 
-  // Load preferences and initialize app title on mount
+  // Load preferences, initialize crash recovery, proxy listener and autosave background worker
   useEffect(() => {
     loadPreferences();
     initProxyEventListener();
+    checkCrashRecovery();
+    const cleanupAutosave = initAutoSaveWorker();
     updateAppTitle(project.name || 'Untitled Project', isDirty, currentProjectPath);
+
+    const handleBeforeUnload = () => {
+      if (isTauri) {
+        import('@tauri-apps/api/core').then(({ invoke }) => {
+          invoke('mark_clean_exit').catch(() => {});
+          invoke('kill_all_sidecar_processes').catch(() => {});
+        }).catch(() => {});
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      cleanupAutosave();
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
   }, []);
 
   // Ensure Web Audio context is seamlessly unlocked on first user gesture
@@ -213,6 +241,13 @@ export const App: React.FC = () => {
           useTimelineStore.getState().stopVoiceoverRecording();
           return;
         }
+      }
+
+      // Hotkey Reference & Shortcuts Modal (? or F1)
+      if (e.key === '?' || (e.shiftKey && e.code === 'Slash') || e.key === 'F1') {
+        e.preventDefault();
+        useShortcutStore.getState().openSettingsModal();
+        return;
       }
 
       const combo = normalizeKeyEvent(e);
@@ -341,6 +376,39 @@ export const App: React.FC = () => {
       {/* Top CapCut / Premiere Navigation Bar */}
       <Header />
 
+      {/* Dirty-Exit Crash Recovery Alert Banner */}
+      {recoverySnapshot && (
+        <div className="bg-[#EF4444]/15 border-b border-[#EF4444]/40 px-4 py-2 flex items-center justify-between text-xs animate-in slide-in-from-top select-none z-40 shrink-0">
+          <div className="flex items-center gap-2.5 text-[#FCA5A5]">
+            <div className="p-1 rounded-full bg-red-500/20 text-red-400">
+              <AlertCircle size={15} />
+            </div>
+            <div>
+              <span className="font-bold text-white">Unsaved Session Recovered: </span>
+              <span>
+                Project &quot;{recoverySnapshot.projectName}&quot; was restored from an unexpected shutdown (
+                {new Date(recoverySnapshot.timestamp).toLocaleTimeString()}).
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => restoreCrashSnapshot()}
+              className="px-3 py-1 rounded bg-[#00F0FF] hover:bg-[#3bf1ff] text-[#0D0E11] font-bold text-xs cursor-pointer transition-all shadow-[0_0_8px_rgba(0,240,255,0.3)] flex items-center gap-1.5"
+            >
+              <RefreshCw size={12} />
+              <span>Restore Snapshot</span>
+            </button>
+            <button
+              onClick={() => discardCrashSnapshot()}
+              className="px-2.5 py-1 rounded bg-[#1C202B] hover:bg-[#282E3E] text-[#8A92A6] hover:text-[#F0F3F8] text-xs cursor-pointer transition-colors border border-[#2B3245]"
+            >
+              Discard
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Main Studio Body */}
       <main ref={mainContainerRef} className="flex-1 flex flex-col min-h-0 overflow-hidden">
         {/* Upper Studio Stage: Media Pool (Left), Program Monitor (Center), Inspector (Right) */}
@@ -378,7 +446,9 @@ export const App: React.FC = () => {
                 style={{ width: `${mediaPoolWidthPx}px` }}
                 className="flex overflow-hidden shrink-0 relative"
               >
-                <MediaPool />
+                <ErrorBoundary scoped sectionTitle="Media Pool">
+                  <MediaPool />
+                </ErrorBoundary>
               </div>
 
               {/* Splitter 1: Media Pool <-> Program Monitor */}
@@ -405,7 +475,9 @@ export const App: React.FC = () => {
 
           {/* 2. Center Program Monitor Canvas (Single Player - Expands into all available space) */}
           <div className="flex-1 flex min-w-0 overflow-hidden">
-            <ProgramMonitor />
+            <ErrorBoundary scoped sectionTitle="Program Monitor">
+              <ProgramMonitor />
+            </ErrorBoundary>
           </div>
 
           {/* Splitter 2: Program Monitor <-> Inspector (Shown only when Inspector is expanded) */}
@@ -435,7 +507,9 @@ export const App: React.FC = () => {
             style={isInspectorCollapsed ? undefined : { width: `${inspectorWidthPx}px` }}
             className={`flex overflow-hidden shrink-0 ${isInspectorCollapsed ? 'w-10' : ''}`}
           >
-            <Inspector />
+            <ErrorBoundary scoped sectionTitle="Inspector">
+              <Inspector />
+            </ErrorBoundary>
           </div>
         </section>
 
@@ -458,7 +532,9 @@ export const App: React.FC = () => {
           style={{ height: `${timelineHeightPct}%`, minHeight: '160px' }}
           className="flex flex-col overflow-hidden"
         >
-          <Timeline />
+          <ErrorBoundary scoped sectionTitle="Timeline">
+            <Timeline />
+          </ErrorBoundary>
         </section>
       </main>
 
