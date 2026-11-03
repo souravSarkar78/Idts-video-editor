@@ -105,16 +105,24 @@ pub fn probe_media_file(file_path: &str) -> Result<ClipMetadata, String> {
     let ffprobe_bin = find_ffprobe_executable()
         .ok_or_else(|| "Could not locate ffprobe executable".to_string())?;
 
-    let output = Command::new(&ffprobe_bin)
-        .args([
-            "-v",
-            "quiet",
-            "-print_format",
-            "json",
-            "-show_format",
-            "-show_streams",
-            file_path,
-        ])
+    let mut cmd = Command::new(&ffprobe_bin);
+    cmd.args([
+        "-v",
+        "quiet",
+        "-print_format",
+        "json",
+        "-show_format",
+        "-show_streams",
+        file_path,
+    ]);
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+
+    let output = cmd
         .output()
         .map_err(|e| format!("Failed to execute ffprobe: {}", e))?;
 
@@ -210,6 +218,13 @@ pub fn probe_media_file(file_path: &str) -> Result<ClipMetadata, String> {
                 }
             }
         }
+    }
+
+    // Probe embedded IMU telemetry (GoPro, Sony, DJI, Insta360)
+    let telemetry = crate::engine::stabilize::probe_clip_telemetry(file_path);
+    if telemetry.has_gyro {
+        metadata.has_gyro_data = Some(true);
+        metadata.gyro_format = telemetry.gyro_format;
     }
 
     Ok(metadata)

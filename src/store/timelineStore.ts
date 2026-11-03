@@ -8,6 +8,8 @@ import {
   SyncCandidate,
   MediaBin,
   MediaAsset,
+  ImportProgressPayload,
+  ImportBatchResult,
   SyncPreset,
   SyncRequest,
   TrackSyncOffset,
@@ -21,7 +23,12 @@ import {
   KeyframeTrack,
   SpeedProfile,
   LensEffects,
+  StabilizationProfile,
   StabilizationSettings,
+  StabilizationStatus,
+  StabilizationDebugMode,
+  StabilizationDiagnostics,
+  TelemetryProbeResult,
   TextClip,
   TextClipStyle,
   TextTrack,
@@ -43,8 +50,11 @@ import {
   AutosaveSnapshotInfo,
   RecoveryCheckResult,
   ProcessHealthStats,
+  WaveformChunkPayload,
+  WaveformStatus,
 } from '../types/ipc';
 import { loadAudioBuffer, unlockAudioContext } from '../utils/audioMastering';
+import { filePosterCache } from '../utils/frameCacheService';
 import { BUILT_IN_FILTER_CATEGORIES, BUILT_IN_FILTER_PRESETS } from '../components/Filters/defaultPresets';
 
 export const DEFAULT_COLOR_GRADING_PROFILE: ColorGradingProfile = {
@@ -391,6 +401,7 @@ export interface TimelineState {
   activeBinId: string;
   playhead: number; // in seconds
   isPlaying: boolean;
+  isScrubbing: boolean;
   zoom: number; // pixels per second
   selectedClipId: string | null;
   selectedClipIds: string[];
@@ -544,6 +555,7 @@ export interface TimelineState {
   setPlayhead: (time: number) => void;
   stepFrames: (frames: number) => void;
   setIsPlaying: (isPlaying: boolean) => void;
+  setIsScrubbing: (isScrubbing: boolean) => void;
   togglePlayPause: () => void;
   setZoom: (zoom: number) => void;
   zoomIn: () => void;
@@ -556,6 +568,14 @@ export interface TimelineState {
   deleteBin: (binId: string) => void;
   importFiles: (files: FileList | File[]) => void;
   importFromNativePaths: (paths: string[]) => Promise<void>;
+  importMediaBatch: (paths: string[]) => Promise<void>;
+  cancelMediaImport: () => Promise<void>;
+  initIngestEventListener: () => void;
+  initWaveformEventListener: () => void;
+  isIngesting: boolean;
+  ingestTotal: number;
+  ingestCurrent: number;
+  ingestStatusMessage: string;
   importCustomAsset: (asset: Partial<MediaAsset>) => void;
   deleteAsset: (assetId: string) => void;
   moveAssetToBin: (assetId: string, binId?: string) => void;
@@ -795,20 +815,43 @@ export interface TimelineState {
   ) => void;
   updateClipStabilization: (
     clipId: string,
-    settings: Partial<StabilizationSettings>
+    settings: Partial<StabilizationProfile>
   ) => void;
+  updateClipStabilizationProfile: (
+    clipId: string,
+    settings: Partial<StabilizationProfile>
+  ) => void;
+  analyzeClipStabilization: (clipId: string) => Promise<string | null>;
+  applyStabilizationPreview: (clipId: string, forceRegenerate?: boolean) => Promise<string | null>;
+  validateStabilizationData: (clipId: string) => Promise<StabilizationDiagnostics | null>;
+  probeClipTelemetry: (clipId: string) => Promise<TelemetryProbeResult | null>;
+  initStabilizationEventListener: () => void;
+
+  // Phase 16: Program Monitor Stabilization Comparison
+  isSplitStabilizationComparison: boolean;
+  setSplitStabilizationComparison: (enabled: boolean) => void;
+  splitStabilizationPosition: number;
+  setSplitStabilizationPosition: (pos: number) => void;
+  splitStabilizationMode: 'vertical' | 'side-by-side';
+  setSplitStabilizationMode: (mode: 'vertical' | 'side-by-side') => void;
+  isStabilizationAnalyzing: Record<string, number>;
+  isStabilizationRendering: Record<string, boolean>;
+  stabilizationPreviewUrls: Record<string, string>;
+  stabilizationPreviewRevisions: Record<string, number>;
+  stabilizationDiagnostics: Record<string, StabilizationDiagnostics>;
+
+  // Alignment Grid & Crosshairs
+  isAlignmentGridActive: boolean;
+  setIsAlignmentGridActive: (active: boolean | ((prev: boolean) => boolean)) => void;
 }
 
 // Color palettes for dynamic track assignments
 const VIDEO_COLORS = ['#00F0FF', '#A855F7', '#EC4899', '#3B82F6', '#06B6D4', '#8B5CF6'];
 const AUDIO_COLORS = ['#F59E0B', '#10B981', '#14B8A6', '#84CC16', '#EAB308'];
 
-// Initial default bins matching user request
+// Initial clean bins (clean slate, custom bins can be added via +)
 const INITIAL_BINS: MediaBin[] = [
   { id: 'all', name: 'All Media', color: '#00F0FF' },
-  { id: 'bin-front', name: 'Front POV', color: '#38BDF8' },
-  { id: 'bin-helmet', name: 'Helmet Cam', color: '#A855F7' },
-  { id: 'bin-audio', name: 'External Audio', color: '#F59E0B' },
 ];
 
 // Initial clean media pool assets (empty on startup)
@@ -1130,6 +1173,11 @@ export function resolveTrackOverlaps(currentTracks: MediaTrack[]): { tracks: Med
   return { tracks: finalTracks, movedCount };
 }
 
+let debounceStabTimer: ReturnType<typeof setTimeout> | null = null;
+
+const activeAnalyzeRequests = new Set<string>();
+const activePreviewRequests = new Set<string>();
+
 export const useTimelineStore = create<TimelineState>((set, get) => ({
   project: INITIAL_PROJECT,
   tracks: INITIAL_TRACKS,
@@ -1138,6 +1186,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
   activeBinId: 'all',
   playhead: 0,
   isPlaying: false,
+  isScrubbing: false,
   zoom: 35, // pixels per second
   selectedClipId: null,
   selectedClipIds: [],
@@ -1156,6 +1205,26 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
   lastSyncMessage: null,
   syncPlacementMode: 'compact',
   syncGapCushionSec: 1.0,
+
+  // Phase 16: Video Stabilization state
+  isStabilizationAnalyzing: {},
+  isStabilizationRendering: {},
+  stabilizationPreviewUrls: {},
+  stabilizationPreviewRevisions: {},
+  stabilizationDiagnostics: {},
+  isSplitStabilizationComparison: false,
+  setSplitStabilizationComparison: (isSplitStabilizationComparison) => set({ isSplitStabilizationComparison }),
+  splitStabilizationPosition: 50,
+  setSplitStabilizationPosition: (splitStabilizationPosition) => set({ splitStabilizationPosition }),
+  splitStabilizationMode: 'vertical',
+  setSplitStabilizationMode: (splitStabilizationMode) => set({ splitStabilizationMode }),
+
+  // Alignment Grid & Crosshairs
+  isAlignmentGridActive: false,
+  setIsAlignmentGridActive: (active) =>
+    set((s) => ({
+      isAlignmentGridActive: typeof active === 'function' ? active(s.isAlignmentGridActive) : active,
+    })),
 
   // Phase 6: Proxy state
   isProxyMode: false,
@@ -1803,6 +1872,14 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
     set({ playhead: Math.max(0, Math.min(playhead + frameDelta, maxSec)) });
   },
 
+  setIsScrubbing: (isScrubbing) => {
+    if (isScrubbing) {
+      set({ isScrubbing: true, isPlaying: false });
+    } else {
+      set({ isScrubbing: false });
+    }
+  },
+
   setIsPlaying: (isPlaying) => {
     if (!isPlaying && get().isRecordingVoiceover) {
       get().stopVoiceoverRecording();
@@ -1865,14 +1942,145 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
     }));
   },
 
+  isIngesting: false,
+  ingestTotal: 0,
+  ingestCurrent: 0,
+  ingestStatusMessage: '',
+
+  initIngestEventListener: () => {
+    if (!isTauri) return;
+    import('@tauri-apps/api/event').then(({ listen }) => {
+      listen<ImportProgressPayload>('import-progress', (event) => {
+        const payload = event.payload;
+        if (!payload) return;
+
+        const { mediaId, filePath, total, current, status, metadata } = payload;
+        const state = get();
+
+        const isDone = current >= total && (status === 'ready' || status === 'failed' || status === 'cancelled');
+
+        const existingAssets = state.assets;
+        const targetIndex = existingAssets.findIndex((a) => a.id === mediaId || a.filePath === filePath);
+
+        if (targetIndex !== -1) {
+          const updatedAssets = [...existingAssets];
+          const prev = updatedAssets[targetIndex];
+
+          let updatedAsset = prev;
+          if (status === 'ready' && metadata) {
+            const dur = metadata.durationSeconds > 0 ? metadata.durationSeconds : prev.durationSeconds;
+            const thumb = metadata.thumbnailDataUrl || prev.thumbnailUrl;
+            if (thumb) {
+              filePosterCache.set(filePath, thumb);
+            }
+            updatedAsset = {
+              ...prev,
+              durationSeconds: dur,
+              durationMs: Math.round(dur * 1000),
+              width: metadata.width ?? prev.width,
+              height: metadata.height ?? prev.height,
+              framerate: metadata.framerate ?? prev.framerate,
+              sampleRate: metadata.sampleRate ?? prev.sampleRate,
+              fileSizeBytes: metadata.fileSizeBytes ?? prev.fileSizeBytes,
+              thumbnailUrl: thumb,
+              hasGyroData: metadata.hasGyroData ?? prev.hasGyroData,
+              gyroFormat: metadata.gyroFormat ?? prev.gyroFormat,
+              isPendingIngest: false,
+              ingestStatus: 'ready',
+            };
+          } else if (status === 'failed' || status === 'cancelled') {
+            updatedAsset = {
+              ...prev,
+              isPendingIngest: false,
+              ingestStatus: status,
+            };
+          } else {
+            updatedAsset = {
+              ...prev,
+              isPendingIngest: true,
+              ingestStatus: status,
+            };
+          }
+
+          updatedAssets[targetIndex] = updatedAsset;
+          set({
+            assets: updatedAssets,
+            ingestTotal: total,
+            ingestCurrent: current,
+            ingestStatusMessage: status,
+            isIngesting: !isDone,
+          });
+        } else {
+          set({
+            ingestTotal: total,
+            ingestCurrent: current,
+            ingestStatusMessage: status,
+            isIngesting: !isDone,
+          });
+        }
+      });
+    });
+  },
+
+  initWaveformEventListener: () => {
+    if (!isTauri) return;
+    import('@tauri-apps/api/event').then(({ listen }) => {
+      listen<WaveformChunkPayload>('waveform-chunk-ready', (event) => {
+        const payload = event.payload;
+        if (!payload || !payload.filePath) return;
+
+        const { clipId, filePath, chunkIndex, minMaxPairs, isLastChunk } = payload;
+        const state = get();
+        const currentPeaks = state.waveformData[filePath] || [];
+
+        // If chunkIndex is 0 or current peaks empty, replace; otherwise append
+        const updatedPeaks =
+          chunkIndex === 0 && currentPeaks.length > 0 && !isLastChunk
+            ? minMaxPairs
+            : [...currentPeaks, ...minMaxPairs];
+
+        const updatedTracks = state.tracks.map((track) => ({
+          ...track,
+          clips: track.clips.map((c) => {
+            if (c.id === clipId || c.filePath === filePath) {
+              return {
+                ...c,
+                waveformStatus: isLastChunk
+                  ? ({ type: 'ready' } as const)
+                  : ({ type: 'streaming', chunksReady: chunkIndex + 1 } as const),
+                waveformPeaks: updatedPeaks,
+              };
+            }
+            return c;
+          }),
+        }));
+
+        set({
+          waveformData: {
+            ...state.waveformData,
+            [filePath]: updatedPeaks,
+          },
+          tracks: updatedTracks,
+        });
+      });
+    });
+  },
+
+
   importFiles: (files) => {
+    const fileList = Array.from(files);
+    const nativePaths = fileList.map((f) => (f as any).path).filter(Boolean) as string[];
+    if (nativePaths.length > 0 && isTauri) {
+      get().importMediaBatch(nativePaths);
+      return;
+    }
+
     const { activeBinId } = get();
     const targetBin = activeBinId === 'all' ? undefined : activeBinId;
     const newAssets: MediaAsset[] = [];
 
-    Array.from(files).forEach((file, index) => {
+    fileList.forEach((file, index) => {
       const isAudio = file.type.startsWith('audio') || file.name.endsWith('.wav') || file.name.endsWith('.mp3');
-      const ext = file.name.split('.').pop()?.toUpperCase() || 'MOV';
       const durationSec = 30 + (index % 5) * 15;
 
       newAssets.push({
@@ -1883,9 +2091,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
         durationSeconds: durationSec,
         durationMs: durationSec * 1000,
         binId: targetBin,
-        thumbnailUrl: isAudio
-          ? ''
-          : `https://images.unsplash.com/photo-${1500000000000 + (index * 12345678) % 500000000}?w=320&auto=format&fit=crop&q=60`,
+        thumbnailUrl: isAudio ? '' : undefined,
         width: isAudio ? undefined : 3840,
         height: isAudio ? undefined : 2160,
         framerate: isAudio ? undefined : 30,
@@ -1894,6 +2100,8 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
         creationTime: new Date().toISOString(),
         hasProxy: false,
         proxyPath: undefined,
+        isPendingIngest: false,
+        ingestStatus: 'ready',
       });
     });
 
@@ -1902,67 +2110,66 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
     }));
   },
 
-  importFromNativePaths: async (paths) => {
+  importMediaBatch: async (paths: string[]) => {
     if (paths.length === 0) return;
-    const { activeBinId, assets } = get();
+    const { activeBinId, assets, initIngestEventListener } = get();
+    initIngestEventListener();
+
     const targetBin = activeBinId === 'all' ? undefined : activeBinId;
+    const timestamp = Date.now();
 
-    // Call ffprobe sidecar via Tauri IPC to inspect metadata
-    let metadatas: ClipMetadata[] = [];
-    try {
-      const res = await tauriInvoke<ClipMetadata[]>('get_clip_metadata', { paths });
-      if (res && res.length === paths.length) {
-        metadatas = res;
-      }
-    } catch {
-      // fallback if IPC fails
-    }
-
-    const newAssets: MediaAsset[] = paths.map((filePath, index) => {
+    // 1. Immediately insert placeholder skeleton cards for instantaneous UI response
+    const skeletonAssets: MediaAsset[] = paths.map((filePath, index) => {
       const fileName = filePath.split(/[\\/]/).pop() || filePath;
       const isAudio = /\.(wav|mp3|aac|m4a|flac|ogg)$/i.test(fileName);
-      const meta = metadatas[index] || {};
-      const durSec = meta.durationSeconds && meta.durationSeconds > 0 ? meta.durationSeconds : 30.0;
-
       return {
-        id: `asset-native-${Date.now()}-${index}`,
+        id: `media-${timestamp}-${index}`,
         name: fileName,
         filePath,
         mediaType: isAudio ? 'audio' : 'video',
-        durationSeconds: durSec,
-        durationMs: Math.round(durSec * 1000),
+        durationSeconds: 10.0,
+        durationMs: 10000,
         binId: targetBin,
-        thumbnailUrl: isAudio
-          ? undefined
-          : `https://images.unsplash.com/photo-${1500000000000 + (index * 9876543) % 500000000}?w=320&auto=format&fit=crop&q=60`,
-        width: meta.width || (isAudio ? undefined : 3840),
-        height: meta.height || (isAudio ? undefined : 2160),
-        framerate: meta.framerate || (isAudio ? undefined : 30.0),
-        sampleRate: meta.sampleRate || (isAudio ? 48000 : undefined),
-        fileSizeBytes: meta.fileSizeBytes || 150000000,
-        creationTime: meta.creationTime || new Date().toISOString(),
-        hasProxy: false,
-        proxyPath: undefined,
+        thumbnailUrl: undefined,
+        isPendingIngest: true,
+        ingestStatus: 'pending',
       };
     });
 
-    set({ assets: [...assets, ...newAssets] });
+    set({
+      assets: [...assets, ...skeletonAssets],
+      isIngesting: true,
+      ingestTotal: paths.length,
+      ingestCurrent: 0,
+      ingestStatusMessage: 'pending',
+    });
 
-    // Check existing proxies and trigger auto-generation ONLY if explicitly opted in
-    const { generateClipProxy, checkClipProxy } = get();
-    const autoGen =
-      (typeof window !== 'undefined' && Boolean((window as any).__IDTS_AUTO_GEN_PROXIES__)) ||
-      Boolean(useShortcutStore.getState().autoGenerateProxies);
+    // 2. Dispatch batch import to Rust backend queue
+    if (isTauri) {
+      try {
+        await tauriInvoke('import_media_batch', { filePaths: paths });
+      } catch (err) {
+        console.error('Failed to dispatch import_media_batch:', err);
+        set({ isIngesting: false });
+      }
+    } else {
+      set({ isIngesting: false });
+    }
+  },
 
-    for (const asset of newAssets) {
-      if (asset.mediaType === 'video') {
-        checkClipProxy(asset.filePath).then((existing) => {
-          if (!existing && autoGen) {
-            generateClipProxy(asset.filePath);
-          }
-        });
+  cancelMediaImport: async () => {
+    if (isTauri) {
+      try {
+        await tauriInvoke('cancel_media_import');
+      } catch (e) {
+        console.warn('cancel_media_import error:', e);
       }
     }
+    set({ isIngesting: false });
+  },
+
+  importFromNativePaths: async (paths) => {
+    return get().importMediaBatch(paths);
   },
 
   importCustomAsset: (assetData) => {
@@ -2027,6 +2234,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
       syncDeltaSeconds: undefined,
       hasProxy: Boolean(asset.hasProxy),
       proxyPath: asset.proxyPath,
+      waveformStatus: { type: 'pending' },
       metadata: {
         durationSeconds: durSec,
         width: asset.width,
@@ -2035,6 +2243,30 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
         sampleRate: asset.sampleRate,
         codec: asset.mediaType === 'audio' ? 'pcm_s24le' : 'h264_nvenc',
         creationTime: asset.creationTime,
+        hasGyroData: Boolean(asset.hasGyroData),
+        gyroFormat: asset.gyroFormat,
+      },
+      stabilizationProfile: {
+        enabled: false,
+        mode: 'two_pass',
+        detectionMode: 'auto',
+        hasGyroData: Boolean(asset.hasGyroData),
+        engineUsed: Boolean(asset.hasGyroData) ? 'gyroflow' : 'perspectiveHomography',
+        smoothness: 0.5,
+        cropModePolicy: 'dynamicAdaptiveZoom',
+        maxCropLimit: 1.25,
+        rollingShutterCompensationMs: 0.0,
+        horizonLock: false,
+        shakiness: 5,
+        accuracy: 10,
+        stepsize: 6,
+        smoothing: 30,
+        cropMode: 'auto',
+        zoomPercent: 0,
+        smoothingType: 'gaussian',
+        debugViewMode: 'normal',
+        splitWipePosition: 0.5,
+        status: { type: 'unanalyzed' },
       },
     };
 
@@ -2068,6 +2300,15 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
         },
       };
     });
+
+    // Zero-cost fire-and-forget asynchronous waveform extraction trigger (< 1ms execution)
+    if (isTauri && newClip.filePath) {
+      tauriInvoke('start_background_waveform', {
+        clipId: newClip.id,
+        filePath: newClip.filePath,
+        pointsPerSec: 25,
+      }).catch(() => {});
+    }
   },
 
   // Dynamic Tracks Management
@@ -4469,7 +4710,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
     return null;
   },
 
-  // Milestone 4: Waveform cache and fetch
+  // Milestone 4: Waveform cache and fetch (Zero-blocking)
   waveformData: {},
   fetchWaveformData: async (filePath: string) => {
     if (!filePath) return [];
@@ -4477,20 +4718,15 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
     if (cached && cached.length > 0) return cached;
 
     if (isTauri) {
-      try {
-        const peaks = await tauriInvoke<number[]>('get_waveform_data', { path: filePath });
-        if (peaks && peaks.length > 0) {
-          set((state) => ({
-            waveformData: { ...state.waveformData, [filePath]: peaks },
-          }));
-          return peaks;
-        }
-      } catch (err) {
-        console.warn('Failed to fetch waveform from Tauri:', err);
-      }
+      // Fire-and-forget background waveform streaming extraction so UI never freezes
+      tauriInvoke('start_background_waveform', {
+        clipId: filePath,
+        filePath,
+        pointsPerSec: 25,
+      }).catch(() => {});
     }
 
-    // Pseudo-waveform for non-tauri or fallback
+    // Instant pseudo-waveform placeholder while background chunks stream in
     const pseudoPeaks: number[] = [];
     let hash = 0;
     for (let i = 0; i < filePath.length; i++) {
@@ -5416,6 +5652,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
     });
   },
 
+
   autoCutSilence: async (targetTrackId, thresholdDb, minDurationSec) => {
     const { tracks, pushHistory } = get();
     const track = tracks.find((t) => t.id === targetTrackId);
@@ -5945,22 +6182,559 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
         ...track,
         clips: track.clips.map((clip) => {
           if (clip.id !== clipId) return clip;
-          const current = clip.stabilization ?? {
+          const current = (clip.stabilizationProfile ?? clip.stabilization) ?? {
             enabled: false,
-            intensity: 0.5,
-            smoothness: 15,
-            tripodMode: false,
+            mode: 'two_pass',
+            detectionMode: 'auto',
+            hasGyroData: Boolean(clip.metadata?.hasGyroData),
+            engineUsed: clip.metadata?.hasGyroData ? 'gyroflow' : 'perspectiveHomography',
+            smoothness: 0.5,
+            cropModePolicy: 'dynamicAdaptiveZoom',
+            maxCropLimit: 1.25,
+            rollingShutterCompensationMs: 0.0,
+            horizonLock: false,
+            shakiness: 5,
+            accuracy: 10,
+            stepsize: 6,
+            smoothing: 30,
+            cropMode: 'auto',
+            zoomPercent: 0,
+            smoothingType: 'gaussian',
+            debugViewMode: 'normal',
+            splitWipePosition: 0.5,
+            status: { type: 'unanalyzed' },
+          };
+          const merged: StabilizationProfile = {
+            ...current,
+            ...settingsUpdates,
           };
           return {
             ...clip,
-            stabilization: {
-              ...current,
-              ...settingsUpdates,
-            },
+            stabilization: merged,
+            stabilizationProfile: merged,
           };
         }),
       })),
       isDirty: true,
     }));
+
+    const targetClip = get().tracks.flatMap((t) => t.clips).find((c) => c.id === clipId);
+    const targetProf = targetClip?.stabilizationProfile ?? targetClip?.stabilization;
+
+    // Auto-pipeline: When stabilization is enabled or mode/detectionMode changes
+    if (settingsUpdates.enabled === true || settingsUpdates.mode !== undefined || settingsUpdates.detectionMode !== undefined) {
+      if (targetProf?.enabled) {
+        if (!targetProf.transformsFilePath && !targetProf.cacheMatrixPath && targetProf.status?.type !== 'analyzing' && targetProf.status?.type !== 'trackingMotion') {
+          get().analyzeClipStabilization(clipId).catch(() => {});
+        } else {
+          get().applyStabilizationPreview(clipId, true).catch(() => {});
+        }
+      }
+    } else if (
+      settingsUpdates.smoothness !== undefined ||
+      settingsUpdates.cropModePolicy !== undefined ||
+      settingsUpdates.maxCropLimit !== undefined ||
+      settingsUpdates.horizonLock !== undefined ||
+      settingsUpdates.rollingShutterCompensationMs !== undefined ||
+      settingsUpdates.smoothing !== undefined ||
+      settingsUpdates.cropMode !== undefined ||
+      settingsUpdates.zoomPercent !== undefined ||
+      settingsUpdates.smoothingType !== undefined
+    ) {
+      // Re-render preview with debouncing (debugViewMode and splitWipePosition are handled dynamically in WebGL)
+      if (targetProf?.enabled) {
+        if (debounceStabTimer) {
+          clearTimeout(debounceStabTimer);
+        }
+        debounceStabTimer = setTimeout(() => {
+          const c = get().tracks.flatMap((t) => t.clips).find((item) => item.id === clipId);
+          const p = c?.stabilizationProfile ?? c?.stabilization;
+          if (p?.enabled) {
+            get().applyStabilizationPreview(clipId, false).catch(() => {});
+          }
+        }, 500);
+      }
+    }
   },
+
+  updateClipStabilizationProfile: (clipId, settingsUpdates) => {
+    get().updateClipStabilization(clipId, settingsUpdates);
+  },
+
+  probeClipTelemetry: async (clipId: string) => {
+    const state = get();
+    const clip = state.tracks.flatMap((t) => t.clips).find((c) => c.id === clipId);
+    if (!clip || !clip.filePath) return null;
+    if (!isTauri) return null;
+
+    try {
+      const probeRes = await tauriInvoke<TelemetryProbeResult>('probe_clip_telemetry', {
+        filePath: clip.filePath,
+      });
+
+      if (probeRes) {
+        set((s) => ({
+          tracks: s.tracks.map((t) => ({
+            ...t,
+            clips: t.clips.map((c) => {
+              if (c.id !== clipId) return c;
+              const curProf: StabilizationProfile = (c.stabilizationProfile ?? c.stabilization) ?? {
+                enabled: false,
+                detectionMode: 'auto',
+                hasGyroData: probeRes.hasGyro,
+                engineUsed: probeRes.hasGyro ? 'gyroflow' : 'perspectiveHomography',
+                smoothness: 0.5,
+                cropModePolicy: 'dynamicAdaptiveZoom',
+                maxCropLimit: 1.25,
+                rollingShutterCompensationMs: 0.0,
+                horizonLock: false,
+                shakiness: 5,
+                accuracy: 10,
+                stepsize: 6,
+                smoothing: 30,
+                cropMode: 'auto',
+                zoomPercent: 0,
+                smoothingType: 'gaussian',
+                status: { type: 'unanalyzed' },
+              };
+              const updatedProf: StabilizationProfile = {
+                ...curProf,
+                hasGyroData: probeRes.hasGyro,
+                engineUsed: curProf.engineUsed ?? (probeRes.hasGyro ? 'gyroflow' : 'perspectiveHomography'),
+              };
+              return {
+                ...c,
+                metadata: c.metadata
+                  ? {
+                      ...c.metadata,
+                      hasGyroData: probeRes.hasGyro,
+                      gyroFormat: probeRes.gyroFormat,
+                    }
+                  : {
+                      durationSeconds: c.durationSeconds ?? 30,
+                      hasGyroData: probeRes.hasGyro,
+                      gyroFormat: probeRes.gyroFormat,
+                    },
+                stabilization: updatedProf,
+                stabilizationProfile: updatedProf,
+              };
+            }),
+          })),
+        }));
+        return probeRes;
+      }
+    } catch (err) {
+      console.warn('Telemetry probe failed:', err);
+    }
+    return null;
+  },
+
+  analyzeClipStabilization: async (clipId: string) => {
+    if (activeAnalyzeRequests.has(clipId)) return null;
+    activeAnalyzeRequests.add(clipId);
+    const state = get();
+    const clip = state.tracks.flatMap((t) => t.clips).find((c) => c.id === clipId);
+    if (!clip) {
+      activeAnalyzeRequests.delete(clipId);
+      return null;
+    }
+
+    const currentProfile: StabilizationProfile = (clip.stabilizationProfile ?? clip.stabilization) ?? {
+      enabled: true,
+      detectionMode: 'auto',
+      hasGyroData: Boolean(clip.metadata?.hasGyroData),
+      engineUsed: clip.metadata?.hasGyroData ? 'gyroflow' : 'perspectiveHomography',
+      smoothness: 0.5,
+      cropModePolicy: 'dynamicAdaptiveZoom',
+      maxCropLimit: 1.25,
+      rollingShutterCompensationMs: 0.0,
+      horizonLock: false,
+      shakiness: 5,
+      accuracy: 10,
+      stepsize: 6,
+      smoothing: 30,
+      cropMode: 'auto',
+      zoomPercent: 0,
+      smoothingType: 'gaussian',
+      status: { type: 'unanalyzed' },
+    };
+
+    const inPoint = clip.inPointSeconds ?? (clip.sourceOffsetMs != null ? clip.sourceOffsetMs / 1000 : 0);
+    const dur = clip.durationSeconds ?? (clip.durationMs != null ? clip.durationMs / 1000 : 10);
+    const outPoint = clip.outPointSeconds ?? (inPoint + dur);
+
+    // Mark as tracking motion
+    set((s) => ({
+      isStabilizationAnalyzing: { ...s.isStabilizationAnalyzing, [clipId]: 0.1 },
+      tracks: s.tracks.map((t) => ({
+        ...t,
+        clips: t.clips.map((c) =>
+          c.id === clipId
+            ? {
+                ...c,
+                stabilization: { ...currentProfile, enabled: true, status: { type: 'trackingMotion', progress: 0 } },
+                stabilizationProfile: { ...currentProfile, enabled: true, status: { type: 'trackingMotion', progress: 0 } },
+              }
+            : c
+        ),
+      })),
+    }));
+
+    try {
+      if (!isTauri) return null;
+      const { invoke } = await import('@tauri-apps/api/core');
+      const res = await invoke<string>('analyze_clip_stabilization', {
+        clipId,
+        filePath: clip.filePath,
+        settings: {
+          ...currentProfile,
+          filePath: clip.filePath,
+          inPointSeconds: inPoint,
+          outPointSeconds: outPoint,
+          enabled: true,
+          detectionMode: currentProfile.detectionMode ?? 'auto',
+          smoothness: currentProfile.smoothness ?? 0.5,
+          cropModePolicy: currentProfile.cropModePolicy ?? 'dynamicAdaptiveZoom',
+          maxCropLimit: currentProfile.maxCropLimit ?? 1.25,
+          horizonLock: Boolean(currentProfile.horizonLock),
+          rollingShutterCompensationMs: currentProfile.rollingShutterCompensationMs ?? 0.0,
+        },
+      });
+
+      if (res) {
+        const matPath = res;
+        const trfPath = res.endsWith('.mat') ? res.replace(/\.mat$/, '.trf') : undefined;
+        set((s) => {
+          const nextAnalyzing = { ...s.isStabilizationAnalyzing };
+          delete nextAnalyzing[clipId];
+          return {
+            isStabilizationAnalyzing: nextAnalyzing,
+            tracks: s.tracks.map((t) => ({
+              ...t,
+              clips: t.clips.map((c) =>
+                c.id === clipId
+                  ? {
+                      ...c,
+                      stabilization: {
+                        ...currentProfile,
+                        enabled: true,
+                        status: { type: 'ready' },
+                        transformsFilePath: trfPath ?? currentProfile.transformsFilePath,
+                        cacheMatrixPath: matPath,
+                        inPointSeconds: inPoint,
+                        outPointSeconds: outPoint,
+                      },
+                      stabilizationProfile: {
+                        ...currentProfile,
+                        enabled: true,
+                        status: { type: 'ready' },
+                        transformsFilePath: trfPath ?? currentProfile.transformsFilePath,
+                        cacheMatrixPath: matPath,
+                        inPointSeconds: inPoint,
+                        outPointSeconds: outPoint,
+                      },
+                    }
+                  : c
+              ),
+            })),
+            isDirty: true,
+          };
+        });
+
+        // Motion analysis finished -> Validate diagnostics and automatically trigger Pass 2 to generate smoothed preview video
+        get().validateStabilizationData(clipId).catch(() => {});
+        get().applyStabilizationPreview(clipId, true).catch(() => {});
+
+        return res;
+      }
+      throw new Error('Stabilization analysis returned no transformation data');
+    } catch (err) {
+      console.error('Failed to analyze clip motion vectors:', err);
+      set((s) => {
+        const nextAnalyzing = { ...s.isStabilizationAnalyzing };
+        delete nextAnalyzing[clipId];
+        return {
+          isStabilizationAnalyzing: nextAnalyzing,
+          tracks: s.tracks.map((t) => ({
+            ...t,
+            clips: t.clips.map((c) =>
+              c.id === clipId
+                ? {
+                    ...c,
+                    stabilization: { ...currentProfile, status: { type: 'error', message: String(err) } },
+                    stabilizationProfile: { ...currentProfile, status: { type: 'error', message: String(err) } },
+                  }
+                : c
+            ),
+          })),
+        };
+      });
+      return null;
+    } finally {
+      activeAnalyzeRequests.delete(clipId);
+    }
+  },
+
+  applyStabilizationPreview: async (clipId: string, forceRegenerate = false) => {
+    if (activePreviewRequests.has(clipId)) return null;
+    activePreviewRequests.add(clipId);
+    const state = get();
+    const clip = state.tracks.flatMap((t) => t.clips).find((c) => c.id === clipId);
+    if (!clip) {
+      activePreviewRequests.delete(clipId);
+      return null;
+    }
+
+    const currentProfile = clip.stabilizationProfile ?? clip.stabilization;
+    if (!currentProfile) return null;
+
+    const inPoint = clip.inPointSeconds ?? (clip.sourceOffsetMs != null ? clip.sourceOffsetMs / 1000 : 0);
+    const dur = clip.durationSeconds ?? (clip.durationMs != null ? clip.durationMs / 1000 : 10);
+    const outPoint = clip.outPointSeconds ?? (inPoint + dur);
+
+    set((s) => ({
+      isStabilizationRendering: {
+        ...s.isStabilizationRendering,
+        [clipId]: true,
+      },
+    }));
+
+    try {
+      if (!isTauri) return null;
+      const { invoke } = await import('@tauri-apps/api/core');
+      const invokePromise = invoke<string>('apply_stabilization_preview', {
+        clipId,
+        filePath: clip.filePath,
+        settings: {
+          ...currentProfile,
+          filePath: clip.filePath,
+          inPointSeconds: inPoint,
+          outPointSeconds: outPoint,
+          forceRegenerate,
+        },
+      });
+
+      const timeoutPromise = new Promise<null>((_, reject) =>
+        setTimeout(() => reject(new Error('Stabilization preview render timed out after 180s')), 180000)
+      );
+
+      const previewPath = (await Promise.race([invokePromise, timeoutPromise])) as string | null;
+
+      if (previewPath) {
+        const now = Date.now();
+        set((s) => ({
+          stabilizationPreviewUrls: {
+            ...s.stabilizationPreviewUrls,
+            [clipId]: previewPath,
+          },
+          stabilizationPreviewRevisions: {
+            ...s.stabilizationPreviewRevisions,
+            [clipId]: now,
+          },
+          tracks: s.tracks.map((t) => ({
+            ...t,
+            clips: t.clips.map((c) =>
+              c.id === clipId
+                ? {
+                    ...c,
+                    stabilization: {
+                      ...(c.stabilization ?? currentProfile),
+                      enabled: true,
+                      status: { type: 'ready' },
+                      transformsFilePath: c.stabilization?.transformsFilePath ?? currentProfile.transformsFilePath,
+                      cacheMatrixPath: c.stabilization?.cacheMatrixPath ?? currentProfile.cacheMatrixPath,
+                    },
+                    stabilizationProfile: {
+                      ...(c.stabilizationProfile ?? currentProfile),
+                      enabled: true,
+                      status: { type: 'ready' },
+                      transformsFilePath: c.stabilizationProfile?.transformsFilePath ?? currentProfile.transformsFilePath,
+                      cacheMatrixPath: c.stabilizationProfile?.cacheMatrixPath ?? currentProfile.cacheMatrixPath,
+                    },
+                  }
+                : c
+            ),
+          })),
+        }));
+
+        get().validateStabilizationData(clipId).catch(() => {});
+        return previewPath;
+      } else {
+        // Generation failed or returned empty preview
+        set((s) => ({
+          tracks: s.tracks.map((t) => ({
+            ...t,
+            clips: t.clips.map((c) =>
+              c.id === clipId
+                ? {
+                    ...c,
+                    stabilization: {
+                      ...(c.stabilization ?? currentProfile),
+                      status: { type: 'error', message: 'Failed to generate preview' },
+                    },
+                    stabilizationProfile: {
+                      ...(c.stabilizationProfile ?? currentProfile),
+                      status: { type: 'error', message: 'Failed to generate preview' },
+                    },
+                  }
+                : c
+            ),
+          })),
+        }));
+        return null;
+      }
+    } catch (err: any) {
+      console.error('Failed to generate stabilization preview:', err);
+      set((s) => ({
+        tracks: s.tracks.map((t) => ({
+          ...t,
+          clips: t.clips.map((c) =>
+            c.id === clipId
+              ? {
+                  ...c,
+                  stabilization: {
+                    ...(c.stabilization ?? currentProfile),
+                    status: { type: 'error', message: String(err?.message || err) },
+                  },
+                  stabilizationProfile: {
+                    ...(c.stabilizationProfile ?? currentProfile),
+                    status: { type: 'error', message: String(err?.message || err) },
+                  },
+                }
+              : c
+          ),
+        })),
+      }));
+      return null;
+    } finally {
+      activePreviewRequests.delete(clipId);
+      set((s) => {
+        const nextRendering = { ...s.isStabilizationRendering };
+        delete nextRendering[clipId];
+        return { isStabilizationRendering: nextRendering };
+      });
+    }
+  },
+
+  validateStabilizationData: async (clipId: string) => {
+    if (!isTauri) return null;
+    const clip = get().tracks.flatMap((t) => t.clips).find((c) => c.id === clipId);
+    const inPoint = clip?.inPointSeconds ?? (clip?.sourceOffsetMs != null ? clip.sourceOffsetMs / 1000 : 0);
+    const dur = clip?.durationSeconds ?? (clip?.durationMs != null ? clip.durationMs / 1000 : 10);
+    const outPoint = clip?.outPointSeconds ?? (inPoint + dur);
+    try {
+      const diag = await tauriInvoke<StabilizationDiagnostics>('validate_stabilization_data', {
+        clipId,
+        filePath: clip?.filePath ?? null,
+        inPoint,
+        outPoint,
+      });
+      if (diag) {
+        set((s) => ({
+          stabilizationDiagnostics: {
+            ...s.stabilizationDiagnostics,
+            [clipId]: diag,
+          },
+        }));
+        return diag;
+      }
+      return null;
+    } catch (err) {
+      console.warn('Failed to validate stabilization data:', err);
+      return null;
+    }
+  },
+
+  initStabilizationEventListener: () => {
+    if (!isTauri) return;
+    import('@tauri-apps/api/event').then(({ listen }) => {
+      listen<any>('stabilization-progress', (event) => {
+        const payload = event.payload;
+        if (!payload || !payload.clipId) return;
+
+        const clipId = payload.clipId;
+        const pct = payload.percentage ?? 0;
+        const status = payload.status;
+        const trfPath = payload.transformsPath;
+        const matPath = payload.cacheMatrixPath;
+        const engineUsed = payload.engineUsed;
+        const hasGyro = payload.hasGyro;
+        const err = payload.error;
+
+        set((state) => {
+          const nextAnalyzing = { ...state.isStabilizationAnalyzing };
+          if (pct >= 100 || status === 'ready' || status === 'error') {
+            delete nextAnalyzing[clipId];
+          } else {
+            nextAnalyzing[clipId] = pct;
+          }
+
+          const updatedTracks = state.tracks.map((t) => ({
+            ...t,
+            clips: t.clips.map((c) => {
+              if (c.id !== clipId) return c;
+              const curProf: StabilizationProfile = (c.stabilizationProfile ?? c.stabilization) ?? {
+                enabled: true,
+                detectionMode: 'auto',
+                hasGyroData: Boolean(c.metadata?.hasGyroData),
+                engineUsed: c.metadata?.hasGyroData ? 'gyroflow' : 'perspectiveHomography',
+                smoothness: 0.5,
+                cropModePolicy: 'dynamicAdaptiveZoom',
+                maxCropLimit: 1.25,
+                rollingShutterCompensationMs: 0.0,
+                horizonLock: false,
+                shakiness: 5,
+                accuracy: 10,
+                stepsize: 6,
+                smoothing: 30,
+                cropMode: 'auto',
+                zoomPercent: 0,
+                smoothingType: 'gaussian',
+                status: { type: 'unanalyzed' },
+              };
+
+              let nextStatus: StabilizationStatus = curProf.status;
+              if (status === 'probing') {
+                nextStatus = { type: 'probing' };
+              } else if (status === 'trackingMotion' || status === 'tracking_motion') {
+                nextStatus = { type: 'trackingMotion', progress: pct };
+              } else if (status === 'analyzing') {
+                nextStatus = { type: 'analyzing', progress: pct };
+              } else if (status === 'ready' || pct >= 100) {
+                nextStatus = { type: 'ready' };
+              } else if (status === 'error') {
+                nextStatus = { type: 'error', message: err };
+              }
+
+              const nextProf: StabilizationProfile = {
+                ...curProf,
+                enabled: true,
+                status: nextStatus,
+                transformsFilePath: trfPath ?? curProf.transformsFilePath,
+                cacheMatrixPath: matPath ?? curProf.cacheMatrixPath,
+                engineUsed: engineUsed ?? curProf.engineUsed,
+                hasGyroData: hasGyro !== undefined ? hasGyro : curProf.hasGyroData,
+              };
+
+              return {
+                ...c,
+                stabilization: nextProf,
+                stabilizationProfile: nextProf,
+              };
+            }),
+          }));
+
+          return {
+            isStabilizationAnalyzing: nextAnalyzing,
+            tracks: updatedTracks,
+          };
+        });
+
+        if (status === 'ready' || pct >= 100) {
+          get().validateStabilizationData(clipId).catch(() => {});
+        }
+      });
+    });
+  },
+
 }));

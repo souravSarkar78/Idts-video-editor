@@ -27,8 +27,12 @@ import {
   Mic,
   Trash2,
   Play,
+  ChevronDown,
+  Loader2,
+  Compass,
+  HelpCircle,
 } from 'lucide-react';
-import { Diamond, RotateCw, AlignLeft, AlignCenter, AlignRight, Subtitles, Shield } from '@/components/Icons';
+import { Diamond, RotateCw, AlignLeft, AlignCenter, AlignRight, Subtitles, Shield, AlertTriangle } from '@/components/Icons';
 import { useShallow } from 'zustand/react/shallow';
 import { useTimelineStore, isTauri, tauriInvoke, getInterpolatedClipTransform } from '../../store/timelineStore';
 import { formatDeltaSeconds } from '../../utils/timecode';
@@ -70,6 +74,14 @@ export const Inspector: React.FC = () => {
     updateClipSpeed,
     updateClipLensEffects,
     updateClipStabilization,
+    setSplitStabilizationComparison,
+    analyzeClipStabilization,
+    applyStabilizationPreview,
+    validateStabilizationData,
+    stabilizationDiagnostics,
+    probeClipTelemetry,
+    isStabilizationAnalyzing,
+    isStabilizationRendering,
     setPlayhead,
     selectClip,
     updateTextClipContent,
@@ -115,6 +127,14 @@ export const Inspector: React.FC = () => {
       updateClipSpeed: state.updateClipSpeed,
       updateClipLensEffects: state.updateClipLensEffects,
       updateClipStabilization: state.updateClipStabilization,
+      setSplitStabilizationComparison: state.setSplitStabilizationComparison,
+      analyzeClipStabilization: state.analyzeClipStabilization,
+      applyStabilizationPreview: state.applyStabilizationPreview,
+      validateStabilizationData: state.validateStabilizationData,
+      stabilizationDiagnostics: state.stabilizationDiagnostics,
+      probeClipTelemetry: state.probeClipTelemetry,
+      isStabilizationAnalyzing: state.isStabilizationAnalyzing,
+      isStabilizationRendering: state.isStabilizationRendering,
       setPlayhead: state.setPlayhead,
       selectClip: state.selectClip,
       updateTextClipContent: state.updateTextClipContent,
@@ -223,10 +243,50 @@ export const Inspector: React.FC = () => {
   const currentDefish = selectedClip?.lensEffects?.defishEnabled ?? false;
   const currentDefishStrength = Math.round((selectedClip?.lensEffects?.defishStrength ?? 0) * 100);
   const currentBlur = selectedClip?.lensEffects?.gaussianBlur ?? 0;
-  const currentStabEnabled = selectedClip?.stabilization?.enabled ?? false;
-  const currentStabIntensity = Math.round((selectedClip?.stabilization?.intensity ?? 0.5) * 100);
-  const currentStabSmoothness = selectedClip?.stabilization?.smoothness ?? 15;
-  const currentStabTripod = selectedClip?.stabilization?.tripodMode ?? false;
+  const [isStabilizationCollapsed, setIsStabilizationCollapsed] = useState(false);
+  const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
+
+  const stabProfile = selectedClip?.stabilizationProfile ?? selectedClip?.stabilization;
+  const currentStabEnabled = stabProfile?.enabled ?? false;
+  const currentStabMode = stabProfile?.mode ?? 'two_pass';
+  const currentDetectionMode = stabProfile?.detectionMode ?? 'auto';
+  const hasGyroData = Boolean(selectedClip?.metadata?.hasGyroData ?? stabProfile?.hasGyroData);
+  const currentEngineUsed = stabProfile?.engineUsed ?? (hasGyroData ? 'gyroflow' : 'perspectiveHomography');
+  const currentSmoothness = Math.round((stabProfile?.smoothness ?? 0.5) * 100);
+  const currentCropPolicy = stabProfile?.cropModePolicy ?? 'dynamicAdaptiveZoom';
+  const currentMaxCropLimit = Math.round((stabProfile?.maxCropLimit ?? 1.25) * 100);
+  const currentHorizonLock = Boolean(stabProfile?.horizonLock);
+  const currentRollingShutter = Math.round(stabProfile?.rollingShutterCompensationMs ?? 0);
+  const currentDebugViewMode = stabProfile?.debugViewMode ?? 'normal';
+  const currentSplitWipePos = stabProfile?.splitWipePosition !== undefined ? Math.round(stabProfile.splitWipePosition * 100) : 50;
+  const clipDiagnostics = selectedClip ? stabilizationDiagnostics[selectedClip.id] : undefined;
+
+  const stabStatus = stabProfile?.status ?? ((stabProfile?.transformsFilePath || stabProfile?.cacheMatrixPath) ? { type: 'ready' } : { type: 'unanalyzed' });
+  const isClipAnalyzing = Boolean(
+    (selectedClip && isStabilizationAnalyzing[selectedClip.id] !== undefined) ||
+    stabStatus.type === 'analyzing' ||
+    stabStatus.type === 'trackingMotion' ||
+    stabStatus.type === 'probing'
+  );
+  const analysisProgress = selectedClip
+    ? isStabilizationAnalyzing[selectedClip.id] ?? (stabStatus.type === 'analyzing' || stabStatus.type === 'trackingMotion' ? stabStatus.progress : 0)
+    : 0;
+  const isStabilized = stabStatus.type === 'ready' || Boolean(stabProfile?.transformsFilePath || stabProfile?.cacheMatrixPath);
+
+  useEffect(() => {
+    if (selectedClip && selectedClip.filePath && selectedClip.mediaType === 'video') {
+      if (selectedClip.metadata?.hasGyroData === undefined && stabProfile?.hasGyroData === undefined) {
+        probeClipTelemetry(selectedClip.id).catch(() => {});
+      }
+    }
+  }, [selectedClip?.id, selectedClip?.filePath]);
+
+  // Query stabilization verification diagnostics on stabilized clip selection
+  useEffect(() => {
+    if (selectedClip && isStabilized && !stabilizationDiagnostics[selectedClip.id]) {
+      validateStabilizationData(selectedClip.id).catch(() => {});
+    }
+  }, [selectedClip?.id, isStabilized]);
 
   // Live stereo VU meter animation during playback
   const [meterL, setMeterL] = useState(-36);
@@ -315,9 +375,22 @@ export const Inspector: React.FC = () => {
     if (!selectedClip) return;
     updateClipStabilization(selectedClip.id, {
       enabled: false,
-      intensity: 0.5,
-      smoothness: 15,
-      tripodMode: false,
+      detectionMode: 'auto',
+      smoothness: 0.5,
+      cropModePolicy: 'dynamicAdaptiveZoom',
+      maxCropLimit: 1.25,
+      rollingShutterCompensationMs: 0.0,
+      horizonLock: false,
+      shakiness: 5,
+      accuracy: 10,
+      stepsize: 6,
+      smoothing: 30,
+      cropMode: 'auto',
+      zoomPercent: 0,
+      smoothingType: 'gaussian',
+      status: { type: 'unanalyzed' },
+      transformsFilePath: undefined,
+      cacheMatrixPath: undefined,
     });
   };
 
@@ -1633,109 +1706,575 @@ export const Inspector: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Video Stabilization Section */}
-                <div className="p-3 rounded-lg bg-[#0D0E11] border border-[#222630] space-y-3">
-                  <div className="flex items-center justify-between">
+                {/* Phase 16: Video Stabilization Inspector Module */}
+                <div className="rounded-lg bg-[#0D0E11] border border-[#222630] overflow-hidden">
+                  {/* Collapsible Header */}
+                  <div
+                    onClick={() => setIsStabilizationCollapsed((prev) => !prev)}
+                    className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#14161F]/60 transition-colors select-none"
+                  >
                     <span className="text-xs font-bold text-[#F0F3F8] flex items-center gap-1.5">
                       <Shield size={13} className="text-[#00F0FF]" />
                       <span>Video Stabilization</span>
+                      {currentStabEnabled && (
+                        <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-[#00F0FF]/15 text-[#00F0FF] border border-[#00F0FF]/30 ml-1">
+                          {isStabilized ? 'STABILIZED' : isClipAnalyzing ? 'ANALYZING' : 'ENABLED'}
+                        </span>
+                      )}
                     </span>
-                    <button
-                      onClick={handleResetStabilization}
-                      title="Reset video stabilization"
-                      className="px-2 py-0.5 rounded bg-[#181B24] hover:bg-[#202532] text-[#8A92A6] hover:text-[#00F0FF] text-[10px] font-mono flex items-center gap-1 transition-colors cursor-pointer border border-[#222630]"
-                    >
-                      <RotateCcw size={10} />
-                      <span>Reset</span>
-                    </button>
-                  </div>
-
-                  {/* Enable Switch */}
-                  <div className="flex items-center justify-between text-[11px]">
-                    <label className="flex items-center gap-2 cursor-pointer text-[#F0F3F8]">
-                      <input
-                        type="checkbox"
-                        checked={currentStabEnabled}
-                        onChange={(e) =>
-                          updateClipStabilization(selectedClip.id, { enabled: e.target.checked })
-                        }
-                        className="rounded border-[#222630] accent-[#00F0FF]"
-                      />
-                      <span>Enable Stabilization</span>
-                    </label>
-                    <span
-                      className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
-                        currentStabEnabled ? 'bg-[#00F0FF]/15 text-[#00F0FF]' : 'bg-[#181B24] text-[#64748B]'
-                      }`}
-                    >
-                      {currentStabEnabled ? 'Active' : 'Off'}
-                    </span>
-                  </div>
-
-                  {/* Stabilization Intensity Slider */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-[#8A92A6]">Intensity</span>
-                      <span className="font-mono text-[#00F0FF] text-[10px]">{currentStabIntensity}%</span>
-                    </div>
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      step={1}
-                      disabled={!currentStabEnabled}
-                      value={currentStabIntensity}
-                      onChange={(e) =>
-                        updateClipStabilization(selectedClip.id, { intensity: Number(e.target.value) / 100 })
-                      }
-                      className="w-full h-1 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#00F0FF] disabled:opacity-40"
-                    />
-                    <div className="flex justify-between text-[9px] text-[#475569] font-mono">
-                      <span>Subtle (0%)</span>
-                      <span>Standard (50%)</span>
-                      <span>Heavy (100%)</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleResetStabilization();
+                        }}
+                        title="Reset video stabilization"
+                        className="px-2 py-0.5 rounded bg-[#181B24] hover:bg-[#202532] text-[#8A92A6] hover:text-[#00F0FF] text-[10px] font-mono flex items-center gap-1 transition-colors cursor-pointer border border-[#222630]"
+                      >
+                        <RotateCcw size={10} />
+                        <span>Reset</span>
+                      </button>
+                      <span className="text-[#8A92A6]">
+                        {isStabilizationCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                      </span>
                     </div>
                   </div>
 
-                  {/* Smoothness Window */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-[#8A92A6]">Smoothness Window</span>
-                      <span className="font-mono text-[#F0F3F8] text-[10px]">{currentStabSmoothness} frames</span>
-                    </div>
-                    <input
-                      type="range"
-                      min={5}
-                      max={50}
-                      step={1}
-                      disabled={!currentStabEnabled}
-                      value={currentStabSmoothness}
-                      onChange={(e) =>
-                        updateClipStabilization(selectedClip.id, { smoothness: Number(e.target.value) })
-                      }
-                      className="w-full h-1 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#00F0FF] disabled:opacity-40"
-                    />
-                  </div>
+                  {!isStabilizationCollapsed && (
+                    <div className="p-3 pt-0 border-t border-[#1C202B] space-y-3 mt-1">
+                      {/* Telemetry Sensor Header Pill Badge */}
+                      <div className="pt-2">
+                        {hasGyroData ? (
+                          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-[#00F0FF]/10 border border-[#00F0FF]/30 text-[#00F0FF] text-[11px] font-mono">
+                            <Compass size={13} className="text-[#00F0FF] shrink-0 animate-pulse" />
+                            <span className="font-semibold">[ 🧭 Action Cam Gyro Detected ]</span>
+                            <span className="text-[10px] text-[#8A92A6] ml-auto">GPMF/CAMM IMU</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-[#1C202B] border border-[#2B3140] text-[#94A3B8] text-[11px] font-mono">
+                            <Eye size={13} className="text-[#38BDF8] shrink-0" />
+                            <span className="font-semibold text-[#E2E8F0]">[ 👁️ Visual Tracking (Optical Flow) ]</span>
+                            <span className="text-[10px] text-[#64748B] ml-auto">KLT RANSAC</span>
+                          </div>
+                        )}
+                      </div>
 
-                  {/* Tripod Mode Checkbox */}
-                  <div className="pt-1 border-t border-[#1C202B]">
-                    <label
-                      className={`flex items-center gap-2 cursor-pointer text-[11px] ${
-                        !currentStabEnabled ? 'opacity-40 pointer-events-none' : 'text-[#8A92A6] hover:text-[#F0F3F8]'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={currentStabTripod}
-                        disabled={!currentStabEnabled}
-                        onChange={(e) =>
-                          updateClipStabilization(selectedClip.id, { tripodMode: e.target.checked })
-                        }
-                        className="rounded border-[#222630] accent-[#00F0FF]"
-                      />
-                      <span>Tripod Lock (Camera Lock)</span>
-                    </label>
-                  </div>
+                      {/* Enable Stabilization Checkbox Toggle */}
+                      <div className="flex items-center justify-between text-[11px]">
+                        <label className="flex items-center gap-2 cursor-pointer text-[#F0F3F8]">
+                          <input
+                            type="checkbox"
+                            checked={currentStabEnabled}
+                            onChange={(e) =>
+                              updateClipStabilization(selectedClip.id, { enabled: e.target.checked })
+                            }
+                            className="rounded border-[#222630] accent-[#00F0FF]"
+                          />
+                          <span className="font-medium">Enable Stabilization</span>
+                        </label>
+                        <span
+                          className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
+                            currentStabEnabled ? 'bg-[#00F0FF]/15 text-[#00F0FF]' : 'bg-[#181B24] text-[#64748B]'
+                          }`}
+                        >
+                          {currentStabEnabled ? 'Active' : 'Off'}
+                        </span>
+                      </div>
+
+                      {/* Stabilization Pipeline Mode Selector (Real-Time vs Two-Pass) */}
+                      <div className="space-y-1.5 pt-1">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-[#8A92A6]">Pipeline Mode</span>
+                          <span className="font-mono text-[#00F0FF] text-[10px]">
+                            {currentStabMode === 'realtime' ? '⚡ Real-Time (Instant)' : '🎬 Two-Pass (High Accuracy)'}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <button
+                            type="button"
+                            disabled={!currentStabEnabled}
+                            onClick={() => {
+                              useTimelineStore.setState((s) => {
+                                const nextR = { ...s.isStabilizationRendering };
+                                delete nextR[selectedClip.id];
+                                return { isStabilizationRendering: nextR };
+                              });
+                              updateClipStabilization(selectedClip.id, { mode: 'realtime' });
+                            }}
+                            className={`px-2.5 py-1.5 rounded text-[10px] font-mono transition-all border cursor-pointer flex items-center justify-center gap-1.5 ${
+                              currentStabMode === 'realtime'
+                                ? 'bg-[#00F0FF]/20 text-[#00F0FF] border-[#00F0FF]/60 font-bold shadow-[0_0_8px_rgba(0,240,255,0.25)]'
+                                : 'bg-[#14161F] hover:bg-[#1C202B] text-[#8A92A6] hover:text-[#F0F3F8] border-[#222630]'
+                            } disabled:opacity-40 disabled:pointer-events-none`}
+                          >
+                            <Zap size={12} className={currentStabMode === 'realtime' ? 'text-[#00F0FF]' : ''} />
+                            <span>Real-Time (Instant)</span>
+                          </button>
+                          <button
+                            type="button"
+                            disabled={!currentStabEnabled}
+                            onClick={() => updateClipStabilization(selectedClip.id, { mode: 'two_pass' })}
+                            className={`px-2.5 py-1.5 rounded text-[10px] font-mono transition-all border cursor-pointer flex items-center justify-center gap-1.5 ${
+                              currentStabMode === 'two_pass'
+                                ? 'bg-[#00F0FF]/20 text-[#00F0FF] border-[#00F0FF]/60 font-bold shadow-[0_0_8px_rgba(0,240,255,0.25)]'
+                                : 'bg-[#14161F] hover:bg-[#1C202B] text-[#8A92A6] hover:text-[#F0F3F8] border-[#222630]'
+                            } disabled:opacity-40 disabled:pointer-events-none`}
+                          >
+                            <Film size={12} className={currentStabMode === 'two_pass' ? 'text-[#00F0FF]' : ''} />
+                            <span>Two-Pass (Render)</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Stabilization Mode Radio Selector */}
+                      <div className="space-y-1.5 pt-1">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-[#8A92A6]">Tracking & Solver Engine</span>
+                          <span className="font-mono text-[#00F0FF] text-[10px]">
+                            {currentDetectionMode === 'forceGyro'
+                              ? '🧭 Gyroflow IMU'
+                              : currentDetectionMode === 'visualFeatureTracking'
+                              ? '👁️ Optical Flow'
+                              : `🤖 Auto (${hasGyroData ? 'Gyroflow' : 'Optical Flow'})`}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-1">
+                          <button
+                            type="button"
+                            disabled={!currentStabEnabled}
+                            onClick={() => updateClipStabilization(selectedClip.id, { detectionMode: 'auto' })}
+                            className={`px-2 py-1.5 rounded text-[10px] font-mono transition-colors border cursor-pointer ${
+                              currentDetectionMode === 'auto'
+                                ? 'bg-[#00F0FF]/20 text-[#00F0FF] border-[#00F0FF]/50 font-bold shadow-xs'
+                                : 'bg-[#14161F] hover:bg-[#1C202B] text-[#8A92A6] hover:text-[#F0F3F8] border-[#222630]'
+                            } disabled:opacity-40 disabled:pointer-events-none`}
+                          >
+                            Auto (Rec.)
+                          </button>
+                          <button
+                            type="button"
+                            disabled={!currentStabEnabled}
+                            onClick={() => updateClipStabilization(selectedClip.id, { detectionMode: 'visualFeatureTracking' })}
+                            className={`px-2 py-1.5 rounded text-[10px] font-mono transition-colors border cursor-pointer ${
+                              currentDetectionMode === 'visualFeatureTracking'
+                                ? 'bg-[#00F0FF]/20 text-[#00F0FF] border-[#00F0FF]/50 font-bold shadow-xs'
+                                : 'bg-[#14161F] hover:bg-[#1C202B] text-[#8A92A6] hover:text-[#F0F3F8] border-[#222630]'
+                            } disabled:opacity-40 disabled:pointer-events-none`}
+                          >
+                            Optical Flow
+                          </button>
+                          <button
+                            type="button"
+                            disabled={!currentStabEnabled || !hasGyroData}
+                            title={hasGyroData ? 'Use embedded IMU gyroscope sensors' : 'No Gyro telemetry found in video metadata'}
+                            onClick={() => updateClipStabilization(selectedClip.id, { detectionMode: 'forceGyro' })}
+                            className={`px-2 py-1.5 rounded text-[10px] font-mono transition-colors border cursor-pointer ${
+                              currentDetectionMode === 'forceGyro'
+                                ? 'bg-[#00F0FF]/20 text-[#00F0FF] border-[#00F0FF]/50 font-bold shadow-xs'
+                                : !hasGyroData
+                                ? 'bg-[#101217] text-[#475569] border-[#1C202B] cursor-not-allowed opacity-50'
+                                : 'bg-[#14161F] hover:bg-[#1C202B] text-[#8A92A6] hover:text-[#F0F3F8] border-[#222630]'
+                            } disabled:opacity-40 disabled:pointer-events-none`}
+                          >
+                            Gyroflow IMU {!hasGyroData && '🚫'}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Status Badges & Motion Analysis Action */}
+                      <div className="space-y-2">
+                        {isClipAnalyzing ? (
+                          <div className="p-2.5 rounded-md bg-[#00F0FF]/10 border border-[#00F0FF]/40 space-y-2">
+                            <div className="flex items-center justify-between text-xs font-semibold text-[#00F0FF]">
+                              <span className="flex items-center gap-1.5">
+                                <Loader2 size={13} className="animate-spin text-[#00F0FF]" />
+                                <span>
+                                  {stabStatus.type === 'probing'
+                                    ? '[ Probing IMU Sensors... ]'
+                                    : `[ Tracking Motion Vectors... ${Math.round(analysisProgress)}% ]`}
+                                </span>
+                              </span>
+                              <span className="font-mono text-[10px]">
+                                {currentDetectionMode === 'forceGyro' || (currentDetectionMode === 'auto' && hasGyroData)
+                                  ? 'Gyroflow'
+                                  : 'KLT Homography'}
+                              </span>
+                            </div>
+                            <div className="w-full h-1.5 bg-[#14161F] rounded-full overflow-hidden border border-[#00F0FF]/30">
+                              <div
+                                className="h-full bg-linear-to-r from-[#00F0FF] to-[#38BDF8] transition-all duration-200"
+                                style={{ width: `${Math.max(5, analysisProgress)}%` }}
+                              />
+                            </div>
+                          </div>
+                        ) : isStabilizationRendering?.[selectedClip.id] ? (
+                          <div className="p-2.5 rounded-md bg-[#00F0FF]/10 border border-[#00F0FF]/40 flex items-center justify-between">
+                            <div className="flex items-center gap-1.5 text-xs font-semibold text-[#00F0FF]">
+                              <Loader2 size={13} className="animate-spin text-[#00F0FF]" />
+                              <span>[ Rendering Stabilized Video... ]</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                useTimelineStore.setState((s) => {
+                                  const nextR = { ...s.isStabilizationRendering };
+                                  delete nextR[selectedClip.id];
+                                  return { isStabilizationRendering: nextR };
+                                });
+                              }}
+                              className="px-2 py-0.5 rounded bg-[#181B24] hover:bg-red-500/20 text-red-400 text-[10px] font-mono border border-red-500/30 transition-colors cursor-pointer"
+                              title="Dismiss render indicator"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : isStabilized ? (
+                          <div className="p-2 rounded-md bg-emerald-950/30 border border-emerald-500/40 flex items-center justify-between">
+                            <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400">
+                              <CheckCircle2 size={14} className="text-emerald-400" />
+                              <span>[ ✓ Stabilized ({currentEngineUsed === 'gyroflow' ? 'Gyroflow IMU' : 'Optical Flow Homography'}) ]</span>
+                            </div>
+                            <button
+                              onClick={() => analyzeClipStabilization(selectedClip.id)}
+                              disabled={!currentStabEnabled}
+                              title="Re-run Motion Tracking"
+                              className="px-2 py-1 rounded bg-[#181B24] hover:bg-[#202532] text-[10px] font-mono text-[#8A92A6] hover:text-[#00F0FF] border border-[#222630] transition-colors cursor-pointer flex items-center gap-1 disabled:opacity-40"
+                            >
+                              <RotateCcw size={10} />
+                              <span>Re-Analyze</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="p-2.5 rounded-md bg-[#14161F] border border-[#222630] space-y-2">
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="font-mono text-[#8A92A6]">[ Not Analyzed ]</span>
+                              {stabStatus.type === 'error' && (
+                                <span className="text-[10px] text-red-400 font-mono">Error: {stabStatus.message || 'Tracking failed'}</span>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => analyzeClipStabilization(selectedClip.id)}
+                              disabled={!currentStabEnabled}
+                              className="w-full py-2 px-3 rounded-md bg-[#00F0FF] hover:bg-[#38BDF8] disabled:bg-[#1A1E27] disabled:text-[#64748B] text-[#0D0E11] text-xs font-bold transition-all shadow-[0_0_12px_rgba(0,240,255,0.25)] hover:shadow-[0_0_16px_rgba(0,240,255,0.45)] cursor-pointer flex items-center justify-center gap-2 select-none"
+                            >
+                              <Sparkles size={14} />
+                              <span>Stabilize Clip</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Post-Analysis Controls (Instant interactive adjustments) */}
+                      <div className="space-y-3 pt-2 border-t border-[#1C202B]">
+                        {/* Smoothness Strength Slider */}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="text-[#8A92A6]">Smoothness Strength</span>
+                            <span className="font-mono text-[#00F0FF] text-[10px]">{currentSmoothness}%</span>
+                          </div>
+                          <input
+                            type="range"
+                            min={1}
+                            max={100}
+                            step={1}
+                            disabled={!currentStabEnabled}
+                            value={currentSmoothness}
+                            onChange={(e) =>
+                              updateClipStabilization(selectedClip.id, {
+                                smoothness: Number(e.target.value) / 100,
+                                smoothing: Math.round(Number(e.target.value) * 0.9),
+                              })
+                            }
+                            className="w-full h-1 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#00F0FF] disabled:opacity-40"
+                          />
+                          <div className="flex justify-between text-[9px] text-[#475569] font-mono">
+                            <span>Subtle (10%)</span>
+                            <span>Smooth (50%)</span>
+                            <span>Locked (100%)</span>
+                          </div>
+                        </div>
+
+                        {/* Framing & Borders */}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="text-[#8A92A6]">Framing & Borders</span>
+                          </div>
+                          <select
+                            disabled={!currentStabEnabled}
+                            value={currentCropPolicy}
+                            onChange={(e) =>
+                              updateClipStabilization(selectedClip.id, {
+                                cropModePolicy: e.target.value as any,
+                                cropMode: e.target.value === 'keepEdgesWithBlurFill' ? 'keep_aspect' : 'auto',
+                              })
+                            }
+                            className="w-full bg-[#14161F] text-[#F0F3F8] border border-[#222630] rounded-md px-2 py-1.5 text-xs font-mono focus:border-[#00F0FF] outline-hidden disabled:opacity-40 cursor-pointer"
+                          >
+                            <option value="dynamicAdaptiveZoom">Dynamic Auto-Zoom (Conceal Edges)</option>
+                            <option value="fixedZoom">Fixed Zoom 110% (Zero Breathing)</option>
+                            <option value="keepEdgesWithBlurFill">Replicate Edge Pixels / Blur Fill</option>
+                          </select>
+                        </div>
+
+                        {/* Maximum Zoom Limit Slider */}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="text-[#8A92A6]">Maximum Zoom Limit</span>
+                            <span className="font-mono text-[#F0F3F8] text-[10px]">{currentMaxCropLimit}%</span>
+                          </div>
+                          <input
+                            type="range"
+                            min={100}
+                            max={150}
+                            step={1}
+                            disabled={!currentStabEnabled}
+                            value={currentMaxCropLimit}
+                            onChange={(e) =>
+                              updateClipStabilization(selectedClip.id, {
+                                maxCropLimit: Number(e.target.value) / 100,
+                              })
+                            }
+                            className="w-full h-1 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#00F0FF] disabled:opacity-40"
+                          />
+                          <div className="flex justify-between text-[9px] text-[#475569] font-mono whitespace-nowrap">
+                            <span>100% (No crop)</span>
+                            <span>125% (Std)</span>
+                            <span>150% (Max)</span>
+                          </div>
+                        </div>
+
+                        {/* Horizon Lock Toggle Switch */}
+                        <div className="flex items-center justify-between text-[11px] pt-1">
+                          <div className="space-y-0.5">
+                            <span className="text-[#F0F3F8] font-medium flex items-center gap-1.5">
+                              <Compass size={12} className={hasGyroData ? 'text-[#00F0FF]' : 'text-[#64748B]'} />
+                              <span>Horizon Lock</span>
+                            </span>
+                            <p className="text-[9.5px] text-[#64748B]">
+                              {hasGyroData ? 'Locks roll tilt with IMU orientation' : 'Requires Gyro IMU telemetry'}
+                            </p>
+                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={currentHorizonLock}
+                              disabled={!currentStabEnabled || !hasGyroData}
+                              onChange={(e) =>
+                                updateClipStabilization(selectedClip.id, {
+                                  horizonLock: e.target.checked,
+                                })
+                              }
+                              className="sr-only peer"
+                            />
+                            <div className="w-8 h-4 bg-[#14161F] peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-[#00F0FF] disabled:opacity-40"></div>
+                          </label>
+                        </div>
+
+                        {/* Rolling Shutter Compensation */}
+                        <div className="space-y-1.5 pt-1">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="text-[#8A92A6]">Rolling Shutter Compensation</span>
+                            <span className="font-mono text-[#00F0FF] text-[10px]">{currentRollingShutter} ms</span>
+                          </div>
+                          <input
+                            type="range"
+                            min={0}
+                            max={40}
+                            step={1}
+                            disabled={!currentStabEnabled}
+                            value={currentRollingShutter}
+                            onChange={(e) =>
+                              updateClipStabilization(selectedClip.id, {
+                                rollingShutterCompensationMs: Number(e.target.value),
+                              })
+                            }
+                            className="w-full h-1 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#00F0FF] disabled:opacity-40"
+                          />
+                          <div className="flex justify-between text-[9px] text-[#475569] font-mono">
+                            <span>0 ms (Off)</span>
+                            <span>15 ms</span>
+                            <span>40 ms</span>
+                          </div>
+                        </div>
+
+                        {/* Stabilization Verification & Diagnostic Suite */}
+                        <div className="pt-2 border-t border-[#1C202B] space-y-2.5">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="font-semibold text-[#F0F3F8] flex items-center gap-1.5">
+                              <Shield size={12} className="text-[#00F0FF]" />
+                              <span>Stabilization Diagnostics</span>
+                            </span>
+                            {clipDiagnostics && (
+                              <span className="text-[9.5px] font-mono text-[#00F0FF] bg-[#00F0FF]/10 px-1.5 py-0.5 rounded border border-[#00F0FF]/30">
+                                {clipDiagnostics.transformsExist ? 'Verified' : 'Unchecked'}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Health Indicator Metrics */}
+                          {clipDiagnostics && clipDiagnostics.transformsExist && (
+                            <div className="p-2.5 rounded-md bg-[#14161F] border border-[#222630] space-y-1.5 text-[10.5px] font-mono">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[#8A92A6]">Avg Correction Shift:</span>
+                                <span className="text-[#00F0FF] font-bold">±{clipDiagnostics.meanDisplacementPixels} px</span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-[#8A92A6]">Max Rotation Corrected:</span>
+                                <span className="text-[#38BDF8] font-bold">{clipDiagnostics.maxRotationDegrees}°</span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-[#8A92A6]">Tracked Feature Points:</span>
+                                <span className="text-[#F0F3F8]">{clipDiagnostics.trackedPointsCount.toLocaleString()}</span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-[#8A92A6]">Frames Tracked:</span>
+                                <span className="text-[#F0F3F8]">{clipDiagnostics.totalFrames}</span>
+                              </div>
+
+                              {clipDiagnostics.isIdentityTransform && (
+                                <div className="mt-2 p-2 rounded bg-amber-500/10 border border-amber-500/40 text-amber-300 flex items-start gap-1.5 text-[10px]">
+                                  <AlertTriangle size={13} className="shrink-0 text-amber-400 mt-0.5" />
+                                  <span>Warning: Low feature tracking confidence. No motion vectors detected.</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Quick Audition Button */}
+                          <button
+                            type="button"
+                            disabled={!currentStabEnabled}
+                            onClick={() => {
+                              const nextMode = currentDebugViewMode === 'showBordersNoCrop' ? 'normal' : 'showBordersNoCrop';
+                              updateClipStabilization(selectedClip.id, { debugViewMode: nextMode });
+                              setSplitStabilizationComparison(false);
+                            }}
+                            className={`w-full py-1.5 px-2.5 rounded text-[10px] font-mono transition-all border cursor-pointer flex items-center justify-center gap-1.5 ${
+                              currentDebugViewMode === 'showBordersNoCrop'
+                                ? 'bg-[#00F0FF] text-[#0D0E11] font-bold border-[#00F0FF] shadow-[0_0_10px_rgba(0,240,255,0.4)]'
+                                : 'bg-[#181B24] hover:bg-[#202532] text-[#8A92A6] hover:text-[#00F0FF] border-[#222630]'
+                            } disabled:opacity-40 disabled:pointer-events-none`}
+                            title="Toggle uncropped 1.0x edge view to see camera shake compensation within black border margins"
+                          >
+                            <Eye size={11} />
+                            <span>Audition Without Auto-Zoom (1.0x Borders)</span>
+                          </button>
+
+                          {/* Diagnostic Inspection Mode Selector */}
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="text-[#8A92A6]">Diagnostic View Mode</span>
+                              <span className="font-mono text-[9.5px] text-[#00F0FF]">
+                                {currentDebugViewMode === 'normal' && 'Normal (Compensated)'}
+                                {currentDebugViewMode === 'splitWipe' && 'Split Wipe (Before vs After)'}
+                                {currentDebugViewMode === 'showBordersNoCrop' && 'Show Borders (No Crop)'}
+                                {currentDebugViewMode === 'differenceBlend' && 'Difference Blend (Motion Heatmap)'}
+                                {currentDebugViewMode === 'ghostOverlay50' && 'Ghost Overlay 50%'}
+                              </span>
+                            </div>
+                            <select
+                              disabled={!currentStabEnabled}
+                              value={currentDebugViewMode}
+                              onChange={(e) => {
+                                const mode = e.target.value as any;
+                                updateClipStabilization(selectedClip.id, {
+                                  debugViewMode: mode,
+                                });
+                                setSplitStabilizationComparison(mode === 'splitWipe');
+                              }}
+                              className="w-full bg-[#14161F] text-[#F0F3F8] border border-[#222630] rounded-md px-2 py-1.5 text-xs font-mono focus:border-[#00F0FF] outline-hidden disabled:opacity-40 cursor-pointer"
+                            >
+                              <option value="normal">Normal (Fully Compensated)</option>
+                              <option value="splitWipe">Split Wipe (Interactive Divider)</option>
+                              <option value="showBordersNoCrop">Show Borders (1.0x No Crop)</option>
+                              <option value="differenceBlend">Difference Blend (Motion Heatmap)</option>
+                              <option value="ghostOverlay50">Ghost Overlay 50% (Double Contour)</option>
+                            </select>
+                          </div>
+
+                          {/* Split Wipe Position Slider when Split Wipe is active */}
+                          {currentDebugViewMode === 'splitWipe' && (
+                            <div className="space-y-1.5 p-2 rounded bg-[#14161F] border border-[#222630]">
+                              <div className="flex items-center justify-between text-[10.5px]">
+                                <span className="text-[#8A92A6]">Split Wipe Position</span>
+                                <span className="font-mono text-[#00F0FF] text-[10px]">{currentSplitWipePos}%</span>
+                              </div>
+                              <input
+                                type="range"
+                                min={5}
+                                max={95}
+                                step={1}
+                                value={currentSplitWipePos}
+                                onChange={(e) =>
+                                  updateClipStabilization(selectedClip.id, {
+                                    splitWipePosition: Number(e.target.value) / 100,
+                                  })
+                                }
+                                className="w-full h-1 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#00F0FF]"
+                              />
+                              <div className="flex justify-between text-[9px] font-mono">
+                                <span className="text-amber-400">RAW [Left]</span>
+                                <span className="text-[#00F0FF]">STABILIZED [Right]</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Re-generate Smoothed Stream */}
+                        <div className="pt-2">
+                          <button
+                            onClick={async () => {
+                              if (!selectedClip) return;
+                              setIsGeneratingPreview(true);
+                              try {
+                                await applyStabilizationPreview(selectedClip.id, true);
+                              } finally {
+                                setIsGeneratingPreview(false);
+                              }
+                            }}
+                            disabled={!currentStabEnabled || !isStabilized || isGeneratingPreview}
+                            className="w-full py-1.5 px-3 rounded bg-[#181B24] hover:bg-[#202532] border border-[#222630] hover:border-[#00F0FF]/50 text-xs font-mono text-[#8A92A6] hover:text-[#00F0FF] transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-30 disabled:pointer-events-none"
+                          >
+                            {isGeneratingPreview ? (
+                              <>
+                                <Loader2 size={12} className="animate-spin text-[#00F0FF]" />
+                                <span>Rendering Preview Stream...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Tv size={12} />
+                                <span>Update Smoothed Preview Stream</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+
+                        {/* Why Dual-Engine Stabilization Info Card */}
+                        <div className="pt-2 border-t border-[#1C202B]">
+                          <details className="group text-[11px] text-[#8A92A6]">
+                            <summary className="cursor-pointer flex items-center justify-between text-[#8A92A6] hover:text-[#00F0FF] transition-colors select-none py-1">
+                              <span className="flex items-center gap-1.5 font-medium">
+                                <HelpCircle size={12} className="text-[#00F0FF]" />
+                                <span>How Dual-Engine Stabilization works</span>
+                              </span>
+                              <ChevronDown size={12} className="group-open:rotate-180 transition-transform" />
+                            </summary>
+                            <div className="mt-2 p-2.5 rounded bg-[#14161F] border border-[#222630] space-y-2 text-[10.5px] leading-relaxed text-[#94A3B8]">
+                              <p>
+                                <strong className="text-[#F0F3F8]">🧭 Gyroflow IMU Pipeline:</strong> If action cam or drone telemetry is detected (GoPro GPMF, Sony RTMD, DJI/Insta360 CAMM), stabilization uses true physical camera angular rate quaternions with zero perspective shear and optional Horizon Lock.
+                              </p>
+                              <p>
+                                <strong className="text-[#F0F3F8]">👁️ Optical Flow RANSAC:</strong> For DSLR, mirrorless, and phone footage, multi-pass KLT corner tracking calculates 8-DOF planar homographies, filtering foreground moving objects to isolate true camera trajectory.
+                              </p>
+                              <p className="text-[#00F0FF] font-medium">
+                                💡 Transform matrices are cached permanently (.mat). Sliders update smoothing, framing, and borders instantly without re-analyzing!
+                              </p>
+                            </div>
+                          </details>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Speed Ramping Section */}

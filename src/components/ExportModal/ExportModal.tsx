@@ -12,10 +12,14 @@ import {
   Film,
   Zap,
   FolderOpen,
+  Link,
+  RotateCw,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useTimelineStore, isTauri, tauriInvoke } from '../../store/timelineStore';
 import { ExportConfig } from '../../types/ipc';
+
+  export type ResolutionOption = '1080p' | '2K' | '2.7K' | '4K' | '720p' | 'custom';
 
 export const ExportModal: React.FC = () => {
   const {
@@ -43,13 +47,41 @@ export const ExportModal: React.FC = () => {
   );
 
   const [outputPath, setOutputPath] = useState<string>('D:\\Programming-Projects\\video-editor\\Master_Render.mp4');
-  const [resolution, setResolution] = useState<'1080p' | '4K' | '720p'>('1080p');
+  const [resolution, setResolution] = useState<ResolutionOption>('1080p');
+  const [customWidth, setCustomWidth] = useState<number>(project.width || 1920);
+  const [customHeight, setCustomHeight] = useState<number>(project.height || 1080);
+  const [lockAspectRatio, setLockAspectRatio] = useState<boolean>(true);
   const [fps, setFps] = useState<number>(30);
   const [codec, setCodec] = useState<'h264_nvenc' | 'h264_qsv' | 'h264_amf' | 'libx264'>('h264_nvenc');
   const [lutPath, setLutPath] = useState<string>('');
   const [denoiseEnabled, setDenoiseEnabled] = useState<boolean>(true);
   const [exportComplete, setExportComplete] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const handleWidthChange = (newWidth: number) => {
+    const validW = Math.max(0, Math.min(8192, newWidth));
+    setCustomWidth(validW);
+    if (lockAspectRatio && customWidth > 0 && customHeight > 0) {
+      const ratio = customWidth / customHeight;
+      const computedHeight = Math.max(16, Math.round(validW / ratio / 2) * 2);
+      setCustomHeight(computedHeight);
+    }
+  };
+
+  const handleHeightChange = (newHeight: number) => {
+    const validH = Math.max(0, Math.min(8192, newHeight));
+    setCustomHeight(validH);
+    if (lockAspectRatio && customWidth > 0 && customHeight > 0) {
+      const ratio = customWidth / customHeight;
+      const computedWidth = Math.max(16, Math.round(validH * ratio / 2) * 2);
+      setCustomWidth(computedWidth);
+    }
+  };
+
+  const handleSwapDimensions = () => {
+    setCustomWidth(customHeight);
+    setCustomHeight(customWidth);
+  };
 
   if (!isExportModalOpen) return null;
 
@@ -124,10 +156,23 @@ export const ExportModal: React.FC = () => {
     if (resolution === '4K') {
       width = 3840;
       height = 2160;
+    } else if (resolution === '2.7K') {
+      width = 2704;
+      height = 1520;
+    } else if (resolution === '2K') {
+      width = 2560;
+      height = 1440;
     } else if (resolution === '720p') {
       width = 1280;
       height = 720;
+    } else if (resolution === 'custom') {
+      width = Math.max(16, Math.min(8192, customWidth || 1920));
+      height = Math.max(16, Math.min(8192, customHeight || 1080));
     }
+
+    // Ensure even pixel dimensions required by YUV420p video codecs
+    if (width % 2 !== 0) width += 1;
+    if (height % 2 !== 0) height += 1;
 
     const config: ExportConfig = {
       outputPath: outputPath.trim() || 'D:\\Programming-Projects\\video-editor\\Master_Render.mp4',
@@ -268,13 +313,35 @@ export const ExportModal: React.FC = () => {
               </label>
               <select
                 value={resolution}
-                onChange={(e) => setResolution(e.target.value as any)}
+                onChange={(e) => {
+                  const val = e.target.value as ResolutionOption;
+                  setResolution(val);
+                  if (val === '4K') {
+                    setCustomWidth(3840);
+                    setCustomHeight(2160);
+                  } else if (val === '2.7K') {
+                    setCustomWidth(2704);
+                    setCustomHeight(1520);
+                  } else if (val === '2K') {
+                    setCustomWidth(2560);
+                    setCustomHeight(1440);
+                  } else if (val === '1080p') {
+                    setCustomWidth(1920);
+                    setCustomHeight(1080);
+                  } else if (val === '720p') {
+                    setCustomWidth(1280);
+                    setCustomHeight(720);
+                  }
+                }}
                 disabled={isExporting}
-                className="bg-[#0D0E11] border border-[#222630] focus:border-[#00F0FF] rounded-lg px-3 py-2 text-xs font-mono text-[#F0F3F8] outline-none"
+                className="bg-[#0D0E11] border border-[#222630] focus:border-[#00F0FF] rounded-lg px-3 py-2 text-xs font-mono text-[#F0F3F8] outline-none cursor-pointer"
               >
                 <option value="1080p">1080p FHD (1920 x 1080)</option>
+                <option value="2K">2K QHD (2560 x 1440)</option>
+                <option value="2.7K">2.7K (2704 x 1520)</option>
                 <option value="4K">4K UHD (3840 x 2160)</option>
                 <option value="720p">720p HD (1280 x 720)</option>
+                <option value="custom">Custom (Width x Height)...</option>
               </select>
             </div>
 
@@ -296,6 +363,109 @@ export const ExportModal: React.FC = () => {
               </select>
             </div>
           </div>
+
+          {/* Custom Resolution Specifications */}
+          {resolution === 'custom' && (
+            <div className="p-3.5 rounded-lg bg-[#0D0E11] border border-[#00F0FF]/30 space-y-2.5 animate-in fade-in duration-150">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-[#F0F3F8] flex items-center gap-1.5">
+                  <Sliders size={13} className="text-[#00F0FF]" />
+                  <span>Custom Resolution (Width × Height)</span>
+                </span>
+                <span className="text-[11px] font-mono text-[#00F0FF]">
+                  {customWidth} × {customHeight} px ({(customWidth / (customHeight || 1)).toFixed(2)}:1)
+                </span>
+              </div>
+
+              {/* Dimensions Input Row with Swap & Lock */}
+              <div className="flex items-center gap-2">
+                <div className="flex-1">
+                  <label className="text-[10px] text-[#8A92A6] block mb-1">Width (px)</label>
+                  <input
+                    type="number"
+                    min={16}
+                    max={8192}
+                    step={2}
+                    value={customWidth}
+                    disabled={isExporting}
+                    onChange={(e) => handleWidthChange(Number(e.target.value))}
+                    className="w-full bg-[#14161B] border border-[#222630] focus:border-[#00F0FF] rounded-md px-2.5 py-1.5 text-xs font-mono text-[#F0F3F8] outline-none"
+                    placeholder="Width"
+                  />
+                </div>
+
+                <div className="flex flex-col items-center justify-end pb-0.5">
+                  <span className="text-[10px] text-[#64748B] mb-1">×</span>
+                  <button
+                    type="button"
+                    onClick={handleSwapDimensions}
+                    disabled={isExporting}
+                    className="p-1.5 rounded bg-[#181B22] hover:bg-[#222630] text-[#8A92A6] hover:text-[#00F0FF] transition-colors cursor-pointer border border-[#2A2E3B]"
+                    title="Swap Width & Height (Landscape ↔ Vertical)"
+                  >
+                    <RotateCw size={12} />
+                  </button>
+                </div>
+
+                <div className="flex-1">
+                  <label className="text-[10px] text-[#8A92A6] block mb-1">Height (px)</label>
+                  <input
+                    type="number"
+                    min={16}
+                    max={8192}
+                    step={2}
+                    value={customHeight}
+                    disabled={isExporting}
+                    onChange={(e) => handleHeightChange(Number(e.target.value))}
+                    className="w-full bg-[#14161B] border border-[#222630] focus:border-[#00F0FF] rounded-md px-2.5 py-1.5 text-xs font-mono text-[#F0F3F8] outline-none"
+                    placeholder="Height"
+                  />
+                </div>
+
+                <div className="flex flex-col items-center justify-end pb-0.5">
+                  <span className="text-[10px] text-[#64748B] mb-1">Lock</span>
+                  <button
+                    type="button"
+                    onClick={() => setLockAspectRatio(!lockAspectRatio)}
+                    disabled={isExporting}
+                    className={`p-1.5 rounded transition-colors cursor-pointer border ${
+                      lockAspectRatio
+                        ? 'bg-[#00F0FF]/15 text-[#00F0FF] border-[#00F0FF]/40'
+                        : 'bg-[#181B22] text-[#64748B] border-[#2A2E3B] hover:text-[#F0F3F8]'
+                    }`}
+                    title={lockAspectRatio ? 'Aspect ratio locked' : 'Aspect ratio unlocked'}
+                  >
+                    <Link size={12} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Quick Aspect Ratio Presets */}
+              <div className="flex items-center gap-1.5 pt-1 overflow-x-auto text-[10px]">
+                <span className="text-[#64748B] shrink-0 font-medium">Quick Presets:</span>
+                {[
+                  { label: '16:9 Landscape', w: 1920, h: 1080 },
+                  { label: '9:16 Vertical (Shorts)', w: 1080, h: 1920 },
+                  { label: '1:1 Square', w: 1080, h: 1080 },
+                  { label: '4:5 Social', w: 1080, h: 1350 },
+                  { label: '21:9 Cinema', w: 2560, h: 1080 },
+                ].map((p) => (
+                  <button
+                    key={p.label}
+                    type="button"
+                    disabled={isExporting}
+                    onClick={() => {
+                      setCustomWidth(p.w);
+                      setCustomHeight(p.h);
+                    }}
+                    className="px-2 py-0.5 rounded bg-[#1A1D24] hover:bg-[#222630] text-[#8A92A6] hover:text-[#00F0FF] border border-[#2A2E3B] transition-colors shrink-0 cursor-pointer"
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Hardware Encoder Selection */}
           <div className="flex flex-col gap-1.5">

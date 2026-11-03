@@ -645,6 +645,13 @@ export const Square: React.FC<IconProps> = ({ size = 24, color = 'currentColor',
   </svg>
 );
 
+export const Restore: React.FC<IconProps> = ({ size = 24, color = 'currentColor', strokeWidth = 2, className, fill = 'none', ...props }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+    <path d="M7 4h13v13h-4" />
+    <rect x="4" y="7" width="13" height="13" rx="1" />
+  </svg>
+);
+
 export const MicOff: React.FC<IconProps> = ({ size = 24, color = 'currentColor', strokeWidth = 2, className, ...props }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
     <line x1="2" y1="2" x2="22" y2="22" />
@@ -705,6 +712,21 @@ export const ShieldCheck: React.FC<IconProps> = ({ size = 24, color = 'currentCo
   </svg>
 );
 
+export const Link: React.FC<IconProps> = ({ size = 24, color = 'currentColor', strokeWidth = 2, className, ...props }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+  </svg>
+);
+
+export const Compass: React.FC<IconProps> = ({ size = 24, color = 'currentColor', strokeWidth = 2, className, ...props }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+    <circle cx="12" cy="12" r="10" />
+    <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" fill="currentColor" opacity="0.3" />
+    <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
+  </svg>
+);
+
 export const Share2: React.FC<IconProps> = ({ size = 24, color = 'currentColor', strokeWidth = 2, className, ...props }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
     <circle cx="18" cy="5" r="3" />
@@ -715,6 +737,9 @@ export const Share2: React.FC<IconProps> = ({ size = 24, color = 'currentColor',
   </svg>
 );
 
+export const Grid3X3: React.FC<IconProps> = Grid;
+export const AlertTriangle: React.FC<IconProps> = AlertCircle;
+
 const allIcons = {
   Play, Pause, SkipBack, SkipForward, ChevronLeft, ChevronRight, ChevronDown, ChevronUp,
   Volume2, VolumeX, Lock, Unlock, Eye, EyeOff, ZoomIn, ZoomOut, RefreshCw,
@@ -724,8 +749,8 @@ const allIcons = {
   Upload, Grid, List, Plus, Trash2, Search, RotateCcw, Check, Scissors, Wand2, Tv, ArrowRight, Gauge, Cpu, Settings, Magnet,
   FilePlus, Save, SaveAll, Keyboard, Command, Info, Undo2, Redo2,
   ArrowLeft, ArrowUp, ArrowDown, MoveRight, Sun, Moon, Palette, Thermometer,
-  Diamond, RotateCw, Move, AlignLeft, AlignCenter, AlignRight, Subtitles, Loader2,
-  Radio, Square, MicOff, Activity, Pipette, BarChart2, ShieldCheck
+  Diamond, RotateCw, Move, AlignLeft, AlignCenter, AlignRight, Subtitles, Loader2, Compass,
+  Radio, Square, MicOff, Activity, Pipette, BarChart2, ShieldCheck, Link
 };
 
 export default allIcons;

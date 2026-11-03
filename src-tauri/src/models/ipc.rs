@@ -83,6 +83,12 @@ pub struct ClipMetadata {
     pub creation_time: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub file_size_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thumbnail_data_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub has_gyro_data: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gyro_format: Option<String>,
 }
 
 /// Individual keyframe point on an animation track
@@ -302,37 +308,280 @@ pub struct LensEffects {
     pub gaussian_blur: f32,   // 0.0 to 50.0
 }
 
-/// Video stabilization and motion smoothing settings
+/// Video stabilization analysis and lifecycle status
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum StabilizationStatus {
+    #[serde(rename = "unanalyzed", alias = "Unanalyzed")]
+    Unanalyzed,
+    #[serde(rename = "probing", alias = "Probing")]
+    Probing,
+    #[serde(rename = "trackingMotion", alias = "analyzing", alias = "Analyzing", alias = "TrackingMotion")]
+    TrackingMotion {
+        #[serde(default)]
+        progress: f32,
+    },
+    #[serde(rename = "ready", alias = "Ready")]
+    Ready,
+    #[serde(rename = "error", alias = "Error")]
+    Error {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        message: Option<String>,
+    },
+}
+
+impl Default for StabilizationStatus {
+    fn default() -> Self {
+        StabilizationStatus::Unanalyzed
+    }
+}
+
+/// Stabilization engine mode selection
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum StabilizationMode {
+    Auto,
+    ForceGyro,
+    VisualFeatureTracking,
+}
+
+impl Default for StabilizationMode {
+    fn default() -> Self {
+        StabilizationMode::Auto
+    }
+}
+
+/// Actual stabilization engine utilized for compensation
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum StabilizationEngine {
+    Gyroflow,
+    PerspectiveHomography,
+    AffineSimilarity,
+}
+
+/// Border and cropping handling policy
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CropModePolicy {
+    DynamicAdaptiveZoom,
+    FixedZoom,
+    KeepEdgesWithBlurFill,
+}
+
+impl Default for CropModePolicy {
+    fn default() -> Self {
+        CropModePolicy::DynamicAdaptiveZoom
+    }
+}
+
+/// Diagnostic inspection modes for stabilization verification
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum StabilizationDebugMode {
+    Normal,
+    ShowBordersNoCrop,
+    SplitWipe,
+    DifferenceBlend,
+    GhostOverlay50,
+}
+
+impl Default for StabilizationDebugMode {
+    fn default() -> Self {
+        StabilizationDebugMode::Normal
+    }
+}
+
+/// Diagnostic validation metrics for verified stabilization data
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct StabilizationSettings {
+pub struct StabilizationDiagnostics {
+    pub clip_id: String,
+    pub transforms_exist: bool,
+    pub mean_displacement_pixels: f32,
+    pub max_rotation_degrees: f32,
+    pub tracked_points_count: usize,
+    pub is_identity_transform: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub engine_used: Option<StabilizationEngine>,
+    pub total_frames: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+}
+
+/// 3x3 Homography Matrix for a single frame
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FrameTransformMatrix {
+    pub frame: u64,
+    pub timestamp_sec: f64,
+    /// 3x3 matrix in row-major order: [h00, h01, h02, h10, h11, h12, h20, h21, h22]
+    pub matrix: [f64; 9],
+    pub zoom: f64,
+}
+
+/// Complete transform matrix cache for a stabilized clip
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ClipTransformCache {
+    pub clip_hash: String,
+    pub fps: f64,
+    pub width: u32,
+    pub height: u32,
+    pub engine: StabilizationEngine,
+    pub smoothness: f32,
+    pub max_crop_limit: f32,
+    pub horizon_lock: bool,
+    pub frames: Vec<FrameTransformMatrix>,
+}
+
+/// Telemetry inspection result
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TelemetryProbeResult {
+    pub has_gyro: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gyro_format: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub manufacturer: Option<String>,
+}
+
+fn default_shakiness() -> u32 { 5 }
+fn default_accuracy() -> u32 { 10 }
+fn default_stepsize() -> u32 { 6 }
+fn default_smoothing() -> u32 { 30 }
+fn default_crop_mode() -> String { "auto".to_string() }
+fn default_smoothing_type() -> String { "gaussian".to_string() }
+fn default_stabilization_mode() -> String { "two_pass".to_string() }
+fn default_smoothness_f32() -> f32 { 0.5 }
+fn default_max_crop_limit() -> f32 { 1.25 }
+fn default_split_wipe_position() -> f32 { 0.5 }
+
+/// Video stabilization and motion smoothing profile (Dual Engine: Gyroflow + RANSAC Homography)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct StabilizationProfile {
     #[serde(default)]
     pub enabled: bool,
-    #[serde(default = "default_stabilization_intensity")]
-    pub intensity: f32, // 0.0 to 1.0 (0% to 100%)
-    #[serde(default = "default_stabilization_smoothness")]
-    pub smoothness: u32, // 1 to 50 frame smoothing window
+    #[serde(default = "default_stabilization_mode")]
+    pub mode: String,
     #[serde(default)]
-    pub tripod_mode: bool, // Lock camera movement completely
+    pub detection_mode: StabilizationMode,
+    #[serde(default)]
+    pub has_gyro_data: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub engine_used: Option<StabilizationEngine>,
+    #[serde(default = "default_smoothness_f32")]
+    pub smoothness: f32,
+    #[serde(default)]
+    pub crop_mode_policy: CropModePolicy,
+    #[serde(default = "default_max_crop_limit")]
+    pub max_crop_limit: f32,
+    #[serde(default)]
+    pub rolling_shutter_compensation_ms: f32,
+    #[serde(default)]
+    pub horizon_lock: bool,
+    #[serde(default)]
+    pub debug_view_mode: StabilizationDebugMode,
+    #[serde(default = "default_split_wipe_position")]
+    pub split_wipe_position: f32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_matrix_path: Option<String>,
+
+    #[serde(default = "default_shakiness")]
+    pub shakiness: u32,
+    #[serde(default = "default_accuracy")]
+    pub accuracy: u32,
+    #[serde(default = "default_stepsize")]
+    pub stepsize: u32,
+    #[serde(default = "default_smoothing")]
+    pub smoothing: u32,
+    #[serde(default = "default_crop_mode")]
+    pub crop_mode: String,
+    #[serde(default)]
+    pub zoom_percent: f32,
+    #[serde(default = "default_smoothing_type")]
+    pub smoothing_type: String,
+    #[serde(default)]
+    pub status: StabilizationStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transforms_file_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub in_point_seconds: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub out_point_seconds: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub force_regenerate: Option<bool>,
+
+    // Backward compatibility fields for legacy deshake
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub intensity: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub smoothness_legacy: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tripod_mode: Option<bool>,
 }
 
-fn default_stabilization_intensity() -> f32 {
-    0.5
-}
-
-fn default_stabilization_smoothness() -> u32 {
-    15
-}
-
-impl Default for StabilizationSettings {
+impl Default for StabilizationProfile {
     fn default() -> Self {
         Self {
             enabled: false,
-            intensity: 0.5,
-            smoothness: 15,
-            tripod_mode: false,
+            mode: "two_pass".to_string(),
+            detection_mode: StabilizationMode::Auto,
+            has_gyro_data: false,
+            engine_used: None,
+            smoothness: 0.5,
+            crop_mode_policy: CropModePolicy::DynamicAdaptiveZoom,
+            max_crop_limit: 1.25,
+            rolling_shutter_compensation_ms: 0.0,
+            horizon_lock: false,
+            debug_view_mode: StabilizationDebugMode::Normal,
+            split_wipe_position: 0.5,
+            cache_matrix_path: None,
+            shakiness: 5,
+            accuracy: 10,
+            stepsize: 6,
+            smoothing: 30,
+            crop_mode: "auto".to_string(),
+            zoom_percent: 0.0,
+            smoothing_type: "gaussian".to_string(),
+            status: StabilizationStatus::Unanalyzed,
+            transforms_file_path: None,
+            file_path: None,
+            in_point_seconds: None,
+            out_point_seconds: None,
+            force_regenerate: None,
+            intensity: Some(0.5),
+            smoothness_legacy: Some(30),
+            tripod_mode: Some(false),
         }
     }
+}
+
+pub type StabilizationSettings = StabilizationProfile;
+
+/// Progress event emitted during two-pass motion vector analysis
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StabilizationProgressEvent {
+    pub clip_id: String,
+    pub percentage: f32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transforms_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_matrix_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub engine_used: Option<StabilizationEngine>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub has_gyro: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
 }
 
 /// Structured caption token block from speech recognition
@@ -454,6 +703,35 @@ pub struct TextTrack {
     pub clips: Vec<TextClip>,
 }
 
+/// Asynchronous waveform computation status
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum WaveformStatus {
+    Pending,
+    Streaming { chunks_ready: usize },
+    Ready,
+    Unavailable,
+}
+
+impl Default for WaveformStatus {
+    fn default() -> Self {
+        WaveformStatus::Pending
+    }
+}
+
+/// Incremental waveform chunk emitted to frontend
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WaveformChunkPayload {
+    pub clip_id: String,
+    pub file_path: String,
+    pub chunk_index: usize,
+    pub total_chunks: usize,
+    pub points_per_sec: usize,
+    pub min_max_pairs: Vec<f32>,
+    pub is_last_chunk: bool,
+}
+
 /// A media clip placed on a timeline track
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -488,6 +766,8 @@ pub struct Clip {
     pub sync_delta_seconds: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub waveform_peaks: Option<Vec<f32>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub waveform_status: Option<WaveformStatus>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<ClipMetadata>,
 
@@ -563,6 +843,8 @@ pub struct Clip {
     // Video Stabilization & Motion Smoothing
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stabilization: Option<StabilizationSettings>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stabilization_profile: Option<StabilizationProfile>,
 
     // Phase 11: Dedicated Filters & 3D LUTs Explorer
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -608,6 +890,7 @@ impl Clip {
             is_synced: Some(false),
             sync_delta_seconds: None,
             waveform_peaks: None,
+            waveform_status: Some(WaveformStatus::Pending),
             metadata: None,
             brightness: None,
             contrast: None,
@@ -639,6 +922,7 @@ impl Clip {
             color_grading: None,
             is_adjustment_layer: None,
             stabilization: None,
+            stabilization_profile: None,
             filter_id: None,
             filter_name: None,
             filter_intensity: None,
@@ -1379,6 +1663,41 @@ pub struct AutosaveConfig {
     pub interval_seconds: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub backup_dir: Option<String>,
+}
+
+/// Media ingestion processing status for background task queue
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum IngestStatus {
+    Pending,
+    Probing,
+    GeneratingThumb,
+    Ready,
+    Failed,
+    Cancelled,
+}
+
+/// Unified media ingestion progress event payload emitted to frontend
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportProgressPayload {
+    pub media_id: String,
+    pub file_path: String,
+    pub total: usize,
+    pub current: usize,
+    pub status: IngestStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<ClipMetadata>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+/// Result of registering a media import batch
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportBatchResult {
+    pub total_queued: usize,
+    pub initial_items: Vec<ImportProgressPayload>,
 }
 
 #[cfg(test)]

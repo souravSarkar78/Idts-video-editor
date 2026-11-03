@@ -31,7 +31,7 @@ import {
   Maximize2,
   HelpCircle,
 } from 'lucide-react';
-import { PanelLeft, PanelRight, Minus, Square, Share2 } from '@/components/Icons';
+import { PanelLeft, PanelRight, Minus, Square, Restore, Share2 } from '@/components/Icons';
 import { useShallow } from 'zustand/react/shallow';
 import { useTimelineStore, isTauri } from '../../store/timelineStore';
 import { useShortcutStore } from '../../store/shortcutStore';
@@ -179,37 +179,77 @@ export const Header: React.FC = () => {
     { id: 'filters', label: 'Filters', icon: Filter },
   ] as const;
 
-  // Native window control actions (Tauri 2.0 window API)
-  const handleMinimize = async () => {
-    if (isTauri) {
+  // Track native window maximized state for dynamic Maximize/Restore icon
+  const [isMaximized, setIsMaximized] = useState(false);
+
+  useEffect(() => {
+    const checkMaximized = async () => {
       try {
-        const { getCurrentWindow } = await import('@tauri-apps/api/window');
-        await getCurrentWindow().minimize();
-      } catch (err) {
-        console.warn('Minimize failed:', err);
+        const { invoke } = await import('@tauri-apps/api/core');
+        const max = await invoke<boolean>('is_window_maximized');
+        setIsMaximized(Boolean(max));
+      } catch {
+        // Fallback for web preview mode
       }
+    };
+    checkMaximized();
+  }, []);
+
+  // Native window control actions (Tauri 2.0 window API + direct IPC fallback)
+  const handleMinimize = async (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    e?.preventDefault();
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('minimize_window');
+      return;
+    } catch {
+      // IPC fallback to window API
+    }
+    try {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
+      await getCurrentWindow().minimize();
+    } catch (err) {
+      console.warn('Minimize failed:', err);
     }
   };
 
-  const handleMaximize = async () => {
-    if (isTauri) {
-      try {
-        const { getCurrentWindow } = await import('@tauri-apps/api/window');
-        await getCurrentWindow().toggleMaximize();
-      } catch (err) {
-        console.warn('Maximize failed:', err);
-      }
+  const handleMaximize = async (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    e?.preventDefault();
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const nextMax = await invoke<boolean>('toggle_maximize_window');
+      setIsMaximized(Boolean(nextMax));
+      return;
+    } catch {
+      // IPC fallback to window API
+    }
+    try {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
+      await getCurrentWindow().toggleMaximize();
+      const max = await getCurrentWindow().isMaximized();
+      setIsMaximized(Boolean(max));
+    } catch (err) {
+      console.warn('Maximize failed:', err);
     }
   };
 
-  const handleClose = async () => {
-    if (isTauri) {
-      try {
-        const { getCurrentWindow } = await import('@tauri-apps/api/window');
-        await getCurrentWindow().close();
-      } catch (err) {
-        console.warn('Close failed:', err);
-      }
+  const handleClose = async (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    e?.preventDefault();
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('close_window');
+      return;
+    } catch {
+      // IPC fallback to window API
+    }
+    try {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
+      await getCurrentWindow().close();
+    } catch (err) {
+      console.warn('Close failed:', err);
     }
   };
 
@@ -234,7 +274,7 @@ export const Header: React.FC = () => {
         className="h-8.5 bg-[#101217] border-b border-[#1E222D] flex items-center justify-between px-2.5 text-xs text-[#E2E8F0]"
       >
         {/* Left: App Logo, Name & CapCut "Menu ⌵" button */}
-        <div className="flex items-center gap-2 shrink-0">
+        <div data-tauri-drag-region="false" className="flex items-center gap-2 shrink-0">
           {/* Logo & App Name */}
           <div className="flex items-center gap-1.5 font-bold tracking-tight mr-1 pointer-events-none">
             <div className="w-4.5 h-4.5 rounded bg-[#00F0FF] flex items-center justify-center text-black font-black shadow-[0_0_8px_rgba(0,240,255,0.4)]">
@@ -247,8 +287,9 @@ export const Header: React.FC = () => {
           </div>
 
           {/* Menu ⌵ Dropdown Pill Button */}
-          <div ref={fileMenuRef} className="relative">
+          <div data-tauri-drag-region="false" ref={fileMenuRef} className="relative">
             <button
+              data-tauri-drag-region="false"
               type="button"
               onClick={() => setIsFileMenuOpen(!isFileMenuOpen)}
               className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#1B1F2A] hover:bg-[#252C3D] border border-white/5 hover:border-[#00F0FF]/40 text-[#CBD5E1] text-[11px] font-medium transition-all cursor-pointer"
@@ -596,9 +637,10 @@ export const Header: React.FC = () => {
         </div>
 
         {/* Center: CapCut Style Project Name (e.g. "1001", Click to Rename) */}
-        <div className="flex items-center justify-center flex-1 mx-4 min-w-0 pointer-events-auto">
+        <div data-tauri-drag-region="false" className="flex items-center justify-center flex-1 mx-4 min-w-0 pointer-events-auto">
           {isEditingName ? (
             <input
+              data-tauri-drag-region="false"
               autoFocus
               type="text"
               value={tempName}
@@ -612,6 +654,7 @@ export const Header: React.FC = () => {
             />
           ) : (
             <div
+              data-tauri-drag-region="false"
               onClick={() => setIsEditingName(true)}
               className="px-2.5 py-0.5 rounded-md hover:bg-[#1C202B] cursor-pointer text-xs font-semibold text-[#D1D5DB] hover:text-white transition-colors truncate flex items-center gap-1.5"
               title="Click to rename project"
@@ -623,10 +666,11 @@ export const Header: React.FC = () => {
         </div>
 
         {/* Right: Layout Toggles, Share, Cyan Export Button & Window Controls (─ ❐ ✕) */}
-        <div className="flex items-center gap-2 shrink-0 pointer-events-auto">
+        <div data-tauri-drag-region="false" className="flex items-center gap-2 shrink-0 pointer-events-auto">
           {/* Workspace Layout Quick Toggles [⊟ ⌵] [🗖] */}
-          <div className="flex items-center bg-[#151922] p-0.5 rounded-md border border-[#222735]">
+          <div data-tauri-drag-region="false" className="flex items-center bg-[#151922] p-0.5 rounded-md border border-[#222735]">
             <button
+              data-tauri-drag-region="false"
               type="button"
               onClick={toggleMediaPoolCollapsed}
               className={`p-1 rounded transition-all cursor-pointer ${
@@ -637,6 +681,7 @@ export const Header: React.FC = () => {
               <PanelLeft size={12} />
             </button>
             <button
+              data-tauri-drag-region="false"
               type="button"
               onClick={toggleInspectorCollapsed}
               className={`p-1 rounded transition-all cursor-pointer ${
@@ -650,6 +695,7 @@ export const Header: React.FC = () => {
 
           {/* Quick Multicam Sync / Share Button */}
           <button
+            data-tauri-drag-region="false"
             type="button"
             onClick={() => executeTauriSync()}
             className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#161922] hover:bg-[#202534] border border-[#262C3C] text-[11px] font-medium text-[#CBD5E1] hover:text-[#00F0FF] transition-all cursor-pointer"
@@ -661,6 +707,7 @@ export const Header: React.FC = () => {
 
           {/* CapCut Prominent Cyan "Export" Button */}
           <button
+            data-tauri-drag-region="false"
             type="button"
             onClick={() => setExportModalOpen(true)}
             className="flex items-center gap-1.5 px-3.5 py-1 bg-[#00F0FF] hover:bg-[#38BDF8] text-[#0D0E11] rounded-md text-xs font-extrabold transition-all shadow-[0_0_12px_rgba(0,240,255,0.4)] cursor-pointer"
@@ -674,8 +721,9 @@ export const Header: React.FC = () => {
           <div className="w-[1px] h-3.5 bg-[#2B303C] mx-0.5" />
 
           {/* Window Control Buttons: Minimize (─), Maximize (❐), Close (✕) */}
-          <div className="flex items-center">
+          <div data-tauri-drag-region="false" className="flex items-center">
             <button
+              data-tauri-drag-region="false"
               type="button"
               onClick={handleMinimize}
               className="w-7 h-7 flex items-center justify-center rounded text-[#8E9CAE] hover:text-white hover:bg-[#1E232E] transition-colors cursor-pointer"
@@ -685,15 +733,17 @@ export const Header: React.FC = () => {
             </button>
 
             <button
+              data-tauri-drag-region="false"
               type="button"
               onClick={handleMaximize}
               className="w-7 h-7 flex items-center justify-center rounded text-[#8E9CAE] hover:text-white hover:bg-[#1E232E] transition-colors cursor-pointer"
-              title="Maximize / Restore"
+              title={isMaximized ? "Restore" : "Maximize"}
             >
-              <Square size={11} />
+              {isMaximized ? <Restore size={11} /> : <Square size={11} />}
             </button>
 
             <button
+              data-tauri-drag-region="false"
               type="button"
               onClick={handleClose}
               className="w-7 h-7 flex items-center justify-center rounded text-[#8E9CAE] hover:text-white hover:bg-[#EF4444] transition-colors cursor-pointer"

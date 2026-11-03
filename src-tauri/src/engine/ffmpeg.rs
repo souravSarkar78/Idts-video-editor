@@ -434,6 +434,7 @@ pub fn find_ffmpeg_executable() -> Option<PathBuf> {
         PathBuf::from("binaries/ffmpeg-x86_64-pc-windows-msvc.exe"),
         PathBuf::from("ffmpeg-x86_64-pc-windows-msvc.exe"),
         PathBuf::from("ffmpeg.exe"),
+        PathBuf::from("src-tauri/binaries/ffmpeg/ffmpeg-9.0.2-essentials_build/bin/ffmpeg.exe"),
     ];
 
     for path in &candidate_paths {
@@ -449,6 +450,10 @@ pub fn find_ffmpeg_executable() -> Option<PathBuf> {
                 exe_dir.join("binaries").join("ffmpeg-x86_64-pc-windows-msvc.exe"),
                 exe_dir.join("ffmpeg-x86_64-pc-windows-msvc.exe"),
                 exe_dir.join("../src-tauri/binaries/ffmpeg-x86_64-pc-windows-msvc.exe"),
+                exe_dir.join("../../src-tauri/binaries/ffmpeg-x86_64-pc-windows-msvc.exe"),
+                exe_dir.join("../../../src-tauri/binaries/ffmpeg-x86_64-pc-windows-msvc.exe"),
+                exe_dir.join("../../binaries/ffmpeg-x86_64-pc-windows-msvc.exe"),
+                exe_dir.join("../binaries/ffmpeg-x86_64-pc-windows-msvc.exe"),
             ];
             for path in &relative_candidates {
                 if path.exists() {
@@ -458,7 +463,14 @@ pub fn find_ffmpeg_executable() -> Option<PathBuf> {
         }
     }
 
-    Some(PathBuf::from("ffmpeg"))
+    // Try testing if system ffmpeg exists on PATH
+    if let Ok(output) = std::process::Command::new("ffmpeg").arg("-version").output() {
+        if output.status.success() {
+            return Some(PathBuf::from("ffmpeg"));
+        }
+    }
+
+    None
 }
 
 #[derive(Debug, Clone)]
@@ -601,7 +613,21 @@ pub fn execute_export<R: Runtime>(
                 keyframe_tracks: clip.keyframe_tracks.clone(),
                 speed_profile: clip.speed_profile.clone(),
                 lens_effects: clip.lens_effects.clone(),
-                stabilization: clip.stabilization.clone(),
+                stabilization: {
+                    let mut s = clip.stabilization_profile.clone().or_else(|| clip.stabilization.clone());
+                    if let Some(ref mut prof) = s {
+                        if prof.file_path.is_none() {
+                            prof.file_path = Some(clip.file_path.clone());
+                        }
+                        if prof.in_point_seconds.is_none() {
+                            prof.in_point_seconds = Some(in_point_sec);
+                        }
+                        if prof.out_point_seconds.is_none() {
+                            prof.out_point_seconds = Some(in_point_sec + duration_sec);
+                        }
+                    }
+                    s
+                },
                 color_grading: clip.color_grading.clone(),
                 track_grading: track.track_grading.clone(),
                 is_adjustment_layer: is_adj,
@@ -761,7 +787,7 @@ fn run_ffmpeg_export_process<R: Runtime>(
         let lens_v = build_lens_effects_filter_chain(clip.lens_effects.as_ref());
         v_filters.extend(lens_v);
 
-        // 2b. Video Stabilization (deshake)
+        // 2b. Video Stabilization (Two-Pass VidStab / Deshake)
         let stab_v = build_stabilization_filter_chain(clip.stabilization.as_ref());
         v_filters.extend(stab_v);
 

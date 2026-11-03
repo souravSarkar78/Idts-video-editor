@@ -9,7 +9,6 @@ pub mod sync;
 use std::path::Path;
 use engine::audio::get_waveform_data;
 use engine::ffmpeg::execute_export;
-use engine::metadata::probe_media_file;
 use models::ipc::{ClipMetadata, ExportConfig, SyncPreset, SyncRequest, SyncResult, TrackSyncOffset};
 use models::project::ProjectData;
 use models::settings::AppPreferences;
@@ -239,23 +238,69 @@ fn get_filter_presets(category: Option<String>) -> Result<Vec<crate::models::fil
     }
 }
 
-/// Probes metadata for a list of file paths using ffprobe sidecar
+/// Probes metadata and extracts fast poster thumbnails for a list of file paths in parallel (throttled to 2 concurrent tasks)
 #[tauri::command]
 fn get_clip_metadata(paths: Vec<String>) -> Vec<ClipMetadata> {
-    paths
-        .into_iter()
-        .map(|path| match probe_media_file(&path) {
-            Ok(meta) => meta,
-            Err(_) => ClipMetadata {
-                duration_seconds: 10.0,
-                width: Some(1920),
-                height: Some(1080),
-                framerate: Some(30.0),
-                codec: Some("h264".to_string()),
-                ..Default::default()
-            },
-        })
-        .collect()
+    if paths.is_empty() {
+        return Vec::new();
+    }
+
+    let mut results = Vec::with_capacity(paths.len());
+    // Process in batches of 2 to avoid memory and CPU thread contention
+    for chunk in paths.chunks(2) {
+        let chunk_vec: Vec<String> = chunk.to_vec();
+        let chunk_res: Vec<ClipMetadata> = std::thread::scope(|s| {
+            let mut handles = Vec::with_capacity(chunk_vec.len());
+            for path in chunk_vec {
+                handles.push(s.spawn(move || {
+                    let mut meta = match engine::probe::probe_clip_lightweight(&path) {
+                        Ok(m) => m,
+                        Err(_) => ClipMetadata {
+                            duration_seconds: 10.0,
+                            width: Some(1920),
+                            height: Some(1080),
+                            framerate: Some(30.0),
+                            codec: Some("h264".to_string()),
+                            ..Default::default()
+                        },
+                    };
+
+                    let path_lower = path.to_lowercase();
+                    let is_audio = path_lower.ends_with(".wav")
+                        || path_lower.ends_with(".mp3")
+                        || path_lower.ends_with(".aac")
+                        || path_lower.ends_with(".flac")
+                        || path_lower.ends_with(".m4a")
+                        || path_lower.ends_with(".ogg");
+
+                    if !is_audio {
+                        if let Ok(thumb_path) = engine::thumbnail::extract_clip_thumbnail_file(&path) {
+                            meta.thumbnail_data_url = Some(thumb_path);
+                        }
+                    }
+
+                    meta
+                }));
+            }
+            handles.into_iter().map(|h| h.join().unwrap_or_default()).collect()
+        });
+        results.extend(chunk_res);
+    }
+
+    results
+}
+
+/// Enqueues a batch of media file paths for throttled serialized background ingestion
+#[tauri::command]
+fn import_media_batch(app_handle: tauri::AppHandle, file_paths: Vec<String>) -> Result<models::ipc::ImportBatchResult, String> {
+    Ok(engine::ingest_queue::enqueue_import_batch(app_handle, file_paths))
+}
+
+/// Cancels remaining pending items in the media ingestion queue
+#[tauri::command]
+fn cancel_media_import() -> Result<bool, String> {
+    engine::ingest_queue::cancel_ingest_queue();
+    Ok(true)
 }
 
 /// Computes multi-track relative timeline synchronization offsets anchored at 00:00:00.000
@@ -525,6 +570,44 @@ fn check_clip_proxy(path: String, resolution: Option<String>) -> Option<String> 
     None
 }
 
+/// Pass 1: Motion Vector Analysis via sidecar FFmpeg vidstabdetect
+#[tauri::command]
+async fn analyze_clip_stabilization(
+    app: tauri::AppHandle,
+    clip_id: String,
+    file_path: Option<String>,
+    settings: Option<models::ipc::StabilizationSettings>,
+) -> Result<String, String> {
+    engine::stabilize::run_analyze_stabilization(app, clip_id, file_path, settings).await
+}
+
+/// Pass 2: Generates motion-smoothed preview stream via sidecar FFmpeg vidstabtransform
+#[tauri::command]
+async fn apply_stabilization_preview(
+    clip_id: String,
+    file_path: Option<String>,
+    settings: Option<models::ipc::StabilizationSettings>,
+) -> Result<String, String> {
+    engine::stabilize::run_apply_stabilization_preview(clip_id, file_path, settings).await
+}
+
+/// Validates stabilization cache data (.trf or .mat) and returns diagnostic metrics
+#[tauri::command]
+fn validate_stabilization_data(
+    clip_id: String,
+    file_path: Option<String>,
+    in_point: Option<f64>,
+    out_point: Option<f64>,
+) -> Result<models::ipc::StabilizationDiagnostics, String> {
+    engine::stabilize::validate_stabilization_data(&clip_id, file_path.as_deref(), in_point, out_point)
+}
+
+/// Probes a media file container for embedded action cam/drone IMU telemetry (GoPro, Sony, DJI, Insta360)
+#[tauri::command]
+fn probe_clip_telemetry(file_path: String) -> Result<models::ipc::TelemetryProbeResult, String> {
+    Ok(engine::stabilize::probe_clip_telemetry(&file_path))
+}
+
 /// Detects audio silence intervals in a media file using FFmpeg silencedetect
 #[tauri::command]
 fn detect_track_silence(
@@ -671,6 +754,84 @@ fn read_audio_file(path: String) -> Result<Vec<u8>, String> {
     std::fs::read(&path).map_err(|e| format!("Failed to read file '{}': {}", path, e))
 }
 
+/// Native window control: Minimize window to taskbar
+#[tauri::command]
+fn minimize_window(window: tauri::Window) -> Result<(), String> {
+    window.minimize().map_err(|e| e.to_string())
+}
+
+/// Native window control: Toggle maximize / restore
+#[tauri::command]
+fn toggle_maximize_window(window: tauri::Window) -> Result<bool, String> {
+    let is_max = window.is_maximized().unwrap_or(false);
+    if is_max {
+        window.unmaximize().map_err(|e| e.to_string())?;
+        Ok(false)
+    } else {
+        window.maximize().map_err(|e| e.to_string())?;
+        Ok(true)
+    }
+}
+
+/// Native window control: Query whether window is maximized
+#[tauri::command]
+fn is_window_maximized(window: tauri::Window) -> Result<bool, String> {
+    window.is_maximized().map_err(|e| e.to_string())
+}
+
+/// Native window control: Clean shutdown and close window
+#[tauri::command]
+fn close_window(window: tauri::Window) -> Result<(), String> {
+    crate::engine::recovery::mark_session_clean_exit();
+    crate::engine::process_manager::kill_all_active_processes();
+    window.close().map_err(|e| e.to_string())
+}
+
+/// Zero-cost non-blocking timeline clip placement with fire-and-forget background waveform kickoff
+#[tauri::command]
+fn add_clip_to_timeline(
+    app: tauri::AppHandle,
+    mut track: models::ipc::MediaTrack,
+    mut new_clip: models::ipc::Clip,
+) -> Result<models::ipc::MediaTrack, String> {
+    new_clip.waveform_status = Some(models::ipc::WaveformStatus::Pending);
+
+    // Fire-and-forget background waveform streaming
+    let clip_id = new_clip.id.clone();
+    let file_path = new_clip.file_path.clone();
+    crate::engine::waveform::start_background_waveform_stream(app, clip_id, file_path, 25);
+
+    // Instant in-memory track mutation
+    track.clips.push(new_clip);
+    if !track.clips.is_empty() {
+        let min_offset = track
+            .clips
+            .iter()
+            .map(|c| c.start_position_seconds.unwrap_or(0.0))
+            .fold(f64::INFINITY, f64::min);
+        track.time_offset_seconds = if min_offset.is_infinite() { Some(0.0) } else { Some(min_offset) };
+    }
+
+    Ok(track)
+}
+
+/// Initiates asynchronous background waveform streaming for an inserted or existing clip
+#[tauri::command]
+fn start_background_waveform(
+    app: tauri::AppHandle,
+    clip_id: String,
+    file_path: String,
+    points_per_sec: Option<usize>,
+) -> Result<(), String> {
+    crate::engine::waveform::start_background_waveform_stream(
+        app,
+        clip_id,
+        file_path,
+        points_per_sec.unwrap_or(25),
+    );
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg(target_os = "windows")]
@@ -738,6 +899,8 @@ pub fn run() {
             open_folder_dialog,
             save_file_dialog,
             open_lut_dialog,
+            import_media_batch,
+            cancel_media_import,
             get_waveform_data,
             sync_by_audio,
             get_clip_metadata,
@@ -763,6 +926,10 @@ pub fn run() {
             cancel_clip_proxy,
             delete_clip_proxy,
             check_clip_proxy,
+            analyze_clip_stabilization,
+            apply_stabilization_preview,
+            validate_stabilization_data,
+            probe_clip_telemetry,
             detect_track_silence,
             detect_track_silence_intervals,
             capture_noise_profile,
@@ -777,7 +944,13 @@ pub fn run() {
             read_audio_file,
             capture_preview_frame,
             get_filter_catalog,
-            get_filter_presets
+            get_filter_presets,
+            minimize_window,
+            toggle_maximize_window,
+            is_window_maximized,
+            close_window,
+            add_clip_to_timeline,
+            start_background_waveform
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -16,6 +16,29 @@ interface MediaThumbnailProps {
   durationSeconds: number;
   name: string;
   className?: string;
+  thumbnailUrl?: string;
+}
+
+function resolveThumbnailSrc(raw: string | null): string | null {
+  if (!raw) return null;
+  if (
+    raw.startsWith('data:') ||
+    raw.startsWith('http:') ||
+    raw.startsWith('https:') ||
+    raw.startsWith('blob:') ||
+    raw.startsWith('asset:')
+  ) {
+    return raw;
+  }
+  if (typeof window !== 'undefined') {
+    try {
+      const internals = (window as any).__TAURI_INTERNALS__;
+      if (internals?.convertFileSrc) {
+        return internals.convertFileSrc(raw, 'asset');
+      }
+    } catch {}
+  }
+  return raw;
 }
 
 export const MediaThumbnail: React.FC<MediaThumbnailProps> = ({
@@ -24,11 +47,14 @@ export const MediaThumbnail: React.FC<MediaThumbnailProps> = ({
   durationSeconds,
   name,
   className = '',
+  thumbnailUrl,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
-  const [posterUrl, setPosterUrl] = useState<string | null>(filePosterCache.get(filePath) || null);
+  const [posterUrl, setPosterUrl] = useState<string | null>(
+    thumbnailUrl || filePosterCache.get(filePath) || null
+  );
   const [isHovering, setIsHovering] = useState(false);
   const [hoverRatio, setHoverRatio] = useState<number | null>(null);
   const [hoverTime, setHoverTime] = useState<number>(0);
@@ -36,10 +62,25 @@ export const MediaThumbnail: React.FC<MediaThumbnailProps> = ({
   const [isVideoReady, setIsVideoReady] = useState(false);
   const lastSeekTimeRef = useRef<number>(0);
 
-  // Resolve convertFileSrc asset URL for Tauri
+  // Sync incoming thumbnailUrl with local state and shared cache
+  useEffect(() => {
+    if (thumbnailUrl) {
+      setPosterUrl(thumbnailUrl);
+      filePosterCache.set(filePath, thumbnailUrl);
+    } else {
+      const cached = filePosterCache.get(filePath);
+      if (cached) setPosterUrl(cached);
+    }
+  }, [thumbnailUrl, filePath]);
+
+  // Resolve convertFileSrc asset URL ONLY when user hovers (never keep 20 video decoders open in background!)
   useEffect(() => {
     let isCancelled = false;
-    if (mediaType !== 'video' || !filePath) return;
+    if (!isHovering || mediaType !== 'video' || !filePath) {
+      setVideoSrc(null);
+      setIsVideoReady(false);
+      return;
+    }
 
     if (isTauri) {
       import('@tauri-apps/api/core')
@@ -58,32 +99,22 @@ export const MediaThumbnail: React.FC<MediaThumbnailProps> = ({
     return () => {
       isCancelled = true;
     };
-  }, [filePath, mediaType]);
+  }, [isHovering, filePath, mediaType]);
 
-  // Capture default poster thumbnail once video metadata is available
-  const handleLoadedData = useCallback(() => {
-    setIsVideoReady(true);
-    if (!videoRef.current) return;
-
-    const existing = filePosterCache.get(filePath);
-    if (existing) {
-      setPosterUrl(existing);
-      return;
-    }
-
-    try {
-      const v = videoRef.current;
-      if (v.videoWidth > 0) {
-        const dataUrl = captureVideoFrame(v, 160, 90);
-        if (dataUrl) {
-          setCachedFrame(filePath, 0.1, dataUrl);
-          setPosterUrl(dataUrl);
-        }
+  // Revoke blob URLs when unmounted or changed
+  useEffect(() => {
+    return () => {
+      if (hoverFrameUrl && hoverFrameUrl.startsWith('blob:')) {
+        try {
+          URL.revokeObjectURL(hoverFrameUrl);
+        } catch {}
       }
-    } catch {
-      // Ignored if canvas security policy blocks dataUrl
-    }
-  }, [filePath]);
+    };
+  }, [hoverFrameUrl]);
+
+  const resolvedPosterSrc = resolveThumbnailSrc(posterUrl);
+  const resolvedFrameSrc = resolveThumbnailSrc(hoverFrameUrl);
+  const displayImageSrc = resolvedFrameSrc || resolvedPosterSrc;
 
   // Horizontal Hover Scrubbing with Cached Frame Reuse
   const handleMouseMove = useCallback(
@@ -128,11 +159,8 @@ export const MediaThumbnail: React.FC<MediaThumbnailProps> = ({
     setIsHovering(false);
     setHoverRatio(null);
     setHoverFrameUrl(null);
-    if (videoRef.current) {
-      try {
-        videoRef.current.currentTime = Math.min(1.0, durationSeconds * 0.1);
-      } catch {}
-    }
+    setVideoSrc(null);
+    setIsVideoReady(false);
   };
 
   if (mediaType === 'audio') {
@@ -152,16 +180,16 @@ export const MediaThumbnail: React.FC<MediaThumbnailProps> = ({
       onMouseLeave={handleMouseLeave}
       className={`relative w-full h-full bg-[#0D0E12] overflow-hidden select-none cursor-pointer group ${className}`}
     >
-      {/* Background Video Element for decoding and live rendering uncached frames */}
-      {videoSrc && (
+      {/* Background Video Element: Mounted ONLY while hovering for live scrubbing */}
+      {isHovering && videoSrc && (
         <video
           ref={videoRef}
           src={videoSrc}
           crossOrigin="anonymous"
-          preload="auto"
+          preload="metadata"
           muted
           playsInline
-          onLoadedData={handleLoadedData}
+          onLoadedMetadata={() => setIsVideoReady(true)}
           onSeeked={() => {
             if (videoRef.current) {
               const dataUrl = captureVideoFrame(videoRef.current, 160, 90);
@@ -174,15 +202,15 @@ export const MediaThumbnail: React.FC<MediaThumbnailProps> = ({
             }
           }}
           className={`absolute inset-0 w-full h-full object-cover pointer-events-none ${
-            isHovering && !hoverFrameUrl ? 'opacity-100 z-20' : 'opacity-0 z-0'
+            !hoverFrameUrl ? 'opacity-100 z-20' : 'opacity-0 z-0'
           }`}
         />
       )}
 
       {/* Render Cached Frame (Zero CPU/GPU decoder utilization) or Static Poster */}
-      {(hoverFrameUrl || posterUrl) && (
+      {displayImageSrc && (
         <img
-          src={hoverFrameUrl || posterUrl!}
+          src={displayImageSrc}
           alt={name}
           draggable={false}
           className={`absolute inset-0 w-full h-full object-cover pointer-events-none select-none ${

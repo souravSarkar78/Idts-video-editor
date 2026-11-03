@@ -31,6 +31,9 @@ export const App: React.FC = () => {
     toggleSnapping,
     toggleRippleMode,
     initProxyEventListener,
+    initStabilizationEventListener,
+    initIngestEventListener,
+    initWaveformEventListener,
     undo,
     redo,
     saveProject,
@@ -69,6 +72,9 @@ export const App: React.FC = () => {
       toggleSnapping: state.toggleSnapping,
       toggleRippleMode: state.toggleRippleMode,
       initProxyEventListener: state.initProxyEventListener,
+      initStabilizationEventListener: state.initStabilizationEventListener,
+      initIngestEventListener: state.initIngestEventListener,
+      initWaveformEventListener: state.initWaveformEventListener,
       undo: state.undo,
       redo: state.redo,
       saveProject: state.saveProject,
@@ -174,6 +180,9 @@ export const App: React.FC = () => {
   useEffect(() => {
     loadPreferences();
     initProxyEventListener();
+    initStabilizationEventListener();
+    initIngestEventListener();
+    initWaveformEventListener();
     checkCrashRecovery();
     const cleanupAutosave = initAutoSaveWorker();
     updateAppTitle(project.name || 'Untitled Project', isDirty, currentProjectPath);

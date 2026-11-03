@@ -19,6 +19,44 @@ export interface ClipMetadata {
   codec?: string;
   creationTime?: string;
   fileSizeBytes?: number;
+  thumbnailDataUrl?: string;
+  hasGyroData?: boolean;
+  gyroFormat?: string;
+  isPendingIngest?: boolean;
+  ingestStatus?: IngestStatus;
+}
+
+export type IngestStatus = 'pending' | 'probing' | 'generatingThumb' | 'ready' | 'failed' | 'cancelled';
+
+export interface ImportProgressPayload {
+  mediaId: string;
+  filePath: string;
+  total: number;
+  current: number;
+  status: IngestStatus;
+  metadata?: ClipMetadata;
+  error?: string;
+}
+
+export interface ImportBatchResult {
+  totalQueued: number;
+  initialItems: ImportProgressPayload[];
+}
+
+export type WaveformStatus =
+  | { type: 'pending' }
+  | { type: 'streaming'; chunksReady: number }
+  | { type: 'ready' }
+  | { type: 'unavailable' };
+
+export interface WaveformChunkPayload {
+  clipId: string;
+  filePath: string;
+  chunkIndex: number;
+  totalChunks: number;
+  pointsPerSec: number;
+  minMaxPairs: number[];
+  isLastChunk: boolean;
 }
 
 export interface Clip {
@@ -42,6 +80,7 @@ export interface Clip {
   isSynced?: boolean;
   syncDeltaSeconds?: number;
   waveformPeaks?: number[];
+  waveformStatus?: WaveformStatus;
   metadata?: ClipMetadata;
 
   // Color & Audio Inspector properties (Milestone 4 & Phase 7)
@@ -80,13 +119,15 @@ export interface Clip {
   trebleGain?: number; // -15.0 to +15.0 dB (8kHz)
   volumeKeyframes?: VolumeKeyframePoint[];
   audioProcessing?: AudioProcessingSettings;
+  hasGyroData?: boolean;
 
   // Phase 7: Hierarchical Color Grading & Adjustment Layers
   colorGrading?: ColorGradingProfile;
   isAdjustmentLayer?: boolean;
 
   // Video Stabilization & Motion Smoothing
-  stabilization?: StabilizationSettings;
+  stabilization?: StabilizationProfile;
+  stabilizationProfile?: StabilizationProfile;
 
   // Phase 11: Dedicated Filters & 3D LUTs Explorer
   filterId?: string;
@@ -208,11 +249,107 @@ export interface LensEffects {
   gaussianBlur: number; // 0.0 to 50.0
 }
 
-export interface StabilizationSettings {
+export type StabilizationStatus =
+  | { type: 'unanalyzed' }
+  | { type: 'probing' }
+  | { type: 'trackingMotion'; progress: number }
+  | { type: 'analyzing'; progress: number }
+  | { type: 'ready' }
+  | { type: 'error'; message?: string };
+
+export type StabilizationMode = 'auto' | 'forceGyro' | 'visualFeatureTracking';
+export type StabilizationEngine = 'gyroflow' | 'perspectiveHomography' | 'affineSimilarity';
+export type CropModePolicy = 'dynamicAdaptiveZoom' | 'fixedZoom' | 'keepEdgesWithBlurFill';
+export type StabilizationDebugMode =
+  | 'normal'
+  | 'showBordersNoCrop'
+  | 'splitWipe'
+  | 'differenceBlend'
+  | 'ghostOverlay50';
+
+export interface StabilizationDiagnostics {
+  clipId: string;
+  transformsExist: boolean;
+  meanDisplacementPixels: number;
+  maxRotationDegrees: number;
+  trackedPointsCount: number;
+  isIdentityTransform: boolean;
+  engineUsed?: StabilizationEngine;
+  totalFrames: number;
+  cachePath?: string;
+  message?: string;
+}
+
+export interface FrameTransformMatrix {
+  frame: number;
+  timestampSec: number;
+  matrix: number[]; // 9 elements: [h00, h01, h02, h10, h11, h12, h20, h21, h22]
+  zoom: number;
+}
+
+export interface ClipTransformCache {
+  clipHash: string;
+  fps: number;
+  width: number;
+  height: number;
+  engine: StabilizationEngine;
+  smoothness: number;
+  maxCropLimit: number;
+  horizonLock: boolean;
+  frames: FrameTransformMatrix[];
+}
+
+export interface TelemetryProbeResult {
+  hasGyro: boolean;
+  gyroFormat?: string;
+  manufacturer?: string;
+}
+
+export interface StabilizationProfile {
   enabled: boolean;
-  intensity: number; // 0.0 to 1.0
-  smoothness?: number; // 1 to 50, default 15
+  mode?: 'realtime' | 'two_pass' | string;
+  detectionMode?: StabilizationMode;
+  hasGyroData?: boolean;
+  engineUsed?: StabilizationEngine;
+  smoothness?: number; // 0.0 to 1.0 (default 0.5)
+  cropModePolicy?: CropModePolicy;
+  maxCropLimit?: number; // 1.0 to 1.5 (default 1.25)
+  rollingShutterCompensationMs?: number;
+  horizonLock?: boolean;
+  debugViewMode?: StabilizationDebugMode;
+  splitWipePosition?: number;
+  cacheMatrixPath?: string;
+
+  shakiness: number; // 1 to 10 (default 5)
+  accuracy: number; // 1 to 15 (default 10)
+  stepsize: number; // 1 to 32 (default 6)
+  smoothing: number; // 1 to 100 (default 30)
+  cropMode: 'auto' | 'keep_aspect' | 'black_borders' | string;
+  zoomPercent: number; // 0.0 to 20.0
+  smoothingType: 'linear' | 'gaussian' | string;
+  status: StabilizationStatus;
+  transformsFilePath?: string;
+  filePath?: string;
+  inPointSeconds?: number;
+  outPointSeconds?: number;
+  forceRegenerate?: boolean;
+  // Legacy backward-compatibility fields
+  intensity?: number;
+  smoothnessLegacy?: number;
   tripodMode?: boolean;
+}
+
+export type StabilizationSettings = StabilizationProfile;
+
+export interface StabilizationProgressEvent {
+  clipId: string;
+  percentage: number;
+  status?: string;
+  transformsPath?: string;
+  cacheMatrixPath?: string;
+  engineUsed?: StabilizationEngine;
+  hasGyro?: boolean;
+  error?: string;
 }
 
 export interface ColorCorrection {
@@ -388,6 +525,10 @@ export interface MediaAsset {
   creationTime?: string;
   proxyPath?: string;
   hasProxy?: boolean;
+  hasGyroData?: boolean;
+  gyroFormat?: string;
+  isPendingIngest?: boolean;
+  ingestStatus?: IngestStatus;
 }
 
 export interface TimelineProject {

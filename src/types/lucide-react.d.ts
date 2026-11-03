@@ -61,6 +61,7 @@ declare module 'lucide-react' {
   export const Link: LucideIcon;
   export const Magnet: LucideIcon;
   export const RotateCcw: LucideIcon;
+  export const RotateCw: LucideIcon;
   export const Undo2: LucideIcon;
   export const Redo2: LucideIcon;
   export const Music: LucideIcon;
@@ -95,6 +96,8 @@ declare module 'lucide-react' {
   export const Activity: LucideIcon;
   export const ShieldCheck: LucideIcon;
   export const ChevronUp: LucideIcon;
+  export const Compass: LucideIcon;
+  export const Loader2: LucideIcon;
 
   const icons: { [key: string]: LucideIcon };
   export default icons;

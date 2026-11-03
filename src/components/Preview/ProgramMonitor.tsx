@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   Play,
   Pause,
@@ -16,16 +16,19 @@ import {
   Zap,
   Move,
   Split,
+  Compass,
+  Loader2,
 } from 'lucide-react';
-import { RotateCw, Activity, Shield } from '@/components/Icons';
+import { RotateCw, Activity, Shield, Grid3X3 } from '@/components/Icons';
 import { useShallow } from 'zustand/react/shallow';
 import { useTimelineStore, isTauri, getInterpolatedClipTransform } from '../../store/timelineStore';
 import { formatTimecode } from '../../utils/timecode';
-import { Clip, ColorGradingProfile } from '../../types/ipc';
+import { Clip, ColorGradingProfile, StabilizationDebugMode } from '../../types/ipc';
 import { getActiveAudioClock } from '../Audio/TimelineAudioPlayer';
 import { getInterpolatedVolumeDb, getSharedAudioContext } from '../../utils/audioMastering';
 import { VideoScopes } from './VideoScopes';
 import { compileShaderRecipeToCssFilter } from '../../utils/filterRecipe';
+import { convertFileSrc } from '@tauri-apps/api/core';
 
 function getCleanMediaUrl(rawPath: string): string {
   if (!rawPath) return '';
@@ -37,15 +40,132 @@ function getCleanMediaUrl(rawPath: string): string {
   ) {
     return rawPath;
   }
-  if (typeof window !== 'undefined') {
-    try {
-      const internals = (window as any).__TAURI_INTERNALS__;
-      if (internals?.convertFileSrc) {
-        return internals.convertFileSrc(rawPath, 'asset');
-      }
-    } catch {}
+  try {
+    return convertFileSrc(rawPath, 'asset');
+  } catch {
+    if (typeof window !== 'undefined') {
+      try {
+        const internals = (window as any).__TAURI_INTERNALS__;
+        if (internals?.convertFileSrc) {
+          return internals.convertFileSrc(rawPath, 'asset');
+        }
+      } catch {}
+    }
   }
   return rawPath;
+}
+
+// Lightweight real-time video motion stabilization engine
+// Performs 1D orthogonal luminance cross-correlation to counteract camera jitter at 60 FPS with 0 wait
+class RealTimeMotionStabilizer {
+  private prevColProj: Float32Array | null = null;
+  private prevRowProj: Float32Array | null = null;
+  private sampleCanvas: HTMLCanvasElement | null = null;
+  private sampleCtx: CanvasRenderingContext2D | null = null;
+  private smoothX = 0;
+  private smoothY = 0;
+  public compX = 0;
+  public compY = 0;
+
+  constructor() {
+    if (typeof document !== 'undefined') {
+      this.sampleCanvas = document.createElement('canvas');
+      this.sampleCanvas.width = 96;
+      this.sampleCanvas.height = 54;
+      this.sampleCtx = this.sampleCanvas.getContext('2d', { willReadFrequently: true });
+    }
+  }
+
+  public reset() {
+    this.prevColProj = null;
+    this.prevRowProj = null;
+    this.smoothX = 0;
+    this.smoothY = 0;
+    this.compX = 0;
+    this.compY = 0;
+  }
+
+  public update(video: HTMLVideoElement, smoothness: number, maxShiftPx = 32) {
+    if (!this.sampleCtx || !this.sampleCanvas || video.readyState < 2) return;
+    const w = 96;
+    const h = 54;
+    try {
+      this.sampleCtx.drawImage(video, 0, 0, w, h);
+      const imgData = this.sampleCtx.getImageData(0, 0, w, h);
+      const data = imgData.data;
+
+      const colProj = new Float32Array(w);
+      const rowProj = new Float32Array(h);
+      for (let y = 0; y < h; y++) {
+        const rowOff = y * w;
+        for (let x = 0; x < w; x++) {
+          const idx = (rowOff + x) * 4;
+          const lum = data[idx] * 0.299 + data[idx + 1] * 0.587 + data[idx + 2] * 0.114;
+          colProj[x] += lum;
+          rowProj[y] += lum;
+        }
+      }
+
+      if (this.prevColProj && this.prevRowProj) {
+        let bestShiftX = 0;
+        let minDiffX = Infinity;
+        for (let s = -8; s <= 8; s++) {
+          let diff = 0;
+          let count = 0;
+          for (let x = Math.max(0, -s); x < Math.min(w, w - s); x++) {
+            const d = colProj[x + s] - this.prevColProj[x];
+            diff += d * d;
+            count++;
+          }
+          if (count > 0) {
+            const normDiff = diff / count;
+            if (normDiff < minDiffX) {
+              minDiffX = normDiff;
+              bestShiftX = s;
+            }
+          }
+        }
+
+        let bestShiftY = 0;
+        let minDiffY = Infinity;
+        for (let s = -6; s <= 6; s++) {
+          let diff = 0;
+          let count = 0;
+          for (let y = Math.max(0, -s); y < Math.min(h, h - s); y++) {
+            const d = rowProj[y + s] - this.prevRowProj[y];
+            diff += d * d;
+            count++;
+          }
+          if (count > 0) {
+            const normDiff = diff / count;
+            if (normDiff < minDiffY) {
+              minDiffY = normDiff;
+              bestShiftY = s;
+            }
+          }
+        }
+
+        const scaleX = (video.videoWidth || 1920) / w;
+        const scaleY = (video.videoHeight || 1080) / h;
+        const rawDeltaX = bestShiftX * scaleX;
+        const rawDeltaY = bestShiftY * scaleY;
+
+        const alpha = Math.max(0.6, Math.min(0.96, 0.70 + smoothness * 0.25));
+        this.smoothX = alpha * this.smoothX + (1 - alpha) * rawDeltaX;
+        this.smoothY = alpha * this.smoothY + (1 - alpha) * rawDeltaY;
+
+        const jitterX = rawDeltaX - this.smoothX;
+        const jitterY = rawDeltaY - this.smoothY;
+
+        const maxShift = Math.max(10, maxShiftPx * smoothness);
+        this.compX = Math.max(-maxShift, Math.min(maxShift, -jitterX * smoothness * 0.8));
+        this.compY = Math.max(-maxShift, Math.min(maxShift, -jitterY * smoothness * 0.8));
+      }
+
+      this.prevColProj = colProj;
+      this.prevRowProj = rowProj;
+    } catch {}
+  }
 }
 
 export const ProgramMonitor: React.FC = () => {
@@ -53,6 +173,7 @@ export const ProgramMonitor: React.FC = () => {
     playhead,
     project,
     isPlaying,
+    isScrubbing,
     tracks,
     togglePlayPause,
     stepFrames,
@@ -87,11 +208,26 @@ export const ProgramMonitor: React.FC = () => {
     referenceSnapshotUrl,
     setReferenceSnapshotUrl,
     autoMatchLook,
+    isSplitStabilizationComparison,
+    setSplitStabilizationComparison,
+    splitStabilizationPosition,
+    setSplitStabilizationPosition,
+    splitStabilizationMode,
+    setSplitStabilizationMode,
+    stabilizationPreviewUrls,
+    stabilizationPreviewRevisions,
+    applyStabilizationPreview,
+    isStabilizationAnalyzing,
+    isStabilizationRendering,
+    isAlignmentGridActive,
+    setIsAlignmentGridActive,
+    updateClipStabilization,
   } = useTimelineStore(
     useShallow((state) => ({
       playhead: state.playhead,
       project: state.project,
       isPlaying: state.isPlaying,
+      isScrubbing: state.isScrubbing,
       tracks: state.tracks,
       togglePlayPause: state.togglePlayPause,
       stepFrames: state.stepFrames,
@@ -126,13 +262,32 @@ export const ProgramMonitor: React.FC = () => {
       referenceSnapshotUrl: state.referenceSnapshotUrl,
       setReferenceSnapshotUrl: state.setReferenceSnapshotUrl,
       autoMatchLook: state.autoMatchLook,
+      isSplitStabilizationComparison: state.isSplitStabilizationComparison,
+      setSplitStabilizationComparison: state.setSplitStabilizationComparison,
+      splitStabilizationPosition: state.splitStabilizationPosition,
+      setSplitStabilizationPosition: state.setSplitStabilizationPosition,
+      splitStabilizationMode: state.splitStabilizationMode,
+      setSplitStabilizationMode: state.setSplitStabilizationMode,
+      stabilizationPreviewUrls: state.stabilizationPreviewUrls,
+      stabilizationPreviewRevisions: state.stabilizationPreviewRevisions,
+      applyStabilizationPreview: state.applyStabilizationPreview,
+      isStabilizationAnalyzing: state.isStabilizationAnalyzing,
+      isStabilizationRendering: state.isStabilizationRendering,
+      isAlignmentGridActive: state.isAlignmentGridActive,
+      setIsAlignmentGridActive: state.setIsAlignmentGridActive,
+      updateClipStabilization: state.updateClipStabilization,
     }))
   );
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const stageContainerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const incomingVideoRef = useRef<HTMLVideoElement>(null);
+  const stabilizedVideoRef = useRef<HTMLVideoElement>(null);
   const denoisedAudioPlayerRef = useRef<HTMLAudioElement>(null);
+  const realTimeStabilizerRef = useRef<RealTimeMotionStabilizer>(new RealTimeMotionStabilizer());
+  const [isWipeDragging, setIsWipeDragging] = useState<boolean>(false);
+  const [isStabilizedVideoLoaded, setIsStabilizedVideoLoaded] = useState<boolean>(false);
   const [player1Clip, setPlayer1Clip] = useState<Clip | null>(() => getActiveVideoClip()?.clip || null);
   const [player2Clip, setPlayer2Clip] = useState<Clip | null>(null);
   const [activePlayer, setActivePlayer] = useState<'player1' | 'player2'>('player1');
@@ -144,6 +299,53 @@ export const ProgramMonitor: React.FC = () => {
   const [vuRight, setVuRight] = useState(45);
   const [aspectRatio, setAspectRatio] = useState<'Original' | '16:9' | '9:16' | '1:1'>('16:9');
   const [gpuInfo, setGpuInfo] = useState<string | null>(null);
+  const lastPlayheadRef = useRef<number>(playhead);
+  const isSeekingRef = useRef<{ player1: boolean; player2: boolean }>({ player1: false, player2: false });
+  const pendingSeekRef = useRef<{ player1: number | null; player2: number | null }>({ player1: null, player2: null });
+  const isPlayPendingRef = useRef<{ player1: boolean; player2: boolean }>({ player1: false, player2: false });
+
+  // Throttled safe seeker to prevent hardware decoder starvation or browser AbortErrors during scrubbing
+  const safeSeek = useCallback((player: 'player1' | 'player2', video: HTMLVideoElement | null, targetTime: number) => {
+    if (!video || !Number.isFinite(targetTime) || isNaN(targetTime)) return;
+    if (Math.abs(video.currentTime - targetTime) < 0.02) return;
+
+    if (video.seeking || isSeekingRef.current[player]) {
+      pendingSeekRef.current[player] = targetTime;
+      return;
+    }
+
+    isSeekingRef.current[player] = true;
+    try {
+      video.currentTime = targetTime;
+    } catch {
+      isSeekingRef.current[player] = false;
+    }
+
+    // Safety fallback: if video.seeking is not resolved within 300ms, unlock
+    setTimeout(() => {
+      if (isSeekingRef.current[player] && video && !video.seeking) {
+        isSeekingRef.current[player] = false;
+        if (pendingSeekRef.current[player] !== null) {
+          const next = pendingSeekRef.current[player];
+          pendingSeekRef.current[player] = null;
+          safeSeek(player, video, next);
+        }
+      }
+    }, 300);
+  }, []);
+
+  // Safe play executor that prevents Uncaught AbortErrors from overlapping play calls
+  const playVideoSafely = useCallback((player: 'player1' | 'player2', video: HTMLVideoElement | null) => {
+    if (!video || !video.paused || isPlayPendingRef.current[player]) return;
+    isPlayPendingRef.current[player] = true;
+    video.play()
+      .then(() => {
+        isPlayPendingRef.current[player] = false;
+      })
+      .catch(() => {
+        isPlayPendingRef.current[player] = false;
+      });
+  }, []);
 
   // Activate discrete high-performance GPU adapter via WebGPU and WebGL powerPreference request
   useEffect(() => {
@@ -376,23 +578,135 @@ export const ProgramMonitor: React.FC = () => {
     return getNextClipAfter(endSec, currentActiveClip.id);
   })();
 
-  // Synchronous, bulletproof URL resolution (works in Tauri v2 & Web)
-  const resolveVideoUrl = (clip: Clip | null): string | null => {
-    if (!clip?.filePath) return null;
-    const rawPath = isProxyMode && clip.proxyPath ? clip.proxyPath : clip.filePath;
-    if (isTauri && typeof window !== 'undefined') {
-      try {
-        const internals = (window as any).__TAURI_INTERNALS__;
-        if (internals?.convertFileSrc) {
-          return internals.convertFileSrc(rawPath, 'asset');
-        }
-      } catch {}
+  const getFreshClipById = (clipId?: string | null): Clip | null => {
+    if (!clipId) return null;
+    for (const t of tracks || []) {
+      const c = t.clips?.find((item) => item.id === clipId);
+      if (c) return c;
     }
-    return rawPath;
+    return null;
   };
 
-  const player1Src = resolveVideoUrl(player1Clip);
-  const player2Src = resolveVideoUrl(player2Clip);
+  // Synchronous, bulletproof URL resolution (works in Tauri v2 & Web)
+  const resolveVideoUrl = (clip: Clip | null, forceRaw = false): string | null => {
+    if (!clip?.id) return null;
+    const fresh = getFreshClipById(clip.id) || clip;
+    if (!fresh.filePath) return null;
+    const stabProfile = fresh.stabilizationProfile ?? fresh.stabilization;
+    const isStabReady = stabProfile?.enabled && Boolean(stabilizationPreviewUrls[fresh.id]);
+    const stabPath = !forceRaw && isStabReady ? stabilizationPreviewUrls[fresh.id] : null;
+
+    const targetPath = stabPath || (isProxyMode && fresh.proxyPath ? fresh.proxyPath : fresh.filePath);
+    return getCleanMediaUrl(targetPath);
+  };
+
+  // Phase 16: Resolve Stabilized Preview Video Stream
+  const stabilizedPreviewSrc = useMemo(() => {
+    if (!currentActiveClip) return null;
+    const previewPath = stabilizationPreviewUrls[currentActiveClip.id];
+    if (!previewPath) return null;
+    return getCleanMediaUrl(previewPath);
+  }, [currentActiveClip?.id, stabilizationPreviewUrls]);
+
+  // Stabilization Diagnostic Mode & Split Comparison Variables
+  const activeStabProfile = currentActiveClip?.stabilizationProfile ?? currentActiveClip?.stabilization;
+  const isClipStabEnabled = Boolean(activeStabProfile?.enabled);
+  const activeStabDebugMode: StabilizationDebugMode =
+    isSplitStabilizationComparison
+      ? 'splitWipe'
+      : (activeStabProfile?.debugViewMode ?? 'normal');
+  const activeSplitWipePos = activeStabProfile?.splitWipePosition !== undefined
+    ? activeStabProfile.splitWipePosition
+    : (splitStabilizationPosition / 100);
+
+  const isComparisonOverlayActive = Boolean(
+    currentActiveClip &&
+    isClipStabEnabled &&
+    (activeStabDebugMode === 'splitWipe' ||
+     activeStabDebugMode === 'differenceBlend' ||
+     activeStabDebugMode === 'ghostOverlay50')
+  );
+
+  const freshP1 = getFreshClipById(player1Clip?.id) || player1Clip;
+  const freshP2 = getFreshClipById(player2Clip?.id) || player2Clip;
+  const player1Src = resolveVideoUrl(freshP1, isComparisonOverlayActive);
+  const player2Src = resolveVideoUrl(freshP2, isComparisonOverlayActive);
+
+  const isPlayer1Stabilized = !isComparisonOverlayActive && Boolean(
+    freshP1 &&
+    (freshP1.stabilizationProfile?.enabled || freshP1.stabilization?.enabled) &&
+    stabilizationPreviewUrls[freshP1.id]
+  );
+  const isPlayer2Stabilized = !isComparisonOverlayActive && Boolean(
+    freshP2 &&
+    (freshP2.stabilizationProfile?.enabled || freshP2.stabilization?.enabled) &&
+    stabilizationPreviewUrls[freshP2.id]
+  );
+
+  // Real-Time Split Wipe Gizmo Drag Handlers
+  const handleWipePointerDown = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    setIsWipeDragging(true);
+    if (!stageContainerRef.current) return;
+    const rect = stageContainerRef.current.getBoundingClientRect();
+    const pos = Math.max(0.02, Math.min(0.98, (e.clientX - rect.left) / rect.width));
+    if (currentActiveClip) {
+      updateClipStabilization(currentActiveClip.id, { splitWipePosition: pos });
+    }
+    setSplitStabilizationPosition(Math.round(pos * 100));
+  }, [currentActiveClip, updateClipStabilization, setSplitStabilizationPosition]);
+
+  useEffect(() => {
+    if (!isWipeDragging) return;
+    const handleMove = (e: MouseEvent) => {
+      if (!stageContainerRef.current) return;
+      const rect = stageContainerRef.current.getBoundingClientRect();
+      const pos = Math.max(0.02, Math.min(0.98, (e.clientX - rect.left) / rect.width));
+      if (currentActiveClip) {
+        updateClipStabilization(currentActiveClip.id, { splitWipePosition: pos });
+      }
+      setSplitStabilizationPosition(Math.round(pos * 100));
+    };
+    const handleUp = () => setIsWipeDragging(false);
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+    };
+  }, [isWipeDragging, currentActiveClip, updateClipStabilization, setSplitStabilizationPosition]);
+
+  // Auto-generate preview stream when stabilization is enabled and preview is missing
+  useEffect(() => {
+    const rawClips = [currentActiveClip, player1Clip, player2Clip].filter(Boolean) as Clip[];
+    const seen = new Set<string>();
+    const clipsToCheck = rawClips.filter((c) => {
+      if (seen.has(c.id)) return false;
+      seen.add(c.id);
+      return true;
+    });
+
+    for (const c of clipsToCheck) {
+      const prof = c.stabilizationProfile ?? c.stabilization;
+      if (
+        prof?.enabled &&
+        !stabilizationPreviewUrls[c.id] &&
+        !isStabilizationRendering?.[c.id] &&
+        (isStabilizationAnalyzing[c.id] === undefined || isStabilizationAnalyzing[c.id] === 0)
+      ) {
+        applyStabilizationPreview(c.id).catch(() => {});
+      }
+    }
+  }, [
+    currentActiveClip?.id,
+    currentActiveClip?.stabilizationProfile?.enabled,
+    currentActiveClip?.stabilization?.enabled,
+    player1Clip?.id,
+    player2Clip?.id,
+    stabilizationPreviewUrls,
+    isStabilizationRendering,
+    isStabilizationAnalyzing,
+  ]);
 
   // Collect all existing video clip IDs across all tracks to detect deleted/cleared clips
   const existingClipIds = useMemo(() => {
@@ -478,14 +792,14 @@ export const ProgramMonitor: React.FC = () => {
     return clip;
   };
 
-  const getClipSeekTime = (clip: Clip, ph: number): number => {
+  const getClipSeekTime = (clip: Clip, ph: number, isStabilizedStream = false): number => {
     const s = clip.startPositionSeconds ?? (clip.startTimeMs != null ? clip.startTimeMs / 1000 : 0);
-    const inPoint = clip.inPointSeconds ?? (clip.sourceOffsetMs != null ? clip.sourceOffsetMs / 1000 : 0);
+    const inPoint = isStabilizedStream ? 0 : (clip.inPointSeconds ?? (clip.sourceOffsetMs != null ? clip.sourceOffsetMs / 1000 : 0));
     const dur = clip.durationSeconds ?? (clip.durationMs != null ? clip.durationMs / 1000 : 10);
     const speed = clip.speedProfile?.speedMultiplier ?? 1.0;
     const sourceDur =
-      clip.outPointSeconds != null && clip.outPointSeconds > inPoint
-        ? clip.outPointSeconds - inPoint
+      clip.outPointSeconds != null && clip.outPointSeconds > (clip.inPointSeconds ?? 0)
+        ? clip.outPointSeconds - (clip.inPointSeconds ?? 0)
         : dur * speed;
 
     if (ph <= s) {
@@ -973,17 +1287,23 @@ export const ProgramMonitor: React.FC = () => {
     };
   }, [isPlaying, activeLayer?.clip?.audioProcessing?.noiseProfile]);
 
-  // Scrubbing / Seek synchronization (accurate frame seeking when paused)
+  // Scrubbing / Seek synchronization (accurate frame seeking when paused and user jump handling)
   useEffect(() => {
-    if (isPlaying) {
-      const activeVid = activePlayer === 'player1' ? videoRef.current : incomingVideoRef.current;
-      const rawClip = activePlayer === 'player1' ? player1Clip : player2Clip;
-      const activeClip = getFreshClip(rawClip);
-      if (activeVid && activeClip && currentActiveClip && activeClip.id === currentActiveClip.id) {
-        const targetTime = getClipSeekTime(activeClip, playhead);
-        const diff = Math.abs(activeVid.currentTime - targetTime);
-        if (diff > 0.6) {
-          activeVid.currentTime = targetTime;
+    const prevPlayhead = lastPlayheadRef.current;
+    lastPlayheadRef.current = playhead;
+
+    if (isPlaying && !isScrubbing) {
+      // Normal playback frame advancement is ~0.016s per frame.
+      // If playhead jumped by more than 0.35s while playing, it was an explicit user jump/seek!
+      const isManualJump = Math.abs(playhead - prevPlayhead) > 0.35;
+      if (isManualJump) {
+        const curActiveVid = activePlayerRef.current === 'player2' ? incomingVideoRef.current : videoRef.current;
+        const rawClip = activePlayerRef.current === 'player2' ? player2Clip : player1Clip;
+        const isCurStab = activePlayerRef.current === 'player2' ? isPlayer2Stabilized : isPlayer1Stabilized;
+        const activeClip = getFreshClip(rawClip) || currentActiveClip;
+        if (curActiveVid && activeClip && currentActiveClip && activeClip.id === currentActiveClip.id) {
+          const targetTime = getClipSeekTime(activeClip, playhead, isCurStab);
+          safeSeek(activePlayerRef.current, curActiveVid, targetTime);
         }
       }
       return;
@@ -995,14 +1315,34 @@ export const ProgramMonitor: React.FC = () => {
       return;
     }
 
+    // When paused or scrubbing and playhead moves, ensure activePlayer points to whichever player holds currentActiveClip
+    if (player1Clip?.id === currentActiveClip.id && activePlayerRef.current !== 'player1') {
+      activePlayerRef.current = 'player1';
+      setActivePlayer('player1');
+    } else if (player2Clip?.id === currentActiveClip.id && activePlayerRef.current !== 'player2') {
+      activePlayerRef.current = 'player2';
+      setActivePlayer('player2');
+    }
+
+    const curActiveVid = activePlayerRef.current === 'player2' ? incomingVideoRef.current : videoRef.current;
+    const isCurStab = activePlayerRef.current === 'player2' ? isPlayer2Stabilized : isPlayer1Stabilized;
+
     if (videoRef.current && player1Clip && player1Clip.id === currentActiveClip.id) {
       const fresh1 = getFreshClip(player1Clip) || player1Clip;
-      videoRef.current.currentTime = getClipSeekTime(fresh1, playhead);
+      const targetTime = getClipSeekTime(fresh1, playhead, isPlayer1Stabilized);
+      safeSeek('player1', videoRef.current, targetTime);
     }
     if (incomingVideoRef.current && player2Clip && player2Clip.id === currentActiveClip.id) {
       const fresh2 = getFreshClip(player2Clip) || player2Clip;
-      incomingVideoRef.current.currentTime = getClipSeekTime(fresh2, playhead);
+      const targetTime = getClipSeekTime(fresh2, playhead, isPlayer2Stabilized);
+      safeSeek('player2', incomingVideoRef.current, targetTime);
     }
+    // Fallback: If neither player1Clip nor player2Clip state has updated to currentActiveClip yet, seek the active video element
+    if (curActiveVid && player1Clip?.id !== currentActiveClip.id && player2Clip?.id !== currentActiveClip.id) {
+      const targetTime = getClipSeekTime(currentActiveClip, playhead, isCurStab);
+      safeSeek(activePlayerRef.current, curActiveVid, targetTime);
+    }
+
     if (denoisedAudioPlayerRef.current && currentActiveClip) {
       const fresh = getFreshClip(currentActiveClip) || currentActiveClip;
       const np = fresh.audioProcessing?.noiseProfile;
@@ -1014,31 +1354,59 @@ export const ProgramMonitor: React.FC = () => {
         denoisedAudioPlayerRef.current.currentTime = getClipSeekTime(fresh, playhead);
       }
     }
-  }, [playhead, isPlaying, player1Clip, player2Clip, activePlayer, currentActiveClip, tracks]);
+
+    if (stabilizedVideoRef.current && currentActiveClip && stabilizedPreviewSrc) {
+      const targetTime = getClipSeekTime(currentActiveClip, playhead, true);
+      if (Math.abs(stabilizedVideoRef.current.currentTime - targetTime) > 0.02) {
+        stabilizedVideoRef.current.currentTime = targetTime;
+      }
+    }
+  }, [playhead, isPlaying, isScrubbing, player1Clip, player2Clip, activePlayer, currentActiveClip, tracks, safeSeek, stabilizedPreviewSrc, activeStabDebugMode, isSplitStabilizationComparison]);
 
   // Continuous smooth requestAnimationFrame playback loop driven by hardware decoder clock
   useEffect(() => {
     let animId: number | null = null;
 
-    if (!isPlaying) {
+    if (!isPlaying || isScrubbing) {
+      realTimeStabilizerRef.current.reset();
       if (videoRef.current && !videoRef.current.paused) videoRef.current.pause();
       if (incomingVideoRef.current && !incomingVideoRef.current.paused) incomingVideoRef.current.pause();
       if (denoisedAudioPlayerRef.current && !denoisedAudioPlayerRef.current.paused) denoisedAudioPlayerRef.current.pause();
       return;
     }
 
-    const curVid = activePlayerRef.current === 'player2' ? incomingVideoRef.current : videoRef.current;
-    const rawCurClip = activePlayerRef.current === 'player2' ? player2Clip : player1Clip;
-    const curClip = getFreshClip(rawCurClip);
+    // Determine and sync the active player for the clip currently at playhead
+    let targetActive = activePlayerRef.current;
+    if (currentActiveClip) {
+      if (player1Clip?.id === currentActiveClip.id) {
+        targetActive = 'player1';
+      } else if (player2Clip?.id === currentActiveClip.id) {
+        targetActive = 'player2';
+      } else {
+        targetActive = 'player1';
+        setPlayer1Clip(currentActiveClip);
+      }
+      if (activePlayerRef.current !== targetActive) {
+        activePlayerRef.current = targetActive;
+        setActivePlayer(targetActive);
+      }
+    }
+
+    const curVid = targetActive === 'player2' ? incomingVideoRef.current : videoRef.current;
+    const rawCurClip = targetActive === 'player2' ? player2Clip : player1Clip;
+    const curClip = getFreshClip(rawCurClip) || currentActiveClip;
     // Only play video element if playhead is currently over a valid active video clip!
-    if (currentActiveClip && curClip?.id === currentActiveClip.id) {
+    if (currentActiveClip && curClip && (curClip.id === currentActiveClip.id || !rawCurClip)) {
       if (curVid) {
+        const isCurStab = targetActive === 'player2' ? isPlayer2Stabilized : isPlayer1Stabilized;
+        const targetTime = getClipSeekTime(curClip, playhead, isCurStab);
+        if (Math.abs(curVid.currentTime - targetTime) > 0.08) {
+          safeSeek(targetActive, curVid, targetTime);
+        }
         const speed = curClip.speedProfile?.speedMultiplier ?? 1.0;
         curVid.playbackRate = Math.max(0.1, Math.min(16.0, speed));
         (curVid as any).preservesPitch = curClip.speedProfile?.pitchCorrection ?? true;
-        if (curVid.paused) {
-          curVid.play().catch(() => {});
-        }
+        playVideoSafely(targetActive, curVid);
       }
       const np = curClip.audioProcessing?.noiseProfile;
       if (np?.noiseReductionEnabled && np?.denoisedAudioPath && denoisedAudioPlayerRef.current) {
@@ -1057,13 +1425,14 @@ export const ProgramMonitor: React.FC = () => {
       if (videoRef.current && !videoRef.current.paused) videoRef.current.pause();
       if (incomingVideoRef.current && !incomingVideoRef.current.paused) incomingVideoRef.current.pause();
       if (denoisedAudioPlayerRef.current && !denoisedAudioPlayerRef.current.paused) denoisedAudioPlayerRef.current.pause();
+      if (stabilizedVideoRef.current && !stabilizedVideoRef.current.paused) stabilizedVideoRef.current.pause();
     }
 
     let lastTime = performance.now();
 
     const tick = (now: number) => {
       const state = useTimelineStore.getState();
-      if (!state.isPlaying) return;
+      if (!state.isPlaying || state.isScrubbing) return;
 
       const deltaSec = Math.min(0.05, (now - lastTime) / 1000);
       lastTime = now;
@@ -1089,15 +1458,24 @@ export const ProgramMonitor: React.FC = () => {
         if (Math.abs(drift) > 0.02 && Math.abs(drift) < 1.0) {
           nextPlayhead = targetTimelineSec;
         }
-      } else if (topClip && masterVideo && !masterVideo.paused && !masterVideo.seeking && masterClip && masterClip.id === topClip.id) {
+      } else if (topClip && masterVideo && masterClip && masterClip.id === topClip.id) {
+        const isMasterStab = activePlayerRef.current === 'player2' ? isPlayer2Stabilized : isPlayer1Stabilized;
         const clipStart = masterClip.startPositionSeconds ?? (masterClip.startTimeMs ? masterClip.startTimeMs / 1000 : 0);
-        const inPoint = masterClip.inPointSeconds ?? (masterClip.sourceOffsetMs ? masterClip.sourceOffsetMs / 1000 : 0);
+        const inPoint = isMasterStab ? 0 : (masterClip.inPointSeconds ?? (masterClip.sourceOffsetMs ? masterClip.sourceOffsetMs / 1000 : 0));
         const speed = masterClip.speedProfile?.speedMultiplier ?? 1.0;
         const sourceElapsed = masterVideo.currentTime - inPoint;
         const calculatedPlayhead = clipStart + (sourceElapsed / speed);
-        const drift = calculatedPlayhead - state.playhead;
-        if (Math.abs(drift) > 0.03 && Math.abs(drift) < 2.0) {
-          nextPlayhead = calculatedPlayhead;
+        const drift = calculatedPlayhead - nextPlayhead;
+
+        // If drift is substantial (> 0.25s), seek the video forward/backward to catch up with the timeline
+        if (Math.abs(drift) > 0.25 && !masterVideo.seeking) {
+          const targetTime = getClipSeekTime(masterClip, nextPlayhead, isMasterStab);
+          safeSeek(activePlayerRef.current, masterVideo, targetTime);
+        }
+
+        // If video is paused while playing, safely resume
+        if (masterVideo.paused) {
+          playVideoSafely(activePlayerRef.current, masterVideo);
         }
       }
 
@@ -1113,9 +1491,7 @@ export const ProgramMonitor: React.FC = () => {
             const speed = fresh1.speedProfile?.speedMultiplier ?? 1.0;
             videoRef.current.playbackRate = Math.max(0.1, Math.min(16.0, speed));
             (videoRef.current as any).preservesPitch = fresh1.speedProfile?.pitchCorrection ?? true;
-            if (videoRef.current.paused) {
-              videoRef.current.play().catch(() => {});
-            }
+            playVideoSafely('player1', videoRef.current);
           }
         } else if (player2Clip?.id === topClip.id) {
           if (activePlayerRef.current !== 'player2') {
@@ -1127,9 +1503,7 @@ export const ProgramMonitor: React.FC = () => {
             const speed = fresh2.speedProfile?.speedMultiplier ?? 1.0;
             incomingVideoRef.current.playbackRate = Math.max(0.1, Math.min(16.0, speed));
             (incomingVideoRef.current as any).preservesPitch = fresh2.speedProfile?.pitchCorrection ?? true;
-            if (incomingVideoRef.current.paused) {
-              incomingVideoRef.current.play().catch(() => {});
-            }
+            playVideoSafely('player2', incomingVideoRef.current);
           }
         }
       } else {
@@ -1139,8 +1513,9 @@ export const ProgramMonitor: React.FC = () => {
       }
 
       // Pre-roll standby player if approaching upcoming clip (within 0.8s)
-      const standbyVideo = activePlayerRef.current === 'player2' ? videoRef.current : incomingVideoRef.current;
-      const rawStandbyClip = activePlayerRef.current === 'player2' ? player1Clip : player2Clip;
+      const standbyActiveKey = activePlayerRef.current === 'player2' ? 'player1' : 'player2';
+      const standbyVideo = standbyActiveKey === 'player2' ? incomingVideoRef.current : videoRef.current;
+      const rawStandbyClip = standbyActiveKey === 'player2' ? player2Clip : player1Clip;
       const standbyClip = getFreshClip(rawStandbyClip);
       if (standbyVideo && standbyClip && standbyVideo.readyState >= 1) {
         const startSec = standbyClip.startPositionSeconds ?? (standbyClip.startTimeMs ? standbyClip.startTimeMs / 1000 : 0);
@@ -1152,15 +1527,16 @@ export const ProgramMonitor: React.FC = () => {
           : 0;
 
         if (nextPlayhead >= activeEndSec - 0.8 || nextPlayhead >= startSec - 0.8) {
-          const targetTime = getClipSeekTime(standbyClip, nextPlayhead);
+          const isStandbyStab = standbyActiveKey === 'player2' ? isPlayer2Stabilized : isPlayer1Stabilized;
+          const targetTime = getClipSeekTime(standbyClip, nextPlayhead, isStandbyStab);
           const standbySpeed = standbyClip.speedProfile?.speedMultiplier ?? 1.0;
           standbyVideo.playbackRate = Math.max(0.1, Math.min(16.0, standbySpeed));
           (standbyVideo as any).preservesPitch = standbyClip.speedProfile?.pitchCorrection ?? true;
           if (standbyVideo.paused) {
-            standbyVideo.currentTime = targetTime;
-            standbyVideo.play().catch(() => {});
+            safeSeek(standbyActiveKey, standbyVideo, targetTime);
+            playVideoSafely(standbyActiveKey, standbyVideo);
           } else if (Math.abs(standbyVideo.currentTime - targetTime) > 0.3) {
-            standbyVideo.currentTime = targetTime;
+            safeSeek(standbyActiveKey, standbyVideo, targetTime);
           }
         }
       }
@@ -1172,6 +1548,33 @@ export const ProgramMonitor: React.FC = () => {
         return;
       }
 
+      // Smooth clip transform pass during continuous playback
+      const activeVideoEl = activePlayerRef.current === 'player2' ? incomingVideoRef.current : videoRef.current;
+      const rawActiveClip = activePlayerRef.current === 'player2' ? player2Clip : player1Clip;
+      const liveActiveClip = getFreshClip(rawActiveClip) || currentActiveClip;
+      const activeStabProfile = liveActiveClip?.stabilizationProfile ?? liveActiveClip?.stabilization;
+      if (activeVideoEl && liveActiveClip) {
+        const clipTransform = getInterpolatedClipTransform(liveActiveClip, nextPlayhead);
+        const userZoom = (activeStabProfile?.enabled && (activeStabProfile.zoomPercent ?? 0) > 0)
+          ? 1.0 + (activeStabProfile.zoomPercent ?? 0) / 100.0
+          : 1.0;
+        if (clipTransform) {
+          activeVideoEl.style.transform = `translate(${clipTransform.positionX.toFixed(2)}px, ${clipTransform.positionY.toFixed(2)}px) rotate(${clipTransform.rotation}deg) scale(${(clipTransform.scale * userZoom).toFixed(3)})`;
+          activeVideoEl.style.transformOrigin = 'center center';
+        }
+      }
+
+      // Keep stabilized preview synchronized in lockstep during playback
+      if (stabilizedVideoRef.current && currentActiveClip && stabilizedPreviewSrc) {
+        const targetTime = getClipSeekTime(currentActiveClip, nextPlayhead, true);
+        if (stabilizedVideoRef.current.paused) {
+          stabilizedVideoRef.current.play().catch(() => {});
+        }
+        if (Math.abs(stabilizedVideoRef.current.currentTime - targetTime) > 0.15) {
+          stabilizedVideoRef.current.currentTime = targetTime;
+        }
+      }
+
       state.setPlayhead(nextPlayhead);
       animId = requestAnimationFrame(tick);
     };
@@ -1179,10 +1582,12 @@ export const ProgramMonitor: React.FC = () => {
     animId = requestAnimationFrame(tick);
     return () => {
       if (animId) cancelAnimationFrame(animId);
+      realTimeStabilizerRef.current.reset();
       if (videoRef.current && !videoRef.current.paused) videoRef.current.pause();
       if (incomingVideoRef.current && !incomingVideoRef.current.paused) incomingVideoRef.current.pause();
+      if (stabilizedVideoRef.current && !stabilizedVideoRef.current.paused) stabilizedVideoRef.current.pause();
     };
-  }, [isPlaying, isVideoLoaded, isIncomingVideoLoaded, player1Clip, player2Clip, currentActiveClip, tracks]);
+  }, [isPlaying, isScrubbing, isVideoLoaded, isIncomingVideoLoaded, player1Clip, player2Clip, currentActiveClip, tracks, safeSeek, playVideoSafely, stabilizedPreviewSrc]);
 
   // Audio VU meter dynamics during playback
   useEffect(() => {
@@ -1646,20 +2051,23 @@ export const ProgramMonitor: React.FC = () => {
     const rawClip = player === 'player1' ? player1Clip : player2Clip;
     const thisClip = getFreshClip(rawClip);
     const transform = thisClip ? getInterpolatedClipTransform(thisClip, playhead) : null;
-    const stabScale =
-      thisClip?.stabilization?.enabled && (thisClip.stabilization.intensity ?? 0) > 0.001
-        ? 1 + (thisClip.stabilization.intensity ?? 0.5) * 0.05
-        : 1.0;
+    const stabProfile = thisClip?.stabilizationProfile ?? thisClip?.stabilization;
+    const isStab = Boolean(stabProfile?.enabled);
+    const stabZoom = isStab ? (stabProfile?.zoomPercent ?? 0) : 0;
+    const userZoomScale = (isStab && stabZoom > 0) ? (1.0 + stabZoom / 100.0) : 1.0;
+
     const dynamicTransformStyle: React.CSSProperties = transform
       ? {
-          transform: `translate(${transform.positionX}px, ${transform.positionY}px) rotate(${transform.rotation}deg) scale(${(transform.scale * stabScale).toFixed(3)})`,
+          transform: `translate(${transform.positionX.toFixed(2)}px, ${transform.positionY.toFixed(2)}px) rotate(${transform.rotation}deg) scale(${(transform.scale * userZoomScale).toFixed(3)})`,
           transformOrigin: 'center center',
           opacity: transform.opacity,
         }
-      : {
-          transform: stabScale !== 1.0 ? `scale(${stabScale.toFixed(3)})` : undefined,
+      : userZoomScale !== 1.0
+      ? {
+          transform: `scale(${userZoomScale.toFixed(3)})`,
           transformOrigin: 'center center',
-        };
+        }
+      : {};
 
     if (activeTransitionInfo && activeTransitionInfo.isActive) {
       const fromClipId = activeTransitionInfo.fromClip?.id;
@@ -1852,6 +2260,32 @@ export const ProgramMonitor: React.FC = () => {
             </div>
           )}
 
+          {/* Stabilization Diagnostic Inspection Mode Dropdown */}
+          {currentActiveClip && isClipStabEnabled && (
+            <div
+              title="Stabilization Diagnostic Inspection Mode"
+              className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#12151D] border border-[#00F0FF]/40 text-[10px] font-mono shadow-xs"
+            >
+              <Shield size={11} className="text-[#00F0FF]" />
+              <span className="text-[#8A92A6]">Diag:</span>
+              <select
+                value={activeStabDebugMode}
+                onChange={(e) => {
+                  const mode = e.target.value as any;
+                  updateClipStabilization(currentActiveClip.id, { debugViewMode: mode });
+                  setSplitStabilizationComparison(mode === 'splitWipe');
+                }}
+                className="bg-transparent text-[#00F0FF] font-bold outline-hidden cursor-pointer"
+              >
+                <option value="normal" className="bg-[#0D0E11] text-white">Normal</option>
+                <option value="splitWipe" className="bg-[#0D0E11] text-white">Split Wipe</option>
+                <option value="showBordersNoCrop" className="bg-[#0D0E11] text-white">Show Borders (No Crop)</option>
+                <option value="differenceBlend" className="bg-[#0D0E11] text-white">Difference</option>
+                <option value="ghostOverlay50" className="bg-[#0D0E11] text-white">Ghost 50%</option>
+              </select>
+            </div>
+          )}
+
           {activeLayer ? (
             <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#10B981]/15 text-[#10B981] border border-[#10B981]/30 font-mono text-[10px]">
               <span className="w-1.5 h-1.5 rounded-full bg-[#10B981] shadow-[0_0_6px_#10B981]" />
@@ -1881,6 +2315,7 @@ export const ProgramMonitor: React.FC = () => {
       <div className="flex-1 flex items-center justify-center relative bg-[#090A0D] overflow-hidden p-4">
         {/* Rendered Frame Stage with Aspect Ratio Container */}
         <div
+          ref={stageContainerRef}
           style={{
             aspectRatio:
               aspectRatio === '16:9'
@@ -1902,6 +2337,40 @@ export const ProgramMonitor: React.FC = () => {
             className="w-full h-full object-contain block pointer-events-none"
           />
 
+          {/* Reference Alignment Grid & Center Reticle Overlay */}
+          {isAlignmentGridActive && (
+            <div className="absolute inset-0 pointer-events-none z-25 overflow-hidden select-none">
+              {/* Rule of Thirds - Vertical */}
+              <div className="absolute top-0 bottom-0 left-1/3 w-px bg-[#00F0FF]/30 border-r border-dashed border-[#00F0FF]/40" />
+              <div className="absolute top-0 bottom-0 left-2/3 w-px bg-[#00F0FF]/30 border-r border-dashed border-[#00F0FF]/40" />
+              {/* Rule of Thirds - Horizontal */}
+              <div className="absolute left-0 right-0 top-1/3 h-px bg-[#00F0FF]/30 border-b border-dashed border-[#00F0FF]/40" />
+              <div className="absolute left-0 right-0 top-2/3 h-px bg-[#00F0FF]/30 border-b border-dashed border-[#00F0FF]/40" />
+
+              {/* Horizontal Horizon Reference Guide */}
+              <div className="absolute left-0 right-0 top-1/2 -mt-px h-0.5 bg-linear-to-r from-transparent via-[#F59E0B]/80 to-transparent shadow-[0_0_8px_#F59E0B]" />
+              <div className="absolute left-4 top-1/2 -mt-2.5 px-1 py-0.5 rounded bg-black/80 border border-[#F59E0B]/50 text-[#F59E0B] font-mono text-[8px] font-bold">
+                HORIZON GUIDE 0.0°
+              </div>
+              <div className="absolute right-4 top-1/2 -mt-2.5 px-1 py-0.5 rounded bg-black/80 border border-[#F59E0B]/50 text-[#F59E0B] font-mono text-[8px] font-bold">
+                LEVEL
+              </div>
+
+              {/* Center Crosshair & Reticle */}
+              <div className="absolute left-1/2 top-0 bottom-0 -ml-px w-0.5 bg-[#00F0FF]/50" />
+              <div className="absolute top-1/2 left-0 right-0 -mt-px h-0.5 bg-[#00F0FF]/50" />
+              <div className="absolute left-1/2 top-1/2 -ml-6 -mt-6 w-12 h-12 rounded-full border border-[#00F0FF]/60 shadow-[0_0_10px_rgba(0,240,255,0.3)] flex items-center justify-center">
+                <div className="w-2 h-2 rounded-full border border-[#00F0FF] bg-[#00F0FF]/40" />
+              </div>
+
+              {/* Alignment Grid Status Badge */}
+              <div className="absolute bottom-3 left-3 px-2 py-0.5 rounded bg-black/75 border border-[#00F0FF]/30 text-[#00F0FF] font-mono text-[8.5px] font-semibold tracking-wider flex items-center gap-1.5 shadow-md">
+                <div className="w-1.5 h-1.5 rounded-full bg-[#00F0FF] animate-ping" />
+                <span>ALIGNMENT GRID & HORIZON GUIDES ACTIVE</span>
+              </div>
+            </div>
+          )}
+
           {/* Base Layer: Player 1 */}
           {player1Src && (
             <video
@@ -1912,12 +2381,27 @@ export const ProgramMonitor: React.FC = () => {
               disableRemotePlayback
               onLoadedMetadata={() => {
                 setIsVideoLoaded(true);
+                isSeekingRef.current.player1 = false;
                 if (videoRef.current && player1Clip) {
                   const fresh1 = getFreshClip(player1Clip) || player1Clip;
-                  videoRef.current.currentTime = getClipSeekTime(fresh1, playhead);
+                  videoRef.current.currentTime = getClipSeekTime(fresh1, playhead, isPlayer1Stabilized);
                 }
               }}
-              onError={() => setIsVideoLoaded(false)}
+              onSeeked={() => {
+                isSeekingRef.current.player1 = false;
+                if (pendingSeekRef.current.player1 !== null) {
+                  const nextTarget = pendingSeekRef.current.player1;
+                  pendingSeekRef.current.player1 = null;
+                  safeSeek('player1', videoRef.current, nextTarget);
+                }
+              }}
+              onError={(e) => {
+                console.warn('[ProgramMonitor Player 1] Video decode hitch or error:', player1Src, e);
+                isSeekingRef.current.player1 = false;
+                pendingSeekRef.current.player1 = null;
+                isPlayPendingRef.current.player1 = false;
+                setIsVideoLoaded(false);
+              }}
               style={{
                 filter: getInspectorFilterStyle(getFreshClip(player1Clip) || player1Clip),
                 ...getPlayerStyle('player1'),
@@ -1938,12 +2422,27 @@ export const ProgramMonitor: React.FC = () => {
               disableRemotePlayback
               onLoadedMetadata={() => {
                 setIsIncomingVideoLoaded(true);
+                isSeekingRef.current.player2 = false;
                 if (incomingVideoRef.current && player2Clip) {
                   const fresh2 = getFreshClip(player2Clip) || player2Clip;
-                  incomingVideoRef.current.currentTime = getClipSeekTime(fresh2, playhead);
+                  incomingVideoRef.current.currentTime = getClipSeekTime(fresh2, playhead, isPlayer2Stabilized);
                 }
               }}
-              onError={() => setIsIncomingVideoLoaded(false)}
+              onSeeked={() => {
+                isSeekingRef.current.player2 = false;
+                if (pendingSeekRef.current.player2 !== null) {
+                  const nextTarget = pendingSeekRef.current.player2;
+                  pendingSeekRef.current.player2 = null;
+                  safeSeek('player2', incomingVideoRef.current, nextTarget);
+                }
+              }}
+              onError={(e) => {
+                console.warn('[ProgramMonitor Player 2] Video decode hitch or error:', player2Src, e);
+                isSeekingRef.current.player2 = false;
+                pendingSeekRef.current.player2 = null;
+                isPlayPendingRef.current.player2 = false;
+                setIsIncomingVideoLoaded(false);
+              }}
               style={{
                 filter: getInspectorFilterStyle(getFreshClip(player2Clip) || player2Clip),
                 ...getPlayerStyle('player2'),
@@ -2391,6 +2890,177 @@ export const ProgramMonitor: React.FC = () => {
               )}
             </>
           )}
+
+          {/* Phase 16: Stabilization Comparison & Diagnostic Overlay (Raw Shaky vs Stabilized Stream) */}
+          {isComparisonOverlayActive && (
+            <>
+              {stabilizedPreviewSrc ? (
+                splitStabilizationMode === 'side-by-side' && isSplitStabilizationComparison ? (
+                  /* Side-by-Side Comparison Mode */
+                  <div className="absolute inset-0 z-15 flex pointer-events-none bg-black/40">
+                    <div className="w-1/2 h-full relative flex items-center justify-center">
+                      <span className="absolute top-3 left-3 px-2 py-0.5 rounded bg-black/80 text-amber-400 border border-amber-400/40 text-[9px] font-mono font-bold tracking-wider shadow-md">
+                        RAW [Left]
+                      </span>
+                    </div>
+                    <div className="w-1/2 h-full relative border-l-2 border-[#00F0FF] bg-black/60 flex items-center justify-center overflow-hidden">
+                      <video
+                        ref={stabilizedVideoRef}
+                        src={stabilizedPreviewSrc}
+                        playsInline
+                        muted
+                        preload="auto"
+                        onLoadedMetadata={() => {
+                          setIsStabilizedVideoLoaded(true);
+                          if (stabilizedVideoRef.current && currentActiveClip) {
+                            const targetTime = getClipSeekTime(currentActiveClip, playhead, true);
+                            stabilizedVideoRef.current.currentTime = targetTime;
+                          }
+                        }}
+                        className="w-full h-full object-contain"
+                      />
+                      <span className="absolute top-3 right-3 px-2 py-0.5 rounded bg-[#00F0FF]/90 text-[#0D0E11] text-[9px] font-mono font-bold tracking-wider shadow-md">
+                        STABILIZED [Right]
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  /* Overlay Modes: Split Wipe, Difference Blend, Ghost Overlay */
+                  <>
+                    <video
+                      ref={stabilizedVideoRef}
+                      src={stabilizedPreviewSrc}
+                      playsInline
+                      muted
+                      preload="auto"
+                      onLoadedMetadata={() => {
+                        setIsStabilizedVideoLoaded(true);
+                        if (stabilizedVideoRef.current && currentActiveClip) {
+                          const targetTime = getClipSeekTime(currentActiveClip, playhead, true);
+                          stabilizedVideoRef.current.currentTime = targetTime;
+                        }
+                      }}
+                      className="absolute inset-0 w-full h-full object-contain pointer-events-none z-15"
+                      style={{
+                        clipPath: activeStabDebugMode === 'splitWipe'
+                          ? `polygon(${activeSplitWipePos * 100}% 0, 100% 0, 100% 100%, ${activeSplitWipePos * 100}% 100%)`
+                          : undefined,
+                        mixBlendMode: activeStabDebugMode === 'differenceBlend' ? 'difference' : 'normal',
+                        opacity: activeStabDebugMode === 'ghostOverlay50' ? 0.5 : 1,
+                      }}
+                    />
+
+                    {/* Interactive Split Wipe Divider Line with Draggable Handle */}
+                    {activeStabDebugMode === 'splitWipe' && (
+                      <>
+                        <div
+                          onPointerDown={handleWipePointerDown}
+                          className="absolute top-0 bottom-0 w-1 bg-[#00F0FF] shadow-[0_0_12px_#00F0FF] z-20 cursor-ew-resize flex items-center justify-center select-none"
+                          style={{ left: `${activeSplitWipePos * 100}%` }}
+                        >
+                          <div className="w-6 h-6 -ml-px rounded-full bg-[#00F0FF] text-[#0D0E11] flex items-center justify-center text-[8px] font-black shadow-lg border border-white/60 hover:scale-115 transition-transform cursor-ew-resize">
+                            VS
+                          </div>
+                        </div>
+
+                        {/* Viewport Badges */}
+                        <span className="absolute top-3 left-3 z-20 px-2 py-0.5 rounded bg-black/80 text-amber-400 border border-amber-400/40 text-[9px] font-mono font-bold tracking-wider shadow-md pointer-events-none">
+                          RAW [Left]
+                        </span>
+                        <span className="absolute top-3 right-3 z-20 px-2 py-0.5 rounded bg-[#00F0FF]/90 text-[#0D0E11] text-[9px] font-mono font-bold tracking-wider shadow-md pointer-events-none">
+                          STABILIZED [Right]
+                        </span>
+
+                        {/* Draggable Slider Control on Bottom */}
+                        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 bg-[#0D0E11]/85 backdrop-blur-md border border-[#222630] rounded-full px-3 py-1 flex items-center gap-2 shadow-2xl">
+                          <span className="text-[9px] font-bold text-amber-400">RAW</span>
+                          <input
+                            type="range"
+                            min={5}
+                            max={95}
+                            value={Math.round(activeSplitWipePos * 100)}
+                            onChange={(e) => {
+                              const val = Number(e.target.value) / 100;
+                              if (currentActiveClip) {
+                                updateClipStabilization(currentActiveClip.id, { splitWipePosition: val });
+                              }
+                              setSplitStabilizationPosition(Number(e.target.value));
+                            }}
+                            className="w-32 h-1 accent-[#00F0FF] cursor-ew-resize bg-[#222630] rounded"
+                          />
+                          <span className="text-[9px] font-bold text-[#00F0FF]">STABILIZED</span>
+                        </div>
+                      </>
+                    )}
+
+                    {/* Mode Badges for Difference & Ghost */}
+                    {activeStabDebugMode === 'differenceBlend' && (
+                      <div className="absolute top-3 left-3 z-20 px-2.5 py-1 rounded bg-black/85 border border-[#00F0FF]/50 text-[#00F0FF] text-[9.5px] font-mono font-bold tracking-wider shadow-md pointer-events-none">
+                        DIAGNOSTIC: DIFFERENCE BLEND (Bright edges = Motion corrected)
+                      </div>
+                    )}
+                    {activeStabDebugMode === 'ghostOverlay50' && (
+                      <div className="absolute top-3 left-3 z-20 px-2.5 py-1 rounded bg-black/85 border border-[#00F0FF]/50 text-[#00F0FF] text-[9.5px] font-mono font-bold tracking-wider shadow-md pointer-events-none">
+                        DIAGNOSTIC: 50% GHOST OVERLAY (Superimposed Raw + Stabilized)
+                      </div>
+                    )}
+                  </>
+                )
+              ) : (
+                /* Loading preview prompt overlay */
+                <div className="absolute top-3 left-1/2 -translate-x-1/2 z-25 bg-[#0D0E11]/90 backdrop-blur-md border border-[#00F0FF]/40 rounded-full px-3 py-1 flex items-center gap-2 text-[10px] text-[#00F0FF] font-mono font-semibold shadow-2xl">
+                  {isStabilizationAnalyzing[currentActiveClip?.id || ''] !== undefined ? (
+                    <>
+                      <Loader2 size={12} className="animate-spin text-amber-400" />
+                      <span className="text-amber-400">Analyzing Motion ({Math.round(isStabilizationAnalyzing[currentActiveClip?.id || ''])}%)...</span>
+                    </>
+                  ) : isStabilizationRendering?.[currentActiveClip?.id || ''] ? (
+                    <>
+                      <Loader2 size={12} className="animate-spin text-[#00F0FF]" />
+                      <span>Rendering Stabilized Preview Stream...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Loader2 size={12} className="animate-spin text-[#00F0FF]" />
+                      <span>Loading Stabilized Video Stream...</span>
+                    </>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Phase 16: Stabilized Stream Live Badge when playing in non-split mode */}
+          {!isComparisonOverlayActive && currentActiveClip && (currentActiveClip.stabilizationProfile?.enabled || currentActiveClip.stabilization?.enabled) && (
+            <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#0D0E11]/85 backdrop-blur-md border border-[#00F0FF]/40 text-[#00F0FF] text-[9.5px] font-mono font-bold tracking-wide shadow-lg pointer-events-none select-none">
+              {currentActiveClip.stabilizationProfile?.status?.type === 'error' || currentActiveClip.stabilization?.status?.type === 'error' ? (
+                <>
+                  <Shield size={12} className="text-red-400" />
+                  <span className="text-red-400">STABILIZATION ERROR</span>
+                </>
+              ) : isStabilizationAnalyzing[currentActiveClip.id] !== undefined ? (
+                <>
+                  <Loader2 size={12} className="animate-spin text-amber-400" />
+                  <span className="text-amber-400">ANALYZING MOTION ({Math.round(isStabilizationAnalyzing[currentActiveClip.id])}%)</span>
+                </>
+              ) : isStabilizationRendering?.[currentActiveClip.id] ? (
+                <>
+                  <Loader2 size={12} className="animate-spin text-[#00F0FF]" />
+                  <span className="text-[#00F0FF]">RENDERING STABILIZED PREVIEW...</span>
+                </>
+              ) : stabilizationPreviewUrls[currentActiveClip.id] ? (
+                <>
+                  <Compass size={12} className="text-[#00F0FF] animate-pulse" />
+                  <span>STABILIZED STREAM (Active)</span>
+                </>
+              ) : (
+                <>
+                  <Loader2 size={12} className="animate-spin text-amber-400" />
+                  <span className="text-amber-400">PREPARING STABILIZATION...</span>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -2457,8 +3127,58 @@ export const ProgramMonitor: React.FC = () => {
           </button>
         </div>
 
-        {/* Right: Aspect ratio pill & Fullscreen button */}
+        {/* Right: Split Stabilization Comparison Toggle, Aspect ratio pill & Fullscreen button */}
         <div className="flex items-center gap-2">
+          {/* Split Before/After Stabilization Comparison Toggle */}
+          <button
+            onClick={() => {
+              const next = !isSplitStabilizationComparison;
+              setSplitStabilizationComparison(next);
+              if (currentActiveClip) {
+                updateClipStabilization(currentActiveClip.id, {
+                  debugViewMode: next ? 'splitWipe' : 'normal',
+                });
+              }
+            }}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-mono font-bold border transition-all cursor-pointer ${
+              isSplitStabilizationComparison
+                ? 'bg-[#00F0FF] text-[#0D0E11] border-[#00F0FF] shadow-[0_0_10px_rgba(0,240,255,0.4)]'
+                : 'bg-[#181B22] text-[#8A92A6] border-[#222630] hover:text-[#00F0FF]'
+            }`}
+            title="Toggle Split Before/After Video Stabilization Comparison"
+          >
+            <Compass size={12} className={isSplitStabilizationComparison ? 'animate-pulse' : ''} />
+            <span>Split Stab</span>
+          </button>
+
+          {isSplitStabilizationComparison && (
+            <button
+              onClick={() =>
+                setSplitStabilizationMode(splitStabilizationMode === 'vertical' ? 'side-by-side' : 'vertical')
+              }
+              className="px-2 py-0.5 rounded bg-[#181B22] border border-[#222630] text-[10px] font-mono text-[#8A92A6] hover:text-[#00F0FF] transition-colors cursor-pointer"
+              title="Switch between Split Wipe and Side-by-Side comparison"
+            >
+              {splitStabilizationMode === 'vertical' ? 'Wipe' : 'Side'}
+            </button>
+          )}
+
+          {/* Reference Alignment Grid & Center Crosshairs Toggle */}
+          <button
+            onClick={() => setIsAlignmentGridActive((prev) => !prev)}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-mono font-bold border transition-all cursor-pointer ${
+              isAlignmentGridActive
+                ? 'bg-[#00F0FF] text-[#0D0E11] border-[#00F0FF] shadow-[0_0_10px_rgba(0,240,255,0.4)]'
+                : 'bg-[#181B22] text-[#8A92A6] border-[#222630] hover:text-[#00F0FF]'
+            }`}
+            title="Toggle Rule-of-Thirds Grid, Horizon Guide & Center Crosshairs"
+          >
+            <Grid3X3 size={12} className={isAlignmentGridActive ? 'text-[#0D0E11]' : ''} />
+            <span>Grid & Reticle</span>
+          </button>
+
+          <div className="h-4 w-[1px] bg-[#222630] mx-0.5" />
+
           <button
             onClick={() => {
               const ratios: ('Original' | '16:9' | '9:16' | '1:1')[] = ['Original', '16:9', '9:16', '1:1'];

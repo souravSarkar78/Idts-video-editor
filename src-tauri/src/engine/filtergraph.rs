@@ -341,21 +341,93 @@ pub fn build_color_grading_profile_filters(profile: &ColorGradingProfile) -> Vec
     filters
 }
 
-/// Builds video stabilization filter chain using FFmpeg's `deshake` filter.
-/// Maps intensity (0.0 - 1.0) to search range `rx`/`ry` (8 - 64) with edge mirroring.
+/// Builds video stabilization filter chain using two-pass `vidstabtransform` (or fallback `deshake`).
+/// Concatenates transform filter directly before local clip transforms and color grading.
 pub fn build_stabilization_filter_chain(stab: Option<&StabilizationSettings>) -> Vec<String> {
     let mut filters = Vec::new();
     if let Some(settings) = stab {
-        if settings.enabled && settings.intensity > 0.001 {
-            let clamped_intensity = settings.intensity.clamp(0.0, 1.0);
-            let rx = (8.0 + clamped_intensity * 56.0).round() as u32; // 8 to 64
-            let ry = (8.0 + clamped_intensity * 56.0).round() as u32;
-            let blocksize = if clamped_intensity > 0.6 { 16 } else { 32 };
-            filters.push(format!(
-                "deshake=x=-1:y=-1:w=-1:h=-1:rx={}:ry={}:edge=mirror:blocksize={}",
-                rx, ry, blocksize
-            ));
+        if !settings.enabled {
+            return filters;
         }
+
+        if settings.mode != "realtime" {
+            // 1. Pass 2: Two-pass vidstabtransform if transforms_file_path is provided and exists
+            if let Some(ref trf_path_str) = settings.transforms_file_path {
+                let trf_path = Path::new(trf_path_str);
+                if trf_path.exists() && trf_path.extension().map_or(false, |ext| ext.eq_ignore_ascii_case("trf")) {
+                    let escaped_trf = escape_ffmpeg_filter_path(trf_path);
+                    let smoothing = settings.smoothing.clamp(1, 1000);
+                    let optalgo = match settings.smoothing_type.to_lowercase().as_str() {
+                        "gaussian" | "gauss" => "gauss",
+                        "linear" | "avg" => "avg",
+                        _ => "opt",
+                    };
+                    let is_show_borders = settings.debug_view_mode == crate::models::ipc::StabilizationDebugMode::ShowBordersNoCrop;
+                    let (crop, optzoom) = if is_show_borders {
+                        ("black", 0)
+                    } else {
+                        match settings.crop_mode.to_lowercase().as_str() {
+                            "black_borders" => ("black", 0),
+                            "keep_aspect" => ("keep", 2),
+                            _ => ("black", 2), // "auto" dynamic zoom
+                        }
+                    };
+                    let zoom = if is_show_borders { 0.0 } else { settings.zoom_percent.clamp(0.0, 100.0) };
+
+                    filters.push(format!(
+                        "vidstabtransform=input='{}':smoothing={}:optalgo={}:crop={}:optzoom={}:zoomspeed=0.25:interpol=bicubic:maxshift=64:maxangle=0.2:zoom={:.2}",
+                        escaped_trf, smoothing, optalgo, crop, optzoom, zoom
+                    ));
+                    return filters;
+                }
+            }
+
+            // 2. Check persistent transform cache in `%LOCALAPPDATA%/idts-video-editor/stabilization/`
+            if let Some(ref src_path) = settings.file_path {
+                let cached_trf = crate::engine::stabilize::resolve_cached_trf(
+                    src_path,
+                    settings.in_point_seconds,
+                    settings.out_point_seconds,
+                ).or_else(|| crate::engine::stabilize::resolve_cached_trf(src_path, None, None));
+
+                if let Some(cached_trf) = cached_trf {
+                    let escaped_trf = escape_ffmpeg_filter_path(&cached_trf);
+                    let smoothing = settings.smoothing.clamp(1, 1000);
+                    let optalgo = match settings.smoothing_type.to_lowercase().as_str() {
+                        "gaussian" | "gauss" => "gauss",
+                        "linear" | "avg" => "avg",
+                        _ => "opt",
+                    };
+                    let is_show_borders = settings.debug_view_mode == crate::models::ipc::StabilizationDebugMode::ShowBordersNoCrop;
+                    let (crop, optzoom) = if is_show_borders {
+                        ("black", 0)
+                    } else {
+                        match settings.crop_mode.to_lowercase().as_str() {
+                            "black_borders" => ("black", 0),
+                            "keep_aspect" => ("keep", 2),
+                            _ => ("black", 2), // "auto" dynamic zoom
+                        }
+                    };
+                    let zoom = if is_show_borders { 0.0 } else { settings.zoom_percent.clamp(0.0, 100.0) };
+
+                    filters.push(format!(
+                        "vidstabtransform=input='{}':smoothing={}:optalgo={}:crop={}:optzoom={}:zoomspeed=0.25:interpol=bicubic:maxshift=64:maxangle=0.2:zoom={:.2}",
+                        escaped_trf, smoothing, optalgo, crop, optzoom, zoom
+                    ));
+                    return filters;
+                }
+            }
+        }
+
+        // 3. Fallback to single-pass deshake immediately when enabled if Pass 1 .trf not yet available
+        let intensity = settings.intensity.unwrap_or(0.5).clamp(0.05, 1.0);
+        let rx = (8.0 + intensity * 56.0).round() as u32; // 8 to 64
+        let ry = (8.0 + intensity * 56.0).round() as u32;
+        let blocksize = if intensity > 0.6 { 16 } else { 32 };
+        filters.push(format!(
+            "deshake=x=-1:y=-1:w=-1:h=-1:rx={}:ry={}:edge=mirror:blocksize={}",
+            rx, ry, blocksize
+        ));
     }
     filters
 }
@@ -397,7 +469,11 @@ pub fn build_speed_audio_filters(speed_profile: Option<&SpeedProfile>) -> Vec<St
                 rem /= 0.5;
             }
             if (rem - 1.0).abs() > 0.005 {
-                filters.push(format!("atempo={:.3}", rem));
+                if ((rem * 10.0) - (rem * 10.0).round()).abs() < 1e-3 {
+                    filters.push(format!("atempo={:.1}", rem));
+                } else {
+                    filters.push(format!("atempo={:.3}", rem));
+                }
             }
         }
     }

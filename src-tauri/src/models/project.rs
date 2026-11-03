@@ -4,9 +4,13 @@ use serde::{Deserialize, Serialize};
 
 use super::ipc::{MediaAsset, MediaBin, MediaTrack, Transition};
 pub use super::ipc::{
-    AudioDeviceInfo, AudioProcessingSettings, CaptionSegment, ColorCorrection, ColorGradingProfile,
-    ColorWheel, DuckingConfig, HslQualifier, KeyframePoint, KeyframeTrack, LensEffects,
-    NoiseDenoiseAndFillProfile, SpeedProfile, SplineCurves, SplitToning, StabilizationSettings, SelectiveColorAdjustment, TextClip, TextClipStyle, TextTrack, VolumeKeyframePoint,
+    AudioDeviceInfo, AudioProcessingSettings, CaptionSegment, Clip, ClipTransformCache, ColorCorrection,
+    ColorGradingProfile, ColorWheel, CropModePolicy, DuckingConfig, FrameTransformMatrix, HslQualifier,
+    KeyframePoint, KeyframeTrack, LensEffects, NoiseDenoiseAndFillProfile, SpeedProfile, SplineCurves,
+    SplitToning, StabilizationDebugMode, StabilizationDiagnostics, StabilizationEngine, StabilizationMode,
+    StabilizationProfile, StabilizationProgressEvent, StabilizationSettings, StabilizationStatus,
+    SelectiveColorAdjustment, TelemetryProbeResult,
+    TextClip, TextClipStyle, TextTrack, VolumeKeyframePoint, WaveformChunkPayload, WaveformStatus,
 };
 
 /// High-level project metadata for .idts project file

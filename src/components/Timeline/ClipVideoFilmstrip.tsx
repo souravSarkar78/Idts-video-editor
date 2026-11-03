@@ -29,9 +29,9 @@ export const ClipVideoFilmstrip: React.FC<ClipVideoFilmstripProps> = React.memo(
   fps = 30,
 }) => {
   // Approximate 16:9 thumbnail width on the timeline
-  const approxTileWidth = 72;
-  // Span the full width of the clip seamlessly, even when deeply zoomed in (no cutoff or missing tiles)
-  const numTiles = Math.max(1, Math.min(300, Math.ceil(widthPx / approxTileWidth)));
+  const approxTileWidth = 84;
+  // Span the width of the clip smoothly without creating excessive DOM nodes
+  const numTiles = Math.max(1, Math.min(80, Math.ceil(widthPx / approxTileWidth)));
   // Each tile gets exact width so numTiles * tileWidth covers 100% of the clip width
   const tileWidth = widthPx / numTiles;
 
@@ -39,23 +39,21 @@ export const ClipVideoFilmstrip: React.FC<ClipVideoFilmstripProps> = React.memo(
   const [, setCacheRev] = useState(0);
   const isCancelledRef = useRef(false);
 
-  // Background frame extractor: decoupled from widthPx so zooming in/out NEVER cancels or restarts decoding
+  // Background frame extractor: lightweight sample points (head, mid, tail) with preload="metadata"
   useEffect(() => {
     isCancelledRef.current = false;
     if (!filePath || durationSeconds <= 0) return;
 
-    // Distribute sample keyframes across the clip duration (~1 frame every 1.5s to 2s, max 30 keyframes)
-    const sampleCount = Math.min(30, Math.max(8, Math.ceil(durationSeconds / 1.5)));
-    const missingTimes: number[] = [];
+    // Distribute sample keyframes: head, mid, tail (max 3-4 keyframes, avoiding heavy browser seeking)
+    const candidateTimes = [
+      inPointSeconds + 0.1,
+      inPointSeconds + durationSeconds * 0.5,
+      Math.max(inPointSeconds + 0.1, inPointSeconds + durationSeconds - 0.5),
+    ];
 
-    for (let k = 0; k < sampleCount; k++) {
-      const t =
-        inPointSeconds +
-        (sampleCount === 1 ? 0 : (k / (sampleCount - 1)) * durationSeconds);
-      if (!getNearestCachedFrame(filePath, t, 0.75)) {
-        missingTimes.push(t);
-      }
-    }
+    const missingTimes = candidateTimes.filter(
+      (t) => !getNearestCachedFrame(filePath, t, 1.0)
+    );
 
     if (missingTimes.length === 0) return;
 
@@ -77,7 +75,7 @@ export const ClipVideoFilmstrip: React.FC<ClipVideoFilmstripProps> = React.memo(
         video.crossOrigin = 'anonymous';
         video.muted = true;
         video.playsInline = true;
-        video.preload = 'auto';
+        video.preload = 'metadata'; // Never buffer entire file into memory!
         video.src = videoSrc;
 
         cleanupVideo = () => {
@@ -94,6 +92,7 @@ export const ClipVideoFilmstrip: React.FC<ClipVideoFilmstripProps> = React.memo(
             if (!resolved) {
               resolved = true;
               video.removeEventListener('loadeddata', onReady);
+              video.removeEventListener('loadedmetadata', onReady);
               video.removeEventListener('canplay', onReady);
               video.removeEventListener('error', onError);
               resolve();
@@ -107,15 +106,18 @@ export const ClipVideoFilmstrip: React.FC<ClipVideoFilmstripProps> = React.memo(
           };
 
           video.addEventListener('loadeddata', onReady);
+          video.addEventListener('loadedmetadata', onReady);
           video.addEventListener('canplay', onReady);
           video.addEventListener('error', onError);
-          setTimeout(onReady, 2500);
+          setTimeout(onReady, 1800);
         });
 
         if (isCancelledRef.current) {
           cleanupVideo();
           return;
         }
+
+        let anyExtracted = false;
 
         // Decode each missing keyframe
         for (const targetTime of missingTimes) {
@@ -142,7 +144,7 @@ export const ClipVideoFilmstrip: React.FC<ClipVideoFilmstripProps> = React.memo(
               }
             };
             video.addEventListener('seeked', onSeeked);
-            setTimeout(onSeeked, 800);
+            setTimeout(onSeeked, 400);
           });
 
           if (isCancelledRef.current) break;
@@ -151,14 +153,17 @@ export const ClipVideoFilmstrip: React.FC<ClipVideoFilmstripProps> = React.memo(
             const dataUrl = captureVideoFrame(video, 120, 68);
             if (dataUrl) {
               setCachedFrame(filePath, targetTime, dataUrl);
-              if (!isCancelledRef.current) {
-                setCacheRev((r) => r + 1);
-              }
+              anyExtracted = true;
             }
           }
         }
 
         cleanupVideo();
+
+        // Batch notify React exactly once when sampling completes
+        if (anyExtracted && !isCancelledRef.current) {
+          setCacheRev((r) => r + 1);
+        }
       } catch {
         if (cleanupVideo) cleanupVideo();
       }

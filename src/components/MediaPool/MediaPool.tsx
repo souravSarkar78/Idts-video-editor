@@ -21,6 +21,7 @@ import {
   Zap,
   RefreshCw,
   Split,
+  Loader2,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useTimelineStore, isTauri, tauriInvoke } from '../../store/timelineStore';
@@ -45,6 +46,12 @@ export const MediaPool: React.FC = () => {
     deleteBin,
     importFiles,
     importFromNativePaths,
+    importMediaBatch,
+    cancelMediaImport,
+    isIngesting,
+    ingestTotal,
+    ingestCurrent,
+    ingestStatusMessage,
     moveAssetToBin,
     deleteAsset,
     selectedAssetId,
@@ -71,6 +78,12 @@ export const MediaPool: React.FC = () => {
       deleteBin: state.deleteBin,
       importFiles: state.importFiles,
       importFromNativePaths: state.importFromNativePaths,
+      importMediaBatch: state.importMediaBatch,
+      cancelMediaImport: state.cancelMediaImport,
+      isIngesting: state.isIngesting,
+      ingestTotal: state.ingestTotal,
+      ingestCurrent: state.ingestCurrent,
+      ingestStatusMessage: state.ingestStatusMessage,
       moveAssetToBin: state.moveAssetToBin,
       deleteAsset: state.deleteAsset,
       selectedAssetId: state.selectedAssetId,
@@ -104,6 +117,36 @@ export const MediaPool: React.FC = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
+
+  // Virtual Scrolling State
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [containerWidth, setContainerWidth] = useState(400);
+  const [containerHeight, setContainerHeight] = useState(600);
+
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+
+    const onScroll = () => {
+      setScrollTop(el.scrollTop);
+    };
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setContainerWidth(entry.contentRect.width);
+        setContainerHeight(entry.contentRect.height);
+      }
+    });
+
+    el.addEventListener('scroll', onScroll, { passive: true });
+    resizeObserver.observe(el);
+
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      resizeObserver.disconnect();
+    };
+  }, []);
 
   // Close context menu on window click
   useEffect(() => {
@@ -150,7 +193,7 @@ export const MediaPool: React.FC = () => {
       if (isTauri) {
         const paths = await tauriInvoke<string[]>('open_file_dialog');
         if (paths && paths.length > 0) {
-          await importFromNativePaths(paths);
+          await importMediaBatch(paths);
           setIsImporting(false);
           return;
         }
@@ -169,7 +212,7 @@ export const MediaPool: React.FC = () => {
       if (isTauri) {
         const paths = await tauriInvoke<string[]>('open_folder_dialog');
         if (paths && paths.length > 0) {
-          await importFromNativePaths(paths);
+          await importMediaBatch(paths);
           setIsImporting(false);
           return;
         }
@@ -351,6 +394,27 @@ export const MediaPool: React.FC = () => {
       </div>
     );
   }
+
+  // Virtual Scrolling Calculations for Grid & List
+  const effWidth = Math.max(160, containerWidth - 24);
+  const numCols = Math.max(1, Math.floor((effWidth + 10) / (150 + 10)));
+  const colWidth = Math.floor((effWidth - (numCols - 1) * 10) / numCols);
+  const cardHeight = Math.round((colWidth * 9) / 16) + 32;
+  const gridRowHeight = cardHeight + 10;
+  const totalGridRows = Math.ceil(filteredAssets.length / numCols);
+  const startGridRow = Math.max(0, Math.floor(scrollTop / gridRowHeight) - 2);
+  const endGridRow = Math.min(totalGridRows, Math.ceil((scrollTop + containerHeight) / gridRowHeight) + 2);
+  const visibleGridAssets = filteredAssets.slice(startGridRow * numCols, endGridRow * numCols);
+  const topGridSpacer = startGridRow * gridRowHeight;
+  const bottomGridSpacer = Math.max(0, (totalGridRows - endGridRow) * gridRowHeight);
+
+  const listRowHeight = 52;
+  const totalListRows = filteredAssets.length;
+  const startListRow = Math.max(0, Math.floor(scrollTop / listRowHeight) - 4);
+  const endListRow = Math.min(totalListRows, Math.ceil((scrollTop + containerHeight) / listRowHeight) + 4);
+  const visibleListAssets = filteredAssets.slice(startListRow, endListRow);
+  const topListSpacer = startListRow * listRowHeight;
+  const bottomListSpacer = Math.max(0, (totalListRows - endListRow) * listRowHeight);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-[#14161B] border-r border-[#222630] select-none">
@@ -633,125 +697,208 @@ export const MediaPool: React.FC = () => {
           </div>
         </div>
 
-        {/* ASSET ITEMS CONTAINER */}
-        <div className="flex-1 overflow-y-auto p-3">
+        {/* ASSET ITEMS CONTAINER WITH VIRTUALIZATION & DRAG-AND-DROP */}
+        <div
+          ref={scrollContainerRef}
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+              importFiles(e.dataTransfer.files);
+            }
+          }}
+          className="flex-1 overflow-y-auto p-3 flex flex-col relative"
+        >
           {filteredAssets.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center p-6 text-[#64748B]">
-              <div className="w-12 h-12 rounded-full bg-[#181B22] border border-[#222630] flex items-center justify-center mb-3 text-[#00F0FF]">
-                <Upload size={22} />
+            <div
+              onClick={handleNativeImportFiles}
+              className="flex-1 min-h-[220px] flex flex-col items-center justify-center text-center p-6 text-[#64748B] cursor-pointer hover:bg-[#161820]/70 rounded-xl transition-all group border-2 border-dashed border-transparent hover:border-[#00F0FF]/35 select-none"
+              title="Click anywhere to import media files"
+            >
+              <div className="w-14 h-14 rounded-full bg-[#181B22] border border-[#222630] group-hover:border-[#00F0FF]/60 group-hover:bg-[#00F0FF]/15 flex items-center justify-center mb-3 text-[#00F0FF] group-hover:scale-110 transition-all shadow-md">
+                <Upload size={24} className="group-hover:-translate-y-0.5 transition-transform" />
               </div>
-              <div className="text-sm font-semibold text-[#8A92A6]">No media in this bin</div>
-              <div className="text-xs text-[#525D73] mt-1 max-w-[200px]">
-                Click <span className="text-[#00F0FF] font-semibold">Import</span> or drag video/audio files from your explorer
+              <div className="text-sm font-semibold text-[#8A92A6] group-hover:text-white transition-colors">
+                No media in this bin
+              </div>
+              <div className="text-xs text-[#525D73] group-hover:text-[#8A92A6] mt-1 max-w-[220px] transition-colors leading-relaxed">
+                Click <span className="text-[#00F0FF] font-semibold underline decoration-[#00F0FF]/40 underline-offset-2">Import</span> or drag video/audio files from your explorer
               </div>
             </div>
           ) : viewMode === 'grid' ? (
-            /* COMPACT PROFESSIONAL MEDIA GRID */
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2.5">
-              {filteredAssets.map((asset) => {
-                const isSelected = selectedAssetId === asset.id;
-                const isVideo = asset.mediaType === 'video';
-                
-                const resBadge = isVideo
-                  ? asset.height
-                    ? asset.height >= 2160 || (asset.width && asset.width >= 3840)
-                      ? '4K'
-                      : `${asset.height}p`
-                    : '1080p'
-                  : `${asset.sampleRate ? Math.round(asset.sampleRate / 1000) : 48}kHz`;
+            /* COMPACT PROFESSIONAL MEDIA GRID (VIRTUALIZED) */
+            <div>
+              {topGridSpacer > 0 && <div style={{ height: topGridSpacer }} aria-hidden="true" />}
+              <div
+                className="grid gap-2.5"
+                style={{
+                  gridTemplateColumns: `repeat(${numCols}, minmax(0, 1fr))`,
+                }}
+              >
+                {visibleGridAssets.map((asset) => {
+                  const isSelected = selectedAssetId === asset.id;
+                  const isVideo = asset.mediaType === 'video';
 
-                const fpsBadge = isVideo
-                  ? `${Math.round(asset.framerate || 30)}fps`
-                  : 'Audio';
-
-                const durationStr = formatSeconds(asset.durationSeconds);
-
-                return (
-                  <div
-                    key={asset.id}
-                    onMouseDown={(e) => handleStartMouseDrag(e, asset)}
-                    onDoubleClick={() => handleQuickAdd(asset)}
-                    onClick={() => selectAsset(asset.id)}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setAssetContextMenu({ x: e.clientX, y: e.clientY, asset });
-                    }}
-                    title={`File: ${asset.name}\nResolution: ${resBadge}\nFPS: ${fpsBadge}\nDuration: ${durationStr}\n(Right-click for Proxy options, double-click or drag to add to timeline)`}
-                    className={`group relative flex flex-col rounded-md overflow-hidden bg-[#0D0E11] border transition-all cursor-grab active:cursor-grabbing hover:border-[#00F0FF]/80 hover:shadow-[0_0_16px_rgba(0,240,255,0.2)] ${
-                      isSelected ? 'border-[#00F0FF] ring-1 ring-[#00F0FF]' : 'border-[#222630]'
-                    }`}
-                  >
-                    {/* Thumbnail Image Container with Live Horizontal Hover Scrubbing */}
-                    <div className="relative aspect-video w-full bg-[#1A1D24] overflow-hidden flex items-center justify-center">
-                      <MediaThumbnail
-                        filePath={asset.filePath}
-                        mediaType={asset.mediaType}
-                        durationSeconds={asset.durationSeconds}
-                        name={asset.name}
-                      />
-
-                      {/* Top-Left Badges (PROX / Transcoding Progress) */}
-                      <div className="absolute top-1.5 left-1.5 flex items-center gap-1 z-30 pointer-events-none">
-                        {asset.hasProxy && (
-                          <span
-                            className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-[#10B981] text-[#0D0E11] shadow-md"
-                            title="Editing proxy ready for smooth playback"
-                          >
-                            PROX
-                          </span>
-                        )}
-                        {proxyStatus[asset.filePath] === 'transcoding' && (
-                          <span
-                            className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-[#00F0FF] text-[#0D0E11] shadow-md animate-pulse flex items-center gap-1"
-                            title="Transcoding proxy..."
-                          >
-                            <RefreshCw size={9} className="animate-spin" />
-                            <span>PROX {Math.round(proxyProgress[asset.filePath] || 0)}%</span>
-                          </span>
-                        )}
-                      </div>
-
-                      {/* On Hover: Clean Filename Overlay Banner at Bottom */}
+                  // SKELETON PLACEHOLDER DURING BACKGROUND ASYNC INGESTION
+                  if (asset.isPendingIngest) {
+                    return (
                       <div
-                        className="absolute bottom-0 inset-x-0 pl-2 pr-8 pt-4 pb-1 bg-gradient-to-t from-black/95 via-black/75 to-transparent text-[10px] font-medium text-white truncate opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none"
-                        title={asset.name}
+                        key={asset.id}
+                        className="group relative flex flex-col rounded-md overflow-hidden bg-[#0D0E11] border border-[#222630] animate-pulse select-none"
+                        title={`Importing ${asset.name} (${asset.ingestStatus || 'Probing...'})...`}
                       >
-                        {asset.name}
+                        <div className="relative aspect-video w-full bg-[#161820] flex flex-col items-center justify-center text-center p-2">
+                          <Loader2 size={20} className="text-[#00F0FF] animate-spin mb-1.5" />
+                          <span className="text-[10px] font-mono text-[#00F0FF] font-semibold uppercase tracking-wider">
+                            {asset.ingestStatus || 'Probing...'}
+                          </span>
+                          <span className="text-[9px] text-[#64748B] truncate max-w-full px-2 mt-0.5">
+                            {asset.name}
+                          </span>
+                        </div>
+                        <div className="px-2 py-1.5 flex items-center justify-between text-[10px] font-mono bg-[#0C0E12] border-t border-[#1C202B]">
+                          <span className="text-[#64748B] truncate">{asset.name}</span>
+                          <span className="text-[#00F0FF] text-[9px]">Queued</span>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  const resBadge = isVideo
+                    ? asset.height
+                      ? asset.height >= 2160 || (asset.width && asset.width >= 3840)
+                        ? '4K'
+                        : `${asset.height}p`
+                      : '1080p'
+                    : `${asset.sampleRate ? Math.round(asset.sampleRate / 1000) : 48}kHz`;
+
+                  const fpsBadge = isVideo
+                    ? `${Math.round(asset.framerate || 30)}fps`
+                    : 'Audio';
+
+                  const durationStr = formatSeconds(asset.durationSeconds);
+
+                  return (
+                    <div
+                      key={asset.id}
+                      onMouseDown={(e) => handleStartMouseDrag(e, asset)}
+                      onDoubleClick={() => handleQuickAdd(asset)}
+                      onClick={() => selectAsset(asset.id)}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setAssetContextMenu({ x: e.clientX, y: e.clientY, asset });
+                      }}
+                      title={`File: ${asset.name}\nResolution: ${resBadge}\nFPS: ${fpsBadge}\nDuration: ${durationStr}\n(Right-click for Proxy options, double-click or drag to add to timeline)`}
+                      className={`group relative flex flex-col rounded-md overflow-hidden bg-[#0D0E11] border transition-all cursor-grab active:cursor-grabbing hover:border-[#00F0FF]/80 hover:shadow-[0_0_16px_rgba(0,240,255,0.2)] ${
+                        isSelected ? 'border-[#00F0FF] ring-1 ring-[#00F0FF]' : 'border-[#222630]'
+                      }`}
+                    >
+                      {/* Thumbnail Image Container with Live Horizontal Hover Scrubbing */}
+                      <div className="relative aspect-video w-full bg-[#1A1D24] overflow-hidden flex items-center justify-center">
+                        <MediaThumbnail
+                          filePath={asset.filePath}
+                          mediaType={asset.mediaType}
+                          durationSeconds={asset.durationSeconds}
+                          name={asset.name}
+                          thumbnailUrl={asset.thumbnailUrl}
+                        />
+
+                        {/* Top-Left Badges (PROX / Transcoding Progress) */}
+                        <div className="absolute top-1.5 left-1.5 flex items-center gap-1 z-30 pointer-events-none">
+                          {asset.hasProxy && (
+                            <span
+                              className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-[#10B981] text-[#0D0E11] shadow-md"
+                              title="Editing proxy ready for smooth playback"
+                            >
+                              PROX
+                            </span>
+                          )}
+                          {proxyStatus[asset.filePath] === 'transcoding' && (
+                            <span
+                              className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-[#00F0FF] text-[#0D0E11] shadow-md animate-pulse flex items-center gap-1"
+                              title="Transcoding proxy..."
+                            >
+                              <RefreshCw size={9} className="animate-spin" />
+                              <span>PROX {Math.round(proxyProgress[asset.filePath] || 0)}%</span>
+                            </span>
+                          )}
+                        </div>
+
+                        {/* On Hover: Clean Filename Overlay Banner at Bottom */}
+                        <div
+                          className="absolute bottom-0 inset-x-0 pl-2 pr-8 pt-4 pb-1 bg-gradient-to-t from-black/95 via-black/75 to-transparent text-[10px] font-medium text-white truncate opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none"
+                          title={asset.name}
+                        >
+                          {asset.name}
+                        </div>
+
+                        {/* Quick Add Button on Hover (Bottom-Right corner) */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleQuickAdd(asset);
+                          }}
+                          className="absolute bottom-1.5 right-1.5 p-1 rounded-full bg-[#00F0FF] text-[#0D0E11] hover:scale-110 transition-transform shadow-lg opacity-0 group-hover:opacity-100 z-30 cursor-pointer"
+                          title="Add to Timeline Track"
+                        >
+                          <Plus size={12} strokeWidth={3} />
+                        </button>
                       </div>
 
-                      {/* Quick Add Button on Hover (Bottom-Right corner) */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleQuickAdd(asset);
-                        }}
-                        className="absolute bottom-1.5 right-1.5 p-1 rounded-full bg-[#00F0FF] text-[#0D0E11] hover:scale-110 transition-transform shadow-lg opacity-0 group-hover:opacity-100 z-30 cursor-pointer"
-                        title="Add to Timeline Track"
-                      >
-                        <Plus size={12} strokeWidth={3} />
-                      </button>
-                    </div>
-
-                    {/* Compact Footer: ONLY Resolution, FPS, and Duration */}
-                    <div className="px-2 py-1.5 flex items-center justify-between text-[10px] font-mono bg-[#0C0E12] border-t border-[#1C202B]">
-                      <div className="flex items-center gap-1.5 truncate">
-                        <span className="text-[#00F0FF] font-medium">{resBadge}</span>
-                        <span className="text-[#64748B]">•</span>
-                        <span className="text-[#94A3B8]">{fpsBadge}</span>
+                      {/* Compact Footer: ONLY Resolution, FPS, and Duration */}
+                      <div className="px-2 py-1.5 flex items-center justify-between text-[10px] font-mono bg-[#0C0E12] border-t border-[#1C202B]">
+                        <div className="flex items-center gap-1.5 truncate">
+                          <span className="text-[#00F0FF] font-medium">{resBadge}</span>
+                          <span className="text-[#64748B]">•</span>
+                          <span className="text-[#94A3B8]">{fpsBadge}</span>
+                        </div>
+                        <span className="text-[#F0F3F8] font-semibold shrink-0 ml-1">{durationStr}</span>
                       </div>
-                      <span className="text-[#F0F3F8] font-semibold shrink-0 ml-1">{durationStr}</span>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
+              {bottomGridSpacer > 0 && <div style={{ height: bottomGridSpacer }} aria-hidden="true" />}
             </div>
           ) : (
-            /* LIST VIEW */
+            /* LIST VIEW (VIRTUALIZED) */
             <div className="space-y-1">
-              {filteredAssets.map((asset) => {
+              {topListSpacer > 0 && <div style={{ height: topListSpacer }} aria-hidden="true" />}
+              {visibleListAssets.map((asset) => {
                 const isSelected = selectedAssetId === asset.id;
-                const isVideo = asset.mediaType === 'video';
+
+                // SKELETON PLACEHOLDER DURING BACKGROUND ASYNC INGESTION
+                if (asset.isPendingIngest) {
+                  return (
+                    <div
+                      key={asset.id}
+                      className="group relative flex items-center justify-between px-3 py-2 rounded-md bg-[#0D0E11] border border-[#222630] animate-pulse select-none"
+                      title={`Importing ${asset.name} (${asset.ingestStatus || 'Probing...'})...`}
+                    >
+                      <div className="flex items-center gap-3 truncate flex-1 min-w-0 pr-3">
+                        <div className="w-12 h-8 rounded bg-[#161820] flex items-center justify-center shrink-0">
+                          <Loader2 size={14} className="text-[#00F0FF] animate-spin" />
+                        </div>
+                        <div className="truncate flex-1 min-w-0">
+                          <div className="text-xs font-semibold text-[#8A92A6] truncate">
+                            {asset.name}
+                          </div>
+                          <div className="text-[10px] text-[#00F0FF] font-mono">
+                            {asset.ingestStatus || 'Probing metadata...'}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-xs font-mono text-[#64748B] shrink-0">
+                        Queued
+                      </div>
+                    </div>
+                  );
+                }
 
                 return (
                   <div
@@ -776,6 +923,7 @@ export const MediaPool: React.FC = () => {
                           mediaType={asset.mediaType}
                           durationSeconds={asset.durationSeconds}
                           name={asset.name}
+                          thumbnailUrl={asset.thumbnailUrl}
                         />
                         {asset.hasProxy && (
                           <div className="absolute top-0.5 left-0.5 px-1 py-0.2 rounded text-[7px] font-bold bg-[#10B981] text-[#0D0E11]">
@@ -820,6 +968,7 @@ export const MediaPool: React.FC = () => {
                   </div>
                 );
               })}
+              {bottomListSpacer > 0 && <div style={{ height: bottomListSpacer }} aria-hidden="true" />}
             </div>
           )}
         </div>
@@ -889,6 +1038,40 @@ export const MediaPool: React.FC = () => {
             <Trash2 size={13} />
             <span>Delete Asset</span>
           </button>
+        </div>
+      )}
+
+      {/* Floating Overall Ingest Progress Toast */}
+      {isIngesting && (
+        <div className="fixed bottom-4 left-4 z-[99999] bg-[#14161B]/95 border border-[#00F0FF]/40 rounded-lg shadow-2xl p-3 flex flex-col gap-2 min-w-[280px] max-w-[340px] backdrop-blur-md animate-in slide-in-from-bottom-2 duration-200">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-xs font-semibold text-[#F0F3F8] truncate">
+              <Loader2 size={14} className="animate-spin text-[#00F0FF] shrink-0" />
+              <span className="truncate">
+                Importing: {ingestCurrent} of {ingestTotal} clips...
+              </span>
+            </div>
+            <button
+              onClick={cancelMediaImport}
+              className="text-[10px] text-red-400 hover:text-red-300 font-medium px-2 py-0.5 rounded bg-red-500/10 hover:bg-red-500/20 transition-colors shrink-0 cursor-pointer"
+              title="Cancel remaining files in queue"
+            >
+              Cancel Remaining
+            </button>
+          </div>
+          <div className="w-full bg-[#1C202B] rounded-full h-1.5 overflow-hidden">
+            <div
+              className="bg-[#00F0FF] h-1.5 transition-all duration-200"
+              style={{
+                width: `${ingestTotal > 0 ? Math.min(100, Math.round((ingestCurrent / ingestTotal) * 100)) : 0}%`,
+              }}
+            />
+          </div>
+          {ingestStatusMessage && (
+            <div className="text-[10px] text-[#8A92A6] truncate font-mono">
+              {ingestStatusMessage}
+            </div>
+          )}
         </div>
       )}
       </div>

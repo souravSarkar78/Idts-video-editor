@@ -1,15 +1,15 @@
 //! Video frame extraction engine for thumbnail generation and live filter preview cards.
 //!
-//! Extracts downscaled high-performance frame snapshots using sidecar FFmpeg into
-//! `%LOCALAPPDATA%/idts-video-editor/temp_previews/` and returns base64 data URIs.
+//! Extracts downscaled frame snapshots using sidecar FFmpeg into
+//! `%LOCALAPPDATA%/idts-video-editor/cache/thumbs/` and returns local file paths.
 
 use std::path::{Path, PathBuf};
 use crate::engine::ffmpeg::find_ffmpeg_executable;
 
 const BASE64_CHARS: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-/// Fast zero-dependency base64 encoder for image payload streaming.
-fn encode_base64(data: &[u8]) -> String {
+/// Fast zero-dependency base64 encoder for image payload streaming when needed.
+pub fn encode_base64(data: &[u8]) -> String {
     let mut out = String::with_capacity((data.len() + 2) / 3 * 4);
     for chunk in data.chunks(3) {
         let b0 = chunk[0] as u32;
@@ -33,26 +33,127 @@ fn encode_base64(data: &[u8]) -> String {
     out
 }
 
-/// Resolves the preview cache directory in LocalAppData.
+/// Resolves the preview/thumbnail cache directory in LocalAppData (%LOCALAPPDATA%/idts-video-editor/cache/thumbs/).
 pub fn get_preview_cache_dir() -> PathBuf {
     #[cfg(target_os = "windows")]
     {
         if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
             return PathBuf::from(local_app_data)
                 .join("idts-video-editor")
-                .join("temp_previews");
+                .join("cache")
+                .join("thumbs");
         }
     }
 
     std::env::temp_dir()
         .join("idts-video-editor")
-        .join("temp_previews")
+        .join("cache")
+        .join("thumbs")
 }
 
-/// Extracts a downscaled 16:9 preview frame (320x180) from a media source file at `timestamp_sec`.
+/// Computes a deterministic hash for a media file's thumbnail path
+fn compute_thumb_hash(file_path: &str, timestamp_sec: f64) -> u64 {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    std::hash::Hash::hash(&file_path, &mut hasher);
+    std::hash::Hash::hash(&((timestamp_sec * 10.0) as i64), &mut hasher);
+    if let Ok(meta) = std::fs::metadata(file_path) {
+        std::hash::Hash::hash(&meta.len(), &mut hasher);
+    }
+    std::hash::Hasher::finish(&hasher)
+}
+
+/// Extracts a fast-seek single-frame poster thumbnail directly to disk.
 ///
-/// Saves to `%LOCALAPPDATA%/idts-video-editor/temp_previews/current_frame.jpg` and
-/// returns a `data:image/jpeg;base64,...` URI for instant WebGL texture binding.
+/// Uses `ffmpeg -ss 00:00:01.000 -i <input> -vframes 1 -vf "scale=320:180:force_original_aspect_ratio=decrease" -q:v 3 -y <output_path>`.
+/// Returns the local disk path without streaming raw base64 over IPC.
+pub fn extract_clip_thumbnail_file(source_path: &str) -> Result<String, String> {
+    let input_path = Path::new(source_path);
+    if !input_path.exists() {
+        return Err(format!("Source video file does not exist: {}", source_path));
+    }
+
+    let cache_dir = get_preview_cache_dir();
+    let _ = std::fs::create_dir_all(&cache_dir);
+
+    let hash_val = compute_thumb_hash(source_path, 1.0);
+    let output_file = cache_dir.join(format!("thumb_{:016x}.jpg", hash_val));
+
+    // Return cached thumbnail immediately if it already exists and is non-empty
+    if output_file.exists() {
+        if let Ok(meta) = std::fs::metadata(&output_file) {
+            if meta.len() > 100 {
+                return Ok(output_file.to_string_lossy().to_string());
+            }
+        }
+    }
+
+    let ffmpeg_bin = find_ffmpeg_executable()
+        .ok_or_else(|| "Could not locate sidecar FFmpeg binary".to_string())?;
+
+    let mut cmd = std::process::Command::new(&ffmpeg_bin);
+    cmd.args([
+        "-y",
+        "-ss",
+        "00:00:01.000",
+        "-i",
+        source_path,
+        "-vframes",
+        "1",
+        "-vf",
+        "scale=320:180:force_original_aspect_ratio=decrease",
+        "-q:v",
+        "3",
+        output_file.to_str().unwrap_or("thumb.jpg"),
+    ]);
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+
+    let output = cmd
+        .output()
+        .map_err(|e| format!("Failed to execute FFmpeg for thumbnail extraction: {}", e))?;
+
+    if !output.status.success() {
+        // If seek at 1s failed (e.g. video shorter than 1s), retry at 00:00:00.000
+        let mut fallback_cmd = std::process::Command::new(&ffmpeg_bin);
+        fallback_cmd.args([
+            "-y",
+            "-ss",
+            "00:00:00.000",
+            "-i",
+            source_path,
+            "-vframes",
+            "1",
+            "-vf",
+            "scale=320:180:force_original_aspect_ratio=decrease",
+            "-q:v",
+            "3",
+            output_file.to_str().unwrap_or("thumb.jpg"),
+        ]);
+
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            fallback_cmd.creation_flags(0x08000000);
+        }
+
+        let fb_output = fallback_cmd
+            .output()
+            .map_err(|e| format!("Failed to execute fallback FFmpeg thumbnail: {}", e))?;
+
+        if !fb_output.status.success() {
+            let err_msg = String::from_utf8_lossy(&fb_output.stderr);
+            return Err(format!("FFmpeg thumbnail extraction failed: {}", err_msg));
+        }
+    }
+
+    Ok(output_file.to_string_lossy().to_string())
+}
+
+/// Legacy/Hover frame capture with base64 data URI return (used for hover scrubbing)
 pub fn capture_preview_frame(source_path: String, timestamp_sec: f64) -> Result<String, String> {
     let input_path = Path::new(&source_path);
     if !input_path.exists() {
@@ -60,10 +161,19 @@ pub fn capture_preview_frame(source_path: String, timestamp_sec: f64) -> Result<
     }
 
     let cache_dir = get_preview_cache_dir();
-    std::fs::create_dir_all(&cache_dir)
-        .map_err(|e| format!("Failed to create preview cache directory: {}", e))?;
+    let _ = std::fs::create_dir_all(&cache_dir);
 
-    let output_file = cache_dir.join("current_frame.jpg");
+    let hash_val = compute_thumb_hash(&source_path, timestamp_sec);
+    let output_file = cache_dir.join(format!("thumb_{:016x}.jpg", hash_val));
+
+    if output_file.exists() {
+        if let Ok(cached_bytes) = std::fs::read(&output_file) {
+            if !cached_bytes.is_empty() {
+                let b64 = encode_base64(&cached_bytes);
+                return Ok(format!("data:image/jpeg;base64,{}", b64));
+            }
+        }
+    }
 
     let ffmpeg_bin = find_ffmpeg_executable()
         .ok_or_else(|| "Could not locate sidecar FFmpeg binary".to_string())?;
@@ -106,4 +216,9 @@ pub fn capture_preview_frame(source_path: String, timestamp_sec: f64) -> Result<
 
     let b64 = encode_base64(&frame_bytes);
     Ok(format!("data:image/jpeg;base64,{}", b64))
+}
+
+/// Fast poster thumbnail extraction returning disk path or data URL
+pub fn extract_clip_poster(source_path: &str) -> Option<String> {
+    extract_clip_thumbnail_file(source_path).ok()
 }

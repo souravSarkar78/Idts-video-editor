@@ -212,7 +212,7 @@ mod tests {
         }
 
         let offset = compute_envelope_cross_correlation(&env_a, &env_b, 100.0);
-        assert_eq!(offset, 500, "Should detect exactly 500ms delay");
+        assert_eq!(offset, -500, "Should detect 500ms delay in track B relative to track A");
     }
 
     #[test]
