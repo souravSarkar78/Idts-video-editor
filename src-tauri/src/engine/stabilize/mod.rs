@@ -435,14 +435,22 @@ pub async fn run_apply_stabilization_preview(
     let max_crop = stab.max_crop_limit.clamp(1.0, 2.0);
     let max_additional_zoom = ((max_crop - 1.0) * 100.0).clamp(0.0, 100.0);
 
-    // Compute unique hash incorporating settings so varying maximum zoom or smoothness updates the preview
+    // SplitWipe is an interactive frontend comparison against the normal compensated stream;
+    // other modes (ShowBordersNoCrop, DifferenceBlend, GhostOverlay50) have dedicated rendered preview streams
+    let effective_debug_mode = match stab.debug_view_mode {
+        StabilizationDebugMode::SplitWipe => StabilizationDebugMode::Normal,
+        other => other,
+    };
+
+    // Compute unique hash incorporating settings and diagnostic mode so switching modes updates preview
     let settings_sig = format!(
-        "{:.3}:{:.3}:{:?}:{}:{:.2}",
+        "{:.3}:{:.3}:{:?}:{}:{:.2}:{:?}",
         stab.smoothness,
         stab.max_crop_limit,
         stab.crop_mode_policy,
         stab.smoothing_type,
-        stab.zoom_percent
+        stab.zoom_percent,
+        effective_debug_mode
     );
     let settings_hash = deterministic_hash(&settings_sig);
     let preview_output = get_stabilization_dir().join(format!("preview_{}_{:08x}.mp4", clip_hash, settings_hash));
@@ -523,9 +531,9 @@ pub async fn run_apply_stabilization_preview(
         _ => "opt",
     };
 
-    let is_show_borders = stab.debug_view_mode == StabilizationDebugMode::ShowBordersNoCrop;
+    let is_show_borders = effective_debug_mode == StabilizationDebugMode::ShowBordersNoCrop;
     let (crop, optzoom, zoom, maxshift, maxangle, zoomspeed) = if is_show_borders {
-        // Mode 1: ShowBordersNoCrop: scale 1.0x with auto-crop/zoom explicitly disabled
+        // Mode: ShowBordersNoCrop: scale 1.0x with auto-crop/zoom explicitly disabled
         ("black", 0, 0.0f32, 32u32, 0.1f32, 0.1f32)
     } else {
         match stab.crop_mode_policy {
@@ -581,10 +589,40 @@ pub async fn run_apply_stabilization_preview(
     let src_height = probed_meta.as_ref().and_then(|m| m.height).unwrap_or(1080);
     let needs_downscale = src_width > 1920 || src_height > 1080;
 
-    let expr = if needs_downscale {
-        format!("[0:v:0] {} [vstab]; [vstab] scale=1920:1080:force_original_aspect_ratio=decrease [vout]", base_stab_filter)
-    } else {
-        format!("[0:v:0] {} [vout]", base_stab_filter)
+    let expr = match effective_debug_mode {
+        StabilizationDebugMode::DifferenceBlend => {
+            if needs_downscale {
+                format!(
+                    "[0:v:0] split=2 [raw][tostab]; [tostab] {} [vstab]; [raw][vstab] blend=all_mode=difference,eq=contrast=2.5:brightness=0.08 [vdiff]; [vdiff] scale=1920:1080:force_original_aspect_ratio=decrease [vout]",
+                    base_stab_filter
+                )
+            } else {
+                format!(
+                    "[0:v:0] split=2 [raw][tostab]; [tostab] {} [vstab]; [raw][vstab] blend=all_mode=difference,eq=contrast=2.5:brightness=0.08 [vout]",
+                    base_stab_filter
+                )
+            }
+        }
+        StabilizationDebugMode::GhostOverlay50 => {
+            if needs_downscale {
+                format!(
+                    "[0:v:0] split=2 [raw][tostab]; [tostab] {} [vstab]; [raw][vstab] blend=all_mode=average [vghost]; [vghost] scale=1920:1080:force_original_aspect_ratio=decrease [vout]",
+                    base_stab_filter
+                )
+            } else {
+                format!(
+                    "[0:v:0] split=2 [raw][tostab]; [tostab] {} [vstab]; [raw][vstab] blend=all_mode=average [vout]",
+                    base_stab_filter
+                )
+            }
+        }
+        _ => {
+            if needs_downscale {
+                format!("[0:v:0] {} [vstab]; [vstab] scale=1920:1080:force_original_aspect_ratio=decrease [vout]", base_stab_filter)
+            } else {
+                format!("[0:v:0] {} [vout]", base_stab_filter)
+            }
+        }
     };
     let (filter_flag, filter_arg, map_video_arg) = (
         "-filter_complex".to_string(),
@@ -601,6 +639,7 @@ pub async fn run_apply_stabilization_preview(
         vec![
             "-c:v".to_string(), "h264_mf".to_string(),
             "-b:v".to_string(), "8M".to_string(),
+            "-pix_fmt".to_string(), "yuv420p".to_string(),
             "-c:a".to_string(), "aac".to_string(),
             "-b:a".to_string(), "128k".to_string(),
             "-movflags".to_string(), "+faststart".to_string(),

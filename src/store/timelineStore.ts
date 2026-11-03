@@ -6239,20 +6239,22 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
       settingsUpdates.smoothing !== undefined ||
       settingsUpdates.cropMode !== undefined ||
       settingsUpdates.zoomPercent !== undefined ||
-      settingsUpdates.smoothingType !== undefined
+      settingsUpdates.smoothingType !== undefined ||
+      settingsUpdates.debugViewMode !== undefined
     ) {
-      // Re-render preview with debouncing (debugViewMode and splitWipePosition are handled dynamically in WebGL)
+      // Re-render preview with debouncing (debugViewMode updates with rapid 50ms response)
       if (targetProf?.enabled) {
         if (debounceStabTimer) {
           clearTimeout(debounceStabTimer);
         }
+        const delay = settingsUpdates.debugViewMode !== undefined ? 50 : 500;
         debounceStabTimer = setTimeout(() => {
           const c = get().tracks.flatMap((t) => t.clips).find((item) => item.id === clipId);
           const p = c?.stabilizationProfile ?? c?.stabilization;
           if (p?.enabled) {
             get().applyStabilizationPreview(clipId, false).catch(() => {});
           }
-        }, 500);
+        }, delay);
       }
     }
   },

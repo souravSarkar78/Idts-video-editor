@@ -622,9 +622,7 @@ export const ProgramMonitor: React.FC = () => {
   const isComparisonOverlayActive = Boolean(
     currentActiveClip &&
     isClipStabEnabled &&
-    (activeStabDebugMode === 'splitWipe' ||
-     activeStabDebugMode === 'differenceBlend' ||
-     activeStabDebugMode === 'ghostOverlay50')
+    activeStabDebugMode === 'splitWipe'
   );
 
   const freshP1 = getFreshClipById(player1Clip?.id) || player1Clip;
@@ -1372,6 +1370,7 @@ export const ProgramMonitor: React.FC = () => {
       if (videoRef.current && !videoRef.current.paused) videoRef.current.pause();
       if (incomingVideoRef.current && !incomingVideoRef.current.paused) incomingVideoRef.current.pause();
       if (denoisedAudioPlayerRef.current && !denoisedAudioPlayerRef.current.paused) denoisedAudioPlayerRef.current.pause();
+      if (stabilizedVideoRef.current && !stabilizedVideoRef.current.paused) stabilizedVideoRef.current.pause();
       return;
     }
 
@@ -1407,6 +1406,16 @@ export const ProgramMonitor: React.FC = () => {
         curVid.playbackRate = Math.max(0.1, Math.min(16.0, speed));
         (curVid as any).preservesPitch = curClip.speedProfile?.pitchCorrection ?? true;
         playVideoSafely(targetActive, curVid);
+      }
+      if (isComparisonOverlayActive && stabilizedVideoRef.current && stabilizedPreviewSrc) {
+        const stabTargetTime = getClipSeekTime(currentActiveClip, playhead, true);
+        if (Math.abs(stabilizedVideoRef.current.currentTime - stabTargetTime) > 0.08) {
+          stabilizedVideoRef.current.currentTime = stabTargetTime;
+        }
+        stabilizedVideoRef.current.playbackRate = curVid ? curVid.playbackRate : 1.0;
+        if (stabilizedVideoRef.current.paused) {
+          stabilizedVideoRef.current.play().catch(() => {});
+        }
       }
       const np = curClip.audioProcessing?.noiseProfile;
       if (np?.noiseReductionEnabled && np?.denoisedAudioPath && denoisedAudioPlayerRef.current) {
@@ -1564,13 +1573,16 @@ export const ProgramMonitor: React.FC = () => {
         }
       }
 
-      // Keep stabilized preview synchronized in lockstep during playback
-      if (stabilizedVideoRef.current && currentActiveClip && stabilizedPreviewSrc) {
+      // Keep stabilized preview synchronized in lockstep during split wipe playback
+      if (isComparisonOverlayActive && stabilizedVideoRef.current && currentActiveClip && stabilizedPreviewSrc) {
         const targetTime = getClipSeekTime(currentActiveClip, nextPlayhead, true);
         if (stabilizedVideoRef.current.paused) {
           stabilizedVideoRef.current.play().catch(() => {});
         }
-        if (Math.abs(stabilizedVideoRef.current.currentTime - targetTime) > 0.15) {
+        if (masterVideo) {
+          stabilizedVideoRef.current.playbackRate = masterVideo.playbackRate;
+        }
+        if (Math.abs(stabilizedVideoRef.current.currentTime - targetTime) > 0.25) {
           stabilizedVideoRef.current.currentTime = targetTime;
         }
       }
@@ -2895,117 +2907,66 @@ export const ProgramMonitor: React.FC = () => {
           {isComparisonOverlayActive && (
             <>
               {stabilizedPreviewSrc ? (
-                splitStabilizationMode === 'side-by-side' && isSplitStabilizationComparison ? (
-                  /* Side-by-Side Comparison Mode */
-                  <div className="absolute inset-0 z-15 flex pointer-events-none bg-black/40">
-                    <div className="w-1/2 h-full relative flex items-center justify-center">
-                      <span className="absolute top-3 left-3 px-2 py-0.5 rounded bg-black/80 text-amber-400 border border-amber-400/40 text-[9px] font-mono font-bold tracking-wider shadow-md">
-                        RAW [Left]
-                      </span>
-                    </div>
-                    <div className="w-1/2 h-full relative border-l-2 border-[#00F0FF] bg-black/60 flex items-center justify-center overflow-hidden">
-                      <video
-                        ref={stabilizedVideoRef}
-                        src={stabilizedPreviewSrc}
-                        playsInline
-                        muted
-                        preload="auto"
-                        onLoadedMetadata={() => {
-                          setIsStabilizedVideoLoaded(true);
-                          if (stabilizedVideoRef.current && currentActiveClip) {
-                            const targetTime = getClipSeekTime(currentActiveClip, playhead, true);
-                            stabilizedVideoRef.current.currentTime = targetTime;
-                          }
-                        }}
-                        className="w-full h-full object-contain"
-                      />
-                      <span className="absolute top-3 right-3 px-2 py-0.5 rounded bg-[#00F0FF]/90 text-[#0D0E11] text-[9px] font-mono font-bold tracking-wider shadow-md">
-                        STABILIZED [Right]
-                      </span>
+                /* Interactive Full-Frame Split Wipe Overlay */
+                <>
+                  <video
+                    ref={stabilizedVideoRef}
+                    src={stabilizedPreviewSrc}
+                    playsInline
+                    muted
+                    preload="auto"
+                    onLoadedMetadata={() => {
+                      setIsStabilizedVideoLoaded(true);
+                      if (stabilizedVideoRef.current && currentActiveClip) {
+                        const targetTime = getClipSeekTime(currentActiveClip, playhead, true);
+                        stabilizedVideoRef.current.currentTime = targetTime;
+                      }
+                    }}
+                    className="absolute inset-0 w-full h-full object-contain pointer-events-none z-15"
+                    style={{
+                      clipPath: `polygon(${activeSplitWipePos * 100}% 0, 100% 0, 100% 100%, ${activeSplitWipePos * 100}% 100%)`,
+                    }}
+                  />
+
+                  {/* Interactive Split Wipe Divider Line with Draggable Handle */}
+                  <div
+                    onPointerDown={handleWipePointerDown}
+                    className="absolute top-0 bottom-0 w-1 bg-[#00F0FF] shadow-[0_0_12px_#00F0FF] z-20 cursor-ew-resize flex items-center justify-center select-none"
+                    style={{ left: `${activeSplitWipePos * 100}%` }}
+                  >
+                    <div className="w-6 h-6 -ml-px rounded-full bg-[#00F0FF] text-[#0D0E11] flex items-center justify-center text-[8px] font-black shadow-lg border border-white/60 hover:scale-115 transition-transform cursor-ew-resize">
+                      VS
                     </div>
                   </div>
-                ) : (
-                  /* Overlay Modes: Split Wipe, Difference Blend, Ghost Overlay */
-                  <>
-                    <video
-                      ref={stabilizedVideoRef}
-                      src={stabilizedPreviewSrc}
-                      playsInline
-                      muted
-                      preload="auto"
-                      onLoadedMetadata={() => {
-                        setIsStabilizedVideoLoaded(true);
-                        if (stabilizedVideoRef.current && currentActiveClip) {
-                          const targetTime = getClipSeekTime(currentActiveClip, playhead, true);
-                          stabilizedVideoRef.current.currentTime = targetTime;
+
+                  {/* Viewport Badges */}
+                  <span className="absolute top-3 left-3 z-20 px-2 py-0.5 rounded bg-black/80 text-amber-400 border border-amber-400/40 text-[9px] font-mono font-bold tracking-wider shadow-md pointer-events-none">
+                    RAW [Left]
+                  </span>
+                  <span className="absolute top-3 right-3 z-20 px-2 py-0.5 rounded bg-[#00F0FF]/90 text-[#0D0E11] text-[9px] font-mono font-bold tracking-wider shadow-md pointer-events-none">
+                    STABILIZED [Right]
+                  </span>
+
+                  {/* Draggable Slider Control on Bottom */}
+                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 bg-[#0D0E11]/85 backdrop-blur-md border border-[#222630] rounded-full px-3 py-1 flex items-center gap-2 shadow-2xl">
+                    <span className="text-[9px] font-bold text-amber-400">RAW</span>
+                    <input
+                      type="range"
+                      min={5}
+                      max={95}
+                      value={Math.round(activeSplitWipePos * 100)}
+                      onChange={(e) => {
+                        const val = Number(e.target.value) / 100;
+                        if (currentActiveClip) {
+                          updateClipStabilization(currentActiveClip.id, { splitWipePosition: val });
                         }
+                        setSplitStabilizationPosition(Number(e.target.value));
                       }}
-                      className="absolute inset-0 w-full h-full object-contain pointer-events-none z-15"
-                      style={{
-                        clipPath: activeStabDebugMode === 'splitWipe'
-                          ? `polygon(${activeSplitWipePos * 100}% 0, 100% 0, 100% 100%, ${activeSplitWipePos * 100}% 100%)`
-                          : undefined,
-                        mixBlendMode: activeStabDebugMode === 'differenceBlend' ? 'difference' : 'normal',
-                        opacity: activeStabDebugMode === 'ghostOverlay50' ? 0.5 : 1,
-                      }}
+                      className="w-32 h-1 accent-[#00F0FF] cursor-ew-resize bg-[#222630] rounded"
                     />
-
-                    {/* Interactive Split Wipe Divider Line with Draggable Handle */}
-                    {activeStabDebugMode === 'splitWipe' && (
-                      <>
-                        <div
-                          onPointerDown={handleWipePointerDown}
-                          className="absolute top-0 bottom-0 w-1 bg-[#00F0FF] shadow-[0_0_12px_#00F0FF] z-20 cursor-ew-resize flex items-center justify-center select-none"
-                          style={{ left: `${activeSplitWipePos * 100}%` }}
-                        >
-                          <div className="w-6 h-6 -ml-px rounded-full bg-[#00F0FF] text-[#0D0E11] flex items-center justify-center text-[8px] font-black shadow-lg border border-white/60 hover:scale-115 transition-transform cursor-ew-resize">
-                            VS
-                          </div>
-                        </div>
-
-                        {/* Viewport Badges */}
-                        <span className="absolute top-3 left-3 z-20 px-2 py-0.5 rounded bg-black/80 text-amber-400 border border-amber-400/40 text-[9px] font-mono font-bold tracking-wider shadow-md pointer-events-none">
-                          RAW [Left]
-                        </span>
-                        <span className="absolute top-3 right-3 z-20 px-2 py-0.5 rounded bg-[#00F0FF]/90 text-[#0D0E11] text-[9px] font-mono font-bold tracking-wider shadow-md pointer-events-none">
-                          STABILIZED [Right]
-                        </span>
-
-                        {/* Draggable Slider Control on Bottom */}
-                        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 bg-[#0D0E11]/85 backdrop-blur-md border border-[#222630] rounded-full px-3 py-1 flex items-center gap-2 shadow-2xl">
-                          <span className="text-[9px] font-bold text-amber-400">RAW</span>
-                          <input
-                            type="range"
-                            min={5}
-                            max={95}
-                            value={Math.round(activeSplitWipePos * 100)}
-                            onChange={(e) => {
-                              const val = Number(e.target.value) / 100;
-                              if (currentActiveClip) {
-                                updateClipStabilization(currentActiveClip.id, { splitWipePosition: val });
-                              }
-                              setSplitStabilizationPosition(Number(e.target.value));
-                            }}
-                            className="w-32 h-1 accent-[#00F0FF] cursor-ew-resize bg-[#222630] rounded"
-                          />
-                          <span className="text-[9px] font-bold text-[#00F0FF]">STABILIZED</span>
-                        </div>
-                      </>
-                    )}
-
-                    {/* Mode Badges for Difference & Ghost */}
-                    {activeStabDebugMode === 'differenceBlend' && (
-                      <div className="absolute top-3 left-3 z-20 px-2.5 py-1 rounded bg-black/85 border border-[#00F0FF]/50 text-[#00F0FF] text-[9.5px] font-mono font-bold tracking-wider shadow-md pointer-events-none">
-                        DIAGNOSTIC: DIFFERENCE BLEND (Bright edges = Motion corrected)
-                      </div>
-                    )}
-                    {activeStabDebugMode === 'ghostOverlay50' && (
-                      <div className="absolute top-3 left-3 z-20 px-2.5 py-1 rounded bg-black/85 border border-[#00F0FF]/50 text-[#00F0FF] text-[9.5px] font-mono font-bold tracking-wider shadow-md pointer-events-none">
-                        DIAGNOSTIC: 50% GHOST OVERLAY (Superimposed Raw + Stabilized)
-                      </div>
-                    )}
-                  </>
-                )
+                    <span className="text-[9px] font-bold text-[#00F0FF]">STABILIZED</span>
+                  </div>
+                </>
               ) : (
                 /* Loading preview prompt overlay */
                 <div className="absolute top-3 left-1/2 -translate-x-1/2 z-25 bg-[#0D0E11]/90 backdrop-blur-md border border-[#00F0FF]/40 rounded-full px-3 py-1 flex items-center gap-2 text-[10px] text-[#00F0FF] font-mono font-semibold shadow-2xl">
@@ -3051,7 +3012,12 @@ export const ProgramMonitor: React.FC = () => {
               ) : stabilizationPreviewUrls[currentActiveClip.id] ? (
                 <>
                   <Compass size={12} className="text-[#00F0FF] animate-pulse" />
-                  <span>STABILIZED STREAM (Active)</span>
+                  <span>
+                    {activeStabDebugMode === 'showBordersNoCrop' && 'DIAGNOSTIC: SHOW BORDERS (1.0x No Crop)'}
+                    {activeStabDebugMode === 'differenceBlend' && 'DIAGNOSTIC: DIFFERENCE HEATMAP'}
+                    {activeStabDebugMode === 'ghostOverlay50' && 'DIAGNOSTIC: 50% GHOST CONTOUR'}
+                    {activeStabDebugMode === 'normal' && 'STABILIZED STREAM (Active)'}
+                  </span>
                 </>
               ) : (
                 <>
