@@ -770,6 +770,8 @@ pub struct Clip {
     pub waveform_status: Option<WaveformStatus>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<ClipMetadata>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub media_id: Option<String>,
 
     // Color & Audio Inspector properties (Milestone 4 & Phase 7)
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -892,6 +894,7 @@ impl Clip {
             waveform_peaks: None,
             waveform_status: Some(WaveformStatus::Pending),
             metadata: None,
+            media_id: None,
             brightness: None,
             contrast: None,
             saturation: None,

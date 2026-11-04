@@ -98,6 +98,17 @@ export function getCachedAudioBuffer(filePath: string): AudioBuffer | null {
 }
 
 /**
+ * Purges cached AudioBuffer entries for a specific file or all files
+ */
+export function purgeAudioBufferCache(filePath?: string): void {
+  if (filePath) {
+    audioBufferCache.delete(filePath);
+  } else {
+    audioBufferCache.clear();
+  }
+}
+
+/**
  * Loads and decodes an audio file into an AudioBuffer using Tauri raw file read IPC or fetch.
  * This completely avoids CORS and MediaElementAudioSource cross-origin zeroing.
  */

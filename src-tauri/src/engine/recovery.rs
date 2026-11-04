@@ -63,6 +63,23 @@ pub fn update_cached_project_state(project: &ProjectData) {
     }
 }
 
+/// Purges media assets and timeline clip instances from the cached in-memory project snapshot
+pub fn purge_media_from_cached_project(media_ids: &[String]) {
+    if let Ok(mut store) = get_last_project_store().lock() {
+        if let Some(ref mut project) = *store {
+            for track in &mut project.timeline.tracks {
+                track.clips.retain(|clip| {
+                    let matches = media_ids.iter().any(|mid| {
+                        mid == &clip.id || clip.media_id.as_deref() == Some(mid.as_str())
+                    });
+                    !matches
+                });
+            }
+            project.media_pool.assets.retain(|asset| !media_ids.contains(&asset.id));
+        }
+    }
+}
+
 /// Executes an atomic auto-save of the active timeline state.
 /// Writes to a temporary file first before atomically replacing `.idts.bak`.
 pub fn atomic_autosave(project: &ProjectData) -> Result<AutosaveSnapshotInfo, String> {

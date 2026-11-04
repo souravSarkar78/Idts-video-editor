@@ -227,8 +227,47 @@ export const App: React.FC = () => {
         return;
       }
 
+      // Global Spacebar Play/Pause Hotkey Sanitization
+      if (e.code === 'Space' || e.key === ' ') {
+        const active = (document.activeElement || e.target) as HTMLElement | null;
+        const isEditable = Boolean(
+          active &&
+          (['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName) || active.isContentEditable)
+        );
+
+        // If the user is actively typing in a text/input field, allow default spacebar behavior
+        if (isEditable) {
+          return;
+        }
+
+        // For all other UI elements (settings modals, scrollable panels, sliders, buttons, dropdown menus, container divs):
+        // Stop unwanted page/container scrolling or accidental button activation
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (active && active.tagName === 'BUTTON') {
+          active.blur();
+        }
+
+        if (useTimelineStore.getState().isRecordingVoiceover) {
+          useTimelineStore.getState().stopVoiceoverRecording();
+          return;
+        }
+
+        togglePlayPause();
+        return;
+      }
+
+      // Voiceover recording stop via Escape
+      if (e.key === 'Escape' && useTimelineStore.getState().isRecordingVoiceover) {
+        e.preventDefault();
+        e.stopPropagation();
+        useTimelineStore.getState().stopVoiceoverRecording();
+        return;
+      }
+
       // Ignore if user is currently typing in an input, textarea, select, or contentEditable
-      const target = e.target as HTMLElement | null;
+      const target = (document.activeElement || e.target) as HTMLElement | null;
       if (
         target &&
         (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable)
@@ -239,17 +278,6 @@ export const App: React.FC = () => {
       // Ignore global timeline shortcuts if modal dialogs (like Noise Profile Modal) are open
       if (useTimelineStore.getState().isNoiseModalOpen) {
         return;
-      }
-
-      // If user is currently recording, pressing Space or Escape stops and saves recording cleanly
-      if (e.key === ' ' || e.code === 'Space' || e.key === 'Escape') {
-        if (target && target.tagName === 'BUTTON') target.blur();
-        if (useTimelineStore.getState().isRecordingVoiceover) {
-          e.preventDefault();
-          e.stopPropagation();
-          useTimelineStore.getState().stopVoiceoverRecording();
-          return;
-        }
       }
 
       // Hotkey Reference & Shortcuts Modal (? or F1)

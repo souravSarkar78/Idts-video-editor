@@ -22,14 +22,16 @@ import {
   RefreshCw,
   Split,
   Loader2,
+  AlertCircle,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useTimelineStore, isTauri, tauriInvoke } from '../../store/timelineStore';
-import { MediaAsset } from '../../types/ipc';
+import { MediaAsset, Clip } from '../../types/ipc';
 import { MediaThumbnail } from './MediaThumbnail';
-import { TransitionsPanel } from '../Transitions/TransitionsPanel';
+import { TransitionsPanel } from '../TransitionsPanel/TransitionsPanel';
+import { EffectsPanel } from '../EffectsPanel/EffectsPanel';
 import { FiltersPanel } from '../Filters/FiltersPanel';
-import { TextTemplatesPanel } from './TextTemplatesPanel';
+import { TitlesPanel } from '../TitlesPanel/TitlesPanel';
 import { AudioLibraryPanel } from './AudioLibraryPanel';
 import { Type } from '@/components/Icons';
 
@@ -54,6 +56,7 @@ export const MediaPool: React.FC = () => {
     ingestStatusMessage,
     moveAssetToBin,
     deleteAsset,
+    deleteMediaBatch,
     selectedAssetId,
     selectAsset,
     setDraggedAsset,
@@ -86,6 +89,7 @@ export const MediaPool: React.FC = () => {
       ingestStatusMessage: state.ingestStatusMessage,
       moveAssetToBin: state.moveAssetToBin,
       deleteAsset: state.deleteAsset,
+      deleteMediaBatch: state.deleteMediaBatch,
       selectedAssetId: state.selectedAssetId,
       selectAsset: state.selectAsset,
       setDraggedAsset: state.setDraggedAsset,
@@ -124,6 +128,26 @@ export const MediaPool: React.FC = () => {
   const [containerWidth, setContainerWidth] = useState(400);
   const [containerHeight, setContainerHeight] = useState(600);
 
+  // Multi-Selection State & Marquee Drag Box
+  const [selectedMediaIds, setSelectedMediaIds] = useState<Set<string>>(new Set());
+  const lastSelectedAssetIdRef = useRef<string | null>(null);
+  const [marquee, setMarquee] = useState<{
+    startX: number;
+    startY: number;
+    currentX: number;
+    currentY: number;
+    isActive: boolean;
+  } | null>(null);
+
+  // Cascading Media Deletion Safeguards & In-Use Warning Modal
+  const [deletionModal, setDeletionModal] = useState<{
+    isOpen: boolean;
+    targetMediaIds: string[];
+    affectedClips: { clip: Clip; trackName: string; trackId: string }[];
+    affectedTrackCount: number;
+    isInUse: boolean;
+  } | null>(null);
+
   useEffect(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
@@ -154,6 +178,194 @@ export const MediaPool: React.FC = () => {
     window.addEventListener('click', handleCloseMenu);
     return () => window.removeEventListener('click', handleCloseMenu);
   }, []);
+
+  // Multi-Selection: Click, Ctrl/Cmd+Click, Shift+Click
+  const handleAssetClick = (e: React.MouseEvent, asset: MediaAsset) => {
+    // Shift+Click: Contiguous range selection
+    if (e.shiftKey) {
+      e.preventDefault();
+      const lastId = lastSelectedAssetIdRef.current;
+      const lastIdx = filteredAssets.findIndex((a) => a.id === lastId);
+      const curIdx = filteredAssets.findIndex((a) => a.id === asset.id);
+      const start = Math.max(0, Math.min(lastIdx === -1 ? 0 : lastIdx, curIdx));
+      const end = Math.max(lastIdx === -1 ? 0 : lastIdx, curIdx);
+      const next = new Set(selectedMediaIds);
+      for (let i = start; i <= end; i++) {
+        next.add(filteredAssets[i].id);
+      }
+      setSelectedMediaIds(next);
+      selectAsset(asset.id);
+      return;
+    }
+
+    // Ctrl+Click / Cmd+Click: Toggle individual asset in/out of the selection set
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      const next = new Set(selectedMediaIds);
+      if (next.has(asset.id)) {
+        next.delete(asset.id);
+      } else {
+        next.add(asset.id);
+      }
+      setSelectedMediaIds(next);
+      selectAsset(next.size > 0 ? (next.has(asset.id) ? asset.id : Array.from(next)[next.size - 1]) : null);
+      lastSelectedAssetIdRef.current = asset.id;
+      return;
+    }
+
+    // Normal Click: Single asset selection
+    setSelectedMediaIds(new Set([asset.id]));
+    selectAsset(asset.id);
+    lastSelectedAssetIdRef.current = asset.id;
+  };
+
+  // Marquee / Drag-Box Selection
+  const handleContainerMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('[data-asset-id]') || target.closest('button') || target.closest('input')) {
+      return;
+    }
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const initialSelection = new Set(e.ctrlKey || e.metaKey ? selectedMediaIds : []);
+
+    if (!e.ctrlKey && !e.metaKey && !e.shiftKey) {
+      setSelectedMediaIds(new Set());
+      selectAsset(null);
+    }
+
+    let isMarquee = false;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const dx = moveEvent.clientX - startX;
+      const dy = moveEvent.clientY - startY;
+      if (!isMarquee && Math.hypot(dx, dy) > 4) {
+        isMarquee = true;
+        document.body.style.userSelect = 'none';
+      }
+
+      if (isMarquee) {
+        const curX = moveEvent.clientX;
+        const curY = moveEvent.clientY;
+        setMarquee({
+          startX,
+          startY,
+          currentX: curX,
+          currentY: curY,
+          isActive: true,
+        });
+
+        const boxLeft = Math.min(startX, curX);
+        const boxRight = Math.max(startX, curX);
+        const boxTop = Math.min(startY, curY);
+        const boxBottom = Math.max(startY, curY);
+
+        const cardElements = document.querySelectorAll('[data-asset-id]');
+        const newlySelected = new Set(initialSelection);
+
+        cardElements.forEach((el) => {
+          const rect = el.getBoundingClientRect();
+          const isIntersecting = !(
+            rect.right < boxLeft ||
+            rect.left > boxRight ||
+            rect.bottom < boxTop ||
+            rect.top > boxBottom
+          );
+          const id = el.getAttribute('data-asset-id');
+          if (id && isIntersecting) {
+            newlySelected.add(id);
+          }
+        });
+
+        setSelectedMediaIds(newlySelected);
+        if (newlySelected.size > 0) {
+          selectAsset(Array.from(newlySelected)[0]);
+        }
+      }
+    };
+
+    const onMouseUp = () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+      document.body.style.userSelect = '';
+      setMarquee(null);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
+
+  // Cascading Media Deletion Safeguard
+  const initiateMediaDeletion = (targetIds: string[]) => {
+    if (!targetIds || targetIds.length === 0) return;
+    const targetSet = new Set(targetIds);
+    const targetAssets = assets.filter((a) => targetSet.has(a.id));
+    const targetPaths = new Set(targetAssets.map((a) => a.filePath).filter(Boolean));
+
+    // Inspect all tracks and clips across timelineStore to identify dependencies
+    const affectedClips: { clip: Clip; trackName: string; trackId: string }[] = [];
+    const affectedTrackIds = new Set<string>();
+
+    for (const track of tracks) {
+      for (const clip of track.clips || []) {
+        const isMatch =
+          (clip.mediaId && targetSet.has(clip.mediaId)) ||
+          targetSet.has(clip.id) ||
+          (clip.filePath && targetPaths.has(clip.filePath));
+        if (isMatch) {
+          affectedClips.push({
+            clip,
+            trackName: track.name || `Track ${track.id}`,
+            trackId: track.id,
+          });
+          affectedTrackIds.add(track.id);
+        }
+      }
+    }
+
+    const isInUse = affectedClips.length > 0;
+    setDeletionModal({
+      isOpen: true,
+      targetMediaIds: targetIds,
+      affectedClips,
+      affectedTrackCount: affectedTrackIds.size,
+      isInUse,
+    });
+  };
+
+  const confirmDeletion = async () => {
+    if (!deletionModal) return;
+    const { targetMediaIds, isInUse } = deletionModal;
+    await deleteMediaBatch(targetMediaIds, isInUse);
+    setSelectedMediaIds((prev) => {
+      const next = new Set(prev);
+      for (const id of targetMediaIds) next.delete(id);
+      return next;
+    });
+    setDeletionModal(null);
+  };
+
+  // Keyboard Delete / Backspace Hook for Media Pool Selection
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (selectedMediaIds.size === 0) return;
+      const target = (document.activeElement || e.target) as HTMLElement | null;
+      if (
+        target &&
+        (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable)
+      ) {
+        return;
+      }
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        initiateMediaDeletion(Array.from(selectedMediaIds));
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedMediaIds, assets, tracks]);
 
   // Filter assets based on active bin, search, and type
   const filteredAssets = assets.filter((asset) => {
@@ -376,13 +588,21 @@ export const MediaPool: React.FC = () => {
   }
 
   if (activeTab === 'text') {
-    return <TextTemplatesPanel />;
+    return <TitlesPanel />;
   }
 
   if (activeTab === 'transitions') {
     return (
       <div className="flex-1 flex flex-col overflow-hidden bg-[#14161B] border-r border-[#222630] select-none">
         <TransitionsPanel />
+      </div>
+    );
+  }
+
+  if (activeTab === 'effects') {
+    return (
+      <div className="flex-1 flex flex-col overflow-hidden bg-[#14161B] border-r border-[#222630] select-none">
+        <EffectsPanel />
       </div>
     );
   }
@@ -665,8 +885,19 @@ export const MediaPool: React.FC = () => {
             </div>
           </div>
 
-          {/* Right Toolbar: Search & Grid/List view toggle */}
+          {/* Right Toolbar: Batch Delete, Search & Grid/List view toggle */}
           <div className="flex items-center gap-2">
+            {selectedMediaIds.size > 0 && (
+              <button
+                onClick={() => initiateMediaDeletion(Array.from(selectedMediaIds))}
+                className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/40 transition-colors shadow-sm cursor-pointer"
+                title={`Delete ${selectedMediaIds.size} selected asset(s)`}
+              >
+                <Trash2 size={12} />
+                <span>Delete ({selectedMediaIds.size})</span>
+              </button>
+            )}
+
             <div className="relative">
               <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#64748B]" />
               <input
@@ -700,6 +931,7 @@ export const MediaPool: React.FC = () => {
         {/* ASSET ITEMS CONTAINER WITH VIRTUALIZATION & DRAG-AND-DROP */}
         <div
           ref={scrollContainerRef}
+          onMouseDown={handleContainerMouseDown}
           onDragOver={(e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -740,7 +972,8 @@ export const MediaPool: React.FC = () => {
                 }}
               >
                 {visibleGridAssets.map((asset) => {
-                  const isSelected = selectedAssetId === asset.id;
+                  const isMultiSelected = selectedMediaIds.has(asset.id);
+                  const isSelected = selectedAssetId === asset.id || isMultiSelected;
                   const isVideo = asset.mediaType === 'video';
 
                   // SKELETON PLACEHOLDER DURING BACKGROUND ASYNC INGESTION
@@ -748,6 +981,7 @@ export const MediaPool: React.FC = () => {
                     return (
                       <div
                         key={asset.id}
+                        data-asset-id={asset.id}
                         className="group relative flex flex-col rounded-md overflow-hidden bg-[#0D0E11] border border-[#222630] animate-pulse select-none"
                         title={`Importing ${asset.name} (${asset.ingestStatus || 'Probing...'})...`}
                       >
@@ -785,17 +1019,26 @@ export const MediaPool: React.FC = () => {
                   return (
                     <div
                       key={asset.id}
+                      data-asset-id={asset.id}
                       onMouseDown={(e) => handleStartMouseDrag(e, asset)}
                       onDoubleClick={() => handleQuickAdd(asset)}
-                      onClick={() => selectAsset(asset.id)}
+                      onClick={(e) => handleAssetClick(e, asset)}
                       onContextMenu={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
+                        if (!selectedMediaIds.has(asset.id)) {
+                          setSelectedMediaIds(new Set([asset.id]));
+                          selectAsset(asset.id);
+                        }
                         setAssetContextMenu({ x: e.clientX, y: e.clientY, asset });
                       }}
                       title={`File: ${asset.name}\nResolution: ${resBadge}\nFPS: ${fpsBadge}\nDuration: ${durationStr}\n(Right-click for Proxy options, double-click or drag to add to timeline)`}
                       className={`group relative flex flex-col rounded-md overflow-hidden bg-[#0D0E11] border transition-all cursor-grab active:cursor-grabbing hover:border-[#00F0FF]/80 hover:shadow-[0_0_16px_rgba(0,240,255,0.2)] ${
-                        isSelected ? 'border-[#00F0FF] ring-1 ring-[#00F0FF]' : 'border-[#222630]'
+                        isMultiSelected
+                          ? 'border-[#00F0FF] ring-2 ring-[#00F0FF] shadow-[0_0_12px_rgba(0,240,255,0.3)] bg-[#00F0FF]/10'
+                          : isSelected
+                          ? 'border-[#00F0FF] ring-1 ring-[#00F0FF]'
+                          : 'border-[#222630]'
                       }`}
                     >
                       {/* Thumbnail Image Container with Live Horizontal Hover Scrubbing */}
@@ -870,13 +1113,15 @@ export const MediaPool: React.FC = () => {
             <div className="space-y-1">
               {topListSpacer > 0 && <div style={{ height: topListSpacer }} aria-hidden="true" />}
               {visibleListAssets.map((asset) => {
-                const isSelected = selectedAssetId === asset.id;
+                const isMultiSelected = selectedMediaIds.has(asset.id);
+                const isSelected = selectedAssetId === asset.id || isMultiSelected;
 
                 // SKELETON PLACEHOLDER DURING BACKGROUND ASYNC INGESTION
                 if (asset.isPendingIngest) {
                   return (
                     <div
                       key={asset.id}
+                      data-asset-id={asset.id}
                       className="group relative flex items-center justify-between px-3 py-2 rounded-md bg-[#0D0E11] border border-[#222630] animate-pulse select-none"
                       title={`Importing ${asset.name} (${asset.ingestStatus || 'Probing...'})...`}
                     >
@@ -903,17 +1148,26 @@ export const MediaPool: React.FC = () => {
                 return (
                   <div
                     key={asset.id}
+                    data-asset-id={asset.id}
                     onMouseDown={(e) => handleStartMouseDrag(e, asset)}
                     onDoubleClick={() => handleQuickAdd(asset)}
-                    onClick={() => selectAsset(asset.id)}
+                    onClick={(e) => handleAssetClick(e, asset)}
                     onContextMenu={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
+                      if (!selectedMediaIds.has(asset.id)) {
+                        setSelectedMediaIds(new Set([asset.id]));
+                        selectAsset(asset.id);
+                      }
                       setAssetContextMenu({ x: e.clientX, y: e.clientY, asset });
                     }}
                     title={`File: ${asset.name}\nPath: ${asset.filePath}\nDuration: ${formatSeconds(asset.durationSeconds)} (${asset.durationSeconds}s)\nType: ${asset.mediaType.toUpperCase()}\n(Right-click for Proxy options, double-click or drag to add to timeline)`}
                     className={`group relative flex items-center justify-between px-3 py-2 rounded-md bg-[#0D0E11] border transition-all cursor-grab active:cursor-grabbing hover:border-[#00F0FF]/60 hover:bg-[#161922] ${
-                      isSelected ? 'border-[#00F0FF] bg-[#161922]' : 'border-[#222630]'
+                      isMultiSelected
+                        ? 'border-[#00F0FF] ring-2 ring-[#00F0FF] bg-[#00F0FF]/15'
+                        : isSelected
+                        ? 'border-[#00F0FF] bg-[#161922]'
+                        : 'border-[#222630]'
                     }`}
                   >
                     <div className="flex items-center gap-3 truncate flex-1 min-w-0 pr-3">
@@ -1030,14 +1284,116 @@ export const MediaPool: React.FC = () => {
 
           <button
             onClick={() => {
-              deleteAsset(assetContextMenu.asset.id);
+              const targetIds =
+                selectedMediaIds.size > 0 && selectedMediaIds.has(assetContextMenu.asset.id)
+                  ? Array.from(selectedMediaIds)
+                  : [assetContextMenu.asset.id];
+              initiateMediaDeletion(targetIds);
               setAssetContextMenu(null);
             }}
             className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-red-500/15 text-red-400 transition-colors cursor-pointer text-left"
           >
             <Trash2 size={13} />
-            <span>Delete Asset</span>
+            <span>
+              {selectedMediaIds.size > 1 && selectedMediaIds.has(assetContextMenu.asset.id)
+                ? `Delete ${selectedMediaIds.size} Selected Assets`
+                : 'Delete Asset'}
+            </span>
           </button>
+        </div>
+      )}
+
+      {/* Marquee Selection Drag-Box Rectangle Overlay */}
+      {marquee && marquee.isActive && (
+        <div
+          className="fixed pointer-events-none z-[9999] border-2 border-[#00F0FF] bg-[#00F0FF]/15 rounded shadow-[0_0_12px_rgba(0,240,255,0.3)] backdrop-blur-[1px]"
+          style={{
+            left: `${Math.min(marquee.startX, marquee.currentX)}px`,
+            top: `${Math.min(marquee.startY, marquee.currentY)}px`,
+            width: `${Math.abs(marquee.currentX - marquee.startX)}px`,
+            height: `${Math.abs(marquee.currentY - marquee.startY)}px`,
+          }}
+        />
+      )}
+
+      {/* Cascading Media Deletion Safeguards & In-Use Warning Modal */}
+      {deletionModal && deletionModal.isOpen && (
+        <div className="fixed inset-0 z-[999999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div
+            className={`w-full max-w-lg rounded-xl border p-6 shadow-2xl flex flex-col gap-4 bg-[#14161B] text-[#F0F3F8] ${
+              deletionModal.isInUse
+                ? 'border-red-500/60 shadow-[0_0_30px_rgba(239,68,68,0.25)]'
+                : 'border-[#2B3040] shadow-[0_0_20px_rgba(0,0,0,0.6)]'
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-start gap-3">
+              <div
+                className={`p-2.5 rounded-lg shrink-0 ${
+                  deletionModal.isInUse
+                    ? 'bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse'
+                    : 'bg-[#00F0FF]/20 text-[#00F0FF] border border-[#00F0FF]/40'
+                }`}
+              >
+                {deletionModal.isInUse ? <AlertCircle size={24} /> : <Trash2 size={24} />}
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-base font-bold text-white tracking-wide">
+                  {deletionModal.isInUse
+                    ? 'Media Currently Used on Timeline'
+                    : 'Delete Media Asset(s)'}
+                </h3>
+                <p className="text-xs text-[#8A92A6] mt-1 leading-relaxed">
+                  {deletionModal.isInUse
+                    ? `Warning: ${deletionModal.affectedClips.length} of the selected clips are currently used in your timeline across ${deletionModal.affectedTrackCount} track(s). Deleting them from the media pool will remove all corresponding clips from your timeline project.`
+                    : `Delete ${deletionModal.targetMediaIds.length} selected asset(s) from media pool?`}
+                </p>
+              </div>
+            </div>
+
+            {/* In-Use Dependency Breakdown List */}
+            {deletionModal.isInUse && deletionModal.affectedClips.length > 0 && (
+              <div className="mt-1 bg-[#0A0B0E] border border-red-500/30 rounded-lg p-3 max-h-48 overflow-y-auto space-y-2">
+                <div className="text-[10px] uppercase font-mono font-bold tracking-wider text-red-400/90 mb-1">
+                  Affected Timeline Clip Instances:
+                </div>
+                {deletionModal.affectedClips.map((item, idx) => (
+                  <div
+                    key={`${item.clip.id}-${idx}`}
+                    className="flex items-center justify-between text-xs py-1.5 px-2.5 rounded bg-[#14161B] border border-[#222630]"
+                  >
+                    <div className="truncate flex-1 min-w-0 pr-2">
+                      <span className="font-semibold text-white">{item.clip.name || 'Unnamed Clip'}</span>
+                    </div>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-[#1E222D] text-[#00F0FF] border border-[#2B3040] shrink-0">
+                      {item.trackName}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-3 mt-2 pt-2 border-t border-[#222630]">
+              <button
+                onClick={() => setDeletionModal(null)}
+                className="px-4 py-2 rounded-lg text-xs font-semibold bg-[#1C202B] hover:bg-[#252B3A] text-[#8A92A6] hover:text-white transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDeletion}
+                className={`px-4 py-2 rounded-lg text-xs font-semibold text-white transition-all shadow-md cursor-pointer ${
+                  deletionModal.isInUse
+                    ? 'bg-red-600 hover:bg-red-500 shadow-red-600/30'
+                    : 'bg-red-600 hover:bg-red-500 shadow-red-600/20'
+                }`}
+              >
+                {deletionModal.isInUse ? 'Delete Everywhere' : 'Delete'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

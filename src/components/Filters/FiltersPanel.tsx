@@ -353,6 +353,14 @@ export const FiltersPanel: React.FC = () => {
             <div className="flex-1 overflow-y-auto py-1 px-1 space-y-0.5 custom-scrollbar">
               {categories.map((cat) => {
                 const isSelected = activeFilterCategory === cat.id;
+                const list = filterPresets && filterPresets.length > 0 ? filterPresets : BUILT_IN_FILTER_PRESETS;
+                const dynamicCount =
+                  cat.id === 'all'
+                    ? list.length
+                    : cat.id === 'custom'
+                    ? list.filter((p) => p.isCustom).length
+                    : list.filter((p) => p.category === cat.id).length;
+
                 return (
                   <button
                     key={cat.id}
@@ -375,7 +383,7 @@ export const FiltersPanel: React.FC = () => {
                         isSelected ? 'bg-[#00F0FF]/20 text-[#00F0FF]' : 'bg-[#1E222D] text-[#64748B]'
                       }`}
                     >
-                      {cat.count}
+                      {dynamicCount}
                     </span>
                   </button>
                 );

@@ -699,16 +699,56 @@ pub fn build_motion_transform_filters(
 
 /// Builds an FFmpeg `xfade` filter string for two intersecting video segments.
 ///
-/// Supported transition types: "fade", "dissolve", "wipeleft", "wiperight", "slideup", "slidedown".
+/// Supported transition types include 50+ presets spanning Smooth & Whip, Glitch & Digital,
+/// Light & Atmospheric, Geometric Shape Wipes, and Artistic & Organic blends.
 pub fn build_xfade_filter(transition_type: &str, duration: f64, offset: f64) -> String {
-    let normalized = match transition_type.to_lowercase().as_str() {
-        "fade" | "dip_black" | "black" => "fade",
-        "fadewhite" | "dip_white" | "white" => "fadewhite",
-        "wipeleft" => "wipeleft",
-        "wiperight" => "wiperight",
-        "slideup" => "slideup",
-        "slidedown" => "slidedown",
-        "dissolve" | "crossdissolve" | _ => "dissolve",
+    let lower = transition_type.to_lowercase();
+    let normalized = match lower.as_str() {
+        // Smooth Motion & Whip
+        "whipleft" | "trans_whip_left" | "smoothleft" | "parallax_left" | "trans_parallax_left" => "smoothleft",
+        "whipright" | "trans_whip_right" | "smoothright" | "parallax_right" | "trans_parallax_right" => "smoothright",
+        "whipup" | "trans_whip_up" | "smoothup" | "parallax_up" | "trans_parallax_up" => "smoothup",
+        "whipdown" | "trans_whip_down" | "smoothdown" | "parallax_down" | "trans_parallax_down" => "smoothdown",
+        "slideleft" | "trans_slide_left" => "slideleft",
+        "slideright" | "trans_slide_right" => "slideright",
+        "slideup" | "trans_slide_up" => "slideup",
+        "slidedown" | "trans_slide_down" | "trans_sprocket_roll" => "slidedown",
+        "zoomin" | "trans_zoom_in_burst" => "zoomin",
+        "distance" | "zoomout" | "trans_zoom_out_snap" | "trans_glass_shatter" => "distance",
+        "radial" | "spin_cw" | "trans_spin_cw" | "spin_ccw" | "trans_spin_ccw" | "trans_smooth_roll" | "trans_spiral_sweep" | "trans_ripple_distort" => "radial",
+        "squeezev" | "squeezeh" | "trans_elastic_push" => "squeezev",
+        "wipetl" | "trans_skew_shear" | "trans_paper_tear" => "wipetl",
+        "wipetr" | "trans_diagonal_split" => "wipetr",
+        "wipbl" => "wipbl",
+        "wipbr" => "wipbr",
+
+        // Glitch & Digital
+        "pixelize" | "trans_pixelate_dissolve" | "trans_rgb_split_glitch" | "trans_block_noise" | "trans_grid_shuffle" | "trans_digital_mosaic" => "pixelize",
+        "hlslice" | "trans_digital_slice" | "trans_venetian_blinds" => "hlslice",
+        "hrslice" | "trans_scanline_sweep" | "trans_vertical_louvers" => "hrslice",
+        "hblur" => "hblur",
+
+        // Light & Atmospheric
+        "fade" | "dip_black" | "black" | "fadeblack" | "trans_dip_black" | "trans_light_leak_sweep" => "fadeblack",
+        "fadewhite" | "dip_white" | "white" | "trans_overexposure_white" | "trans_film_burn" | "trans_lens_flare_wipe" | "trans_glow_flare_burst" | "trans_static_flash" => "fadewhite",
+        "fadegrays" => "fadegrays",
+
+        // Geometric & Shape Wipes
+        "circleopen" | "trans_circle_iris_open" => "circleopen",
+        "circleclose" | "trans_circle_iris_close" => "circleclose",
+        "circlecrop" => "circlecrop",
+        "rectcrop" | "trans_diamond_expand" => "rectcrop",
+        "horzopen" | "trans_multi_curtain" => "horzopen",
+        "horzclose" => "horzclose",
+        "vertopen" => "vertopen",
+        "vertclose" => "vertclose",
+        "clock" | "clockwipe" | "trans_clock_wipe" => "radial",
+        "wipeleft" | "trans_wipe_left" | "trans_page_curl" => "wipeleft",
+        "wiperight" | "trans_wipe_right" => "wiperight",
+
+        // Artistic & Organic Dissolves
+        "dissolve" | "crossdissolve" | "trans_dissolve" | "trans_datamosh_melt" | "trans_rainbow_bokeh" | "trans_color_bleed_melt" | "trans_hex_honeycomb" | "trans_triangle_mosaic" | "trans_ink_bleed" | "trans_watercolor_splatter" | "trans_liquid_wave_morph" | "trans_smoke_dissolve" => "dissolve",
+        _ => "dissolve",
     };
 
     format!(

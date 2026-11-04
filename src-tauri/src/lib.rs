@@ -2,9 +2,12 @@
 //!
 //! Entry point for Tauri 2.0 desktop application backend.
 
+pub mod commands;
 pub mod engine;
 pub mod models;
 pub mod sync;
+
+use commands::*;
 
 use std::path::Path;
 use engine::audio::get_waveform_data;
@@ -950,7 +953,9 @@ pub fn run() {
             is_window_maximized,
             close_window,
             add_clip_to_timeline,
-            start_background_waveform
+            start_background_waveform,
+            delete_media_batch,
+            get_available_effects
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

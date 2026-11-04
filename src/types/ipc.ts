@@ -82,6 +82,7 @@ export interface Clip {
   waveformPeaks?: number[];
   waveformStatus?: WaveformStatus;
   metadata?: ClipMetadata;
+  mediaId?: string;
 
   // Color & Audio Inspector properties (Milestone 4 & Phase 7)
   brightness?: number; // -1.0 to 1.0 (default 0)
@@ -761,5 +762,8 @@ export interface AutosaveConfig {
   intervalSeconds: number;
   backupDir?: string;
 }
+
+export * from './effects';
+
 
 

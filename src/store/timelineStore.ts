@@ -53,8 +53,8 @@ import {
   WaveformChunkPayload,
   WaveformStatus,
 } from '../types/ipc';
-import { loadAudioBuffer, unlockAudioContext } from '../utils/audioMastering';
-import { filePosterCache } from '../utils/frameCacheService';
+import { loadAudioBuffer, unlockAudioContext, purgeAudioBufferCache } from '../utils/audioMastering';
+import { filePosterCache, purgeFileFrameCaches } from '../utils/frameCacheService';
 import { BUILT_IN_FILTER_CATEGORIES, BUILT_IN_FILTER_PRESETS } from '../components/Filters/defaultPresets';
 
 export const DEFAULT_COLOR_GRADING_PROFILE: ColorGradingProfile = {
@@ -346,6 +346,22 @@ export async function tauriInvoke<T>(cmd: string, args?: Record<string, unknown>
 }
 
 /**
+ * Calculates total project duration dynamically based on the end position of all clips across tracks
+ */
+export function calculateTotalProjectDuration(tracks: MediaTrack[]): number {
+  if (!tracks || tracks.length === 0) return 0;
+  const endTimes = tracks.flatMap((t) =>
+    (t.clips || []).map((c) => {
+      const start = c.startPositionSeconds ?? (c.startTimeMs != null ? c.startTimeMs / 1000 : ((c as any).startTime ?? 0));
+      const dur = c.durationSeconds ?? (c.durationMs != null ? c.durationMs / 1000 : ((c as any).duration ?? 0));
+      return start + dur;
+    })
+  );
+  if (endTimes.length === 0) return 0;
+  return Math.max(0, ...endTimes);
+}
+
+/**
  * Computes interpolated motion transform values (linear / ease_in_out) at the given playhead time
  */
 export function getInterpolatedClipTransform(clip: Clip, playhead: number) {
@@ -401,6 +417,7 @@ export interface TimelineState {
   activeBinId: string;
   playhead: number; // in seconds
   isPlaying: boolean;
+  isLooping: boolean;
   isScrubbing: boolean;
   zoom: number; // pixels per second
   selectedClipId: string | null;
@@ -555,6 +572,9 @@ export interface TimelineState {
   setPlayhead: (time: number) => void;
   stepFrames: (frames: number) => void;
   setIsPlaying: (isPlaying: boolean) => void;
+  setIsLooping: (isLooping: boolean) => void;
+  toggleLoop: () => void;
+  getTotalDuration: () => number;
   setIsScrubbing: (isScrubbing: boolean) => void;
   togglePlayPause: () => void;
   setZoom: (zoom: number) => void;
@@ -578,6 +598,7 @@ export interface TimelineState {
   ingestStatusMessage: string;
   importCustomAsset: (asset: Partial<MediaAsset>) => void;
   deleteAsset: (assetId: string) => void;
+  deleteMediaBatch: (mediaIds: string[], removeTimelineInstances?: boolean) => Promise<void>;
   moveAssetToBin: (assetId: string, binId?: string) => void;
   selectAsset: (assetId: string | null) => void;
   addAssetToTrack: (assetId: string, trackId: string, targetSeconds?: number) => void;
@@ -1186,6 +1207,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
   activeBinId: 'all',
   playhead: 0,
   isPlaying: false,
+  isLooping: false,
   isScrubbing: false,
   zoom: 35, // pixels per second
   selectedClipId: null,
@@ -1860,17 +1882,23 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
   setInspectorTab: (inspectorTab) => set({ inspectorTab }),
 
   setPlayhead: (time) => {
-    const { project } = get();
-    const maxSec = (project.durationMs || 120000) / 1000;
+    const { project, tracks } = get();
+    const totalDuration = calculateTotalProjectDuration(tracks);
+    const maxSec = totalDuration > 0 ? Math.max(totalDuration, (project.durationMs || 120000) / 1000) : ((project.durationMs || 120000) / 1000);
     set({ playhead: Math.max(0, Math.min(time, maxSec)) });
   },
 
   stepFrames: (frames) => {
-    const { playhead, project } = get();
-    const frameDelta = frames / project.fps;
-    const maxSec = (project.durationMs || 120000) / 1000;
+    const { playhead, project, tracks } = get();
+    const frameDelta = frames / (project.fps || 30);
+    const totalDuration = calculateTotalProjectDuration(tracks);
+    const maxSec = totalDuration > 0 ? Math.max(totalDuration, (project.durationMs || 120000) / 1000) : ((project.durationMs || 120000) / 1000);
     set({ playhead: Math.max(0, Math.min(playhead + frameDelta, maxSec)) });
   },
+
+  setIsLooping: (isLooping) => set({ isLooping }),
+  toggleLoop: () => set((state) => ({ isLooping: !state.isLooping })),
+  getTotalDuration: () => calculateTotalProjectDuration(get().tracks),
 
   setIsScrubbing: (isScrubbing) => {
     if (isScrubbing) {
@@ -2195,10 +2223,80 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
   },
 
   deleteAsset: (assetId) => {
-    set((state) => ({
-      assets: state.assets.filter((a) => a.id !== assetId),
-      selectedAssetId: state.selectedAssetId === assetId ? null : state.selectedAssetId,
-    }));
+    get().deleteMediaBatch([assetId], false);
+  },
+
+  deleteMediaBatch: async (mediaIds, removeTimelineInstances = false) => {
+    const { assets, tracks, selectedClipId, selectedClipIds, selectedAssetId } = get();
+    if (!mediaIds || mediaIds.length === 0) return;
+
+    const targetIdSet = new Set(mediaIds);
+    const assetsToDelete = assets.filter((a) => targetIdSet.has(a.id));
+    const targetFilePaths = new Set(assetsToDelete.map((a) => a.filePath).filter(Boolean));
+
+    // Clean frame and audio caches for affected assets
+    for (const asset of assetsToDelete) {
+      if (asset.filePath) {
+        purgeFileFrameCaches(asset.filePath);
+        purgeAudioBufferCache(asset.filePath);
+      }
+    }
+
+    if (removeTimelineInstances) {
+      get().pushHistory();
+
+      const affectedClipIds = new Set<string>();
+
+      const updatedTracks = tracks.map((track) => {
+        const remainingClips = (track.clips || []).filter((clip) => {
+          const isTargetMedia =
+            (clip.mediaId && targetIdSet.has(clip.mediaId)) ||
+            targetIdSet.has(clip.id) ||
+            (clip.filePath && targetFilePaths.has(clip.filePath));
+          if (isTargetMedia) {
+            affectedClipIds.add(clip.id);
+            if (clip.filePath) {
+              purgeFileFrameCaches(clip.filePath);
+              purgeAudioBufferCache(clip.filePath);
+            }
+          }
+          return !isTargetMedia;
+        });
+        return {
+          ...track,
+          clips: remainingClips,
+        };
+      });
+
+      const nextSelectedClipId =
+        selectedClipId && affectedClipIds.has(selectedClipId) ? null : selectedClipId;
+      const nextSelectedClipIds = selectedClipIds.filter((id) => !affectedClipIds.has(id));
+
+      set((state) => ({
+        tracks: updatedTracks,
+        assets: state.assets.filter((a) => !targetIdSet.has(a.id)),
+        selectedAssetId: selectedAssetId && targetIdSet.has(selectedAssetId) ? null : state.selectedAssetId,
+        selectedClipId: nextSelectedClipId,
+        selectedClipIds: nextSelectedClipIds,
+      }));
+    } else {
+      set((state) => ({
+        assets: state.assets.filter((a) => !targetIdSet.has(a.id)),
+        selectedAssetId: selectedAssetId && targetIdSet.has(selectedAssetId) ? null : state.selectedAssetId,
+      }));
+    }
+
+    // Disk cache cleanup via Tauri IPC
+    if (isTauri) {
+      try {
+        await tauriInvoke('delete_media_batch', {
+          mediaIds,
+          removeTimelineInstances: Boolean(removeTimelineInstances),
+        });
+      } catch (err) {
+        console.error('delete_media_batch IPC invocation failed:', err);
+      }
+    }
   },
 
   selectAsset: (selectedAssetId) => set({ selectedAssetId }),
@@ -2219,6 +2317,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
     const newClip: Clip = {
       id: `clip-${Date.now()}`,
       trackId: track.id,
+      mediaId: asset.id,
       name: asset.name,
       filePath: asset.filePath,
       mediaType: asset.mediaType,

@@ -1,11 +1,12 @@
 import { FilterPreset, FilterCategory } from '../../types/ipc';
+import { EFFECTS_CATALOG } from '../EffectsPanel/effectsCatalog';
 
 export const BUILT_IN_FILTER_CATEGORIES: FilterCategory[] = [
   {
     id: 'all',
     name: 'All Filters & LUTs',
     icon: 'Layers',
-    count: 24,
+    count: 84,
     description: 'Complete library of color grades, 3D LUTs, and film emulations',
   },
   {
@@ -17,17 +18,38 @@ export const BUILT_IN_FILTER_CATEGORIES: FilterCategory[] = [
   },
   {
     id: 'cinematic',
-    name: 'Cinematic',
+    name: 'Cinematic & Film',
     icon: 'Film',
-    count: 6,
+    count: 22,
     description: 'Feature-film aesthetics, blockbuster teal & orange, and print stocks',
   },
   {
     id: 'vintage',
     name: 'Retro & Vintage',
     icon: 'Clock',
-    count: 5,
+    count: 16,
     description: 'Analog tape VHS, sepia, Super 8 grain, and halation glows',
+  },
+  {
+    id: 'glitch',
+    name: 'Glitch & CRT',
+    icon: 'Sparkles',
+    count: 10,
+    description: 'Digital data glitch, scanlines, pixel sort, and phosphor masks',
+  },
+  {
+    id: 'blur_optics',
+    name: 'Blur & Optical',
+    icon: 'Sun',
+    count: 10,
+    description: 'Anamorphic flare, pro-mist bloom, radial blur, and prism dispersion',
+  },
+  {
+    id: 'artistic',
+    name: 'Artistic & Distortion',
+    icon: 'Layers',
+    count: 14,
+    description: 'Halftone print, oil paint, sketch, kaleidoscope, and ripple waves',
   },
   {
     id: 'monochrome',
@@ -40,7 +62,7 @@ export const BUILT_IN_FILTER_CATEGORIES: FilterCategory[] = [
     id: 'stylize',
     name: 'Stylize & Pop',
     icon: 'Sparkles',
-    count: 4,
+    count: 10,
     description: 'Cyberpunk neon, cold matrix green, sunset peach, and vaporwave',
   },
   {
@@ -52,7 +74,7 @@ export const BUILT_IN_FILTER_CATEGORIES: FilterCategory[] = [
   },
 ];
 
-export const BUILT_IN_FILTER_PRESETS: FilterPreset[] = [
+const CORE_BUILT_IN_FILTER_PRESETS: FilterPreset[] = [
   // 1. 3D LUTs
   {
     id: 'lut_rec709',
@@ -718,4 +740,65 @@ export const BUILT_IN_FILTER_PRESETS: FilterPreset[] = [
     isCustom: false,
     previewAccentColor: '#A855F7',
   },
+];
+
+function mapEffectCategory(cat: string): {
+  category: string;
+  categoryLabel: string;
+  filterType: FilterPreset['filterType'];
+} {
+  switch (cat) {
+    case 'Color Grade':
+    case 'Cinematic':
+      return { category: 'cinematic', categoryLabel: 'Cinematic & Film', filterType: 'colorGrade' };
+    case 'Retro':
+      return { category: 'vintage', categoryLabel: 'Retro & Vintage', filterType: 'vintage' };
+    case 'Glitch':
+      return { category: 'glitch', categoryLabel: 'Glitch & CRT', filterType: 'stylize' };
+    case 'Blur & Optical':
+      return { category: 'blur_optics', categoryLabel: 'Blur & Optical', filterType: 'stylize' };
+    case 'Artistic':
+    case 'Distortion':
+      return { category: 'artistic', categoryLabel: 'Artistic & Distortion', filterType: 'stylize' };
+    default:
+      return { category: 'stylize', categoryLabel: 'Stylize & Pop', filterType: 'stylize' };
+  }
+}
+
+const EXPANDED_CATALOG_PRESETS: FilterPreset[] = EFFECTS_CATALOG.map((eff) => {
+  const { category, categoryLabel, filterType } = mapEffectCategory(eff.category);
+  return {
+    id: eff.id,
+    name: eff.name,
+    category,
+    categoryLabel,
+    description: eff.description,
+    filterType,
+    ffmpegFilter: eff.ffmpegFilter,
+    defaultIntensity: 1.0,
+    isCustom: false,
+    previewAccentColor: eff.color,
+    shaderRecipe: {
+      brightness: 0,
+      contrast: 1,
+      saturation: 1,
+      temperature: 0,
+      tint: 0,
+      vignette: 0,
+      grain: 0,
+      sepia: 0,
+      hueRotateDeg: 0,
+      rgbBalance: [1, 1, 1],
+      highlights: 0,
+      shadows: 0,
+      cssFilter: eff.cssFilter,
+    },
+  };
+});
+
+export const BUILT_IN_FILTER_PRESETS: FilterPreset[] = [
+  ...CORE_BUILT_IN_FILTER_PRESETS,
+  ...EXPANDED_CATALOG_PRESETS.filter(
+    (p) => !CORE_BUILT_IN_FILTER_PRESETS.some((c) => c.id === p.id)
+  ),
 ];

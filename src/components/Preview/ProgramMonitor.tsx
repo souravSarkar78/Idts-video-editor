@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { RotateCw, Activity, Shield, Grid3X3 } from '@/components/Icons';
 import { useShallow } from 'zustand/react/shallow';
-import { useTimelineStore, isTauri, getInterpolatedClipTransform } from '../../store/timelineStore';
+import { useTimelineStore, isTauri, getInterpolatedClipTransform, calculateTotalProjectDuration } from '../../store/timelineStore';
 import { formatTimecode } from '../../utils/timecode';
 import { Clip, ColorGradingProfile, StabilizationDebugMode } from '../../types/ipc';
 import { getActiveAudioClock } from '../Audio/TimelineAudioPlayer';
@@ -1550,11 +1550,45 @@ export const ProgramMonitor: React.FC = () => {
         }
       }
 
-      const maxSec = (state.project.durationMs || 120000) / 1000;
-      if (nextPlayhead >= maxSec) {
-        state.setIsPlaying(false);
-        state.setPlayhead(maxSec);
-        return;
+      // Timeline Auto-Stop at End of Sequence / Loop Playback Bounds
+      const totalDuration = calculateTotalProjectDuration(state.tracks);
+      const effectiveBoundary = totalDuration > 0 ? totalDuration : ((state.project.durationMs || 120000) / 1000);
+
+      if (totalDuration > 0 && nextPlayhead >= totalDuration) {
+        if (state.isLooping) {
+          state.setPlayhead(0.0);
+          nextPlayhead = 0.0;
+          if (videoRef.current) safeSeek('player1', videoRef.current, 0);
+          if (incomingVideoRef.current) safeSeek('player2', incomingVideoRef.current, 0);
+        } else {
+          // Automatically pause playback
+          state.setIsPlaying(false);
+          // Clamp currentTime exactly to totalDuration
+          state.setPlayhead(totalDuration);
+          // Halt audio playback and video preview decoders cleanly
+          if (videoRef.current && !videoRef.current.paused) videoRef.current.pause();
+          if (incomingVideoRef.current && !incomingVideoRef.current.paused) incomingVideoRef.current.pause();
+          if (denoisedAudioPlayerRef.current && !denoisedAudioPlayerRef.current.paused) denoisedAudioPlayerRef.current.pause();
+          if (stabilizedVideoRef.current && !stabilizedVideoRef.current.paused) stabilizedVideoRef.current.pause();
+          realTimeStabilizerRef.current.reset();
+          return;
+        }
+      } else if (nextPlayhead >= effectiveBoundary) {
+        if (state.isLooping) {
+          state.setPlayhead(0.0);
+          nextPlayhead = 0.0;
+          if (videoRef.current) safeSeek('player1', videoRef.current, 0);
+          if (incomingVideoRef.current) safeSeek('player2', incomingVideoRef.current, 0);
+        } else {
+          state.setIsPlaying(false);
+          state.setPlayhead(effectiveBoundary);
+          if (videoRef.current && !videoRef.current.paused) videoRef.current.pause();
+          if (incomingVideoRef.current && !incomingVideoRef.current.paused) incomingVideoRef.current.pause();
+          if (denoisedAudioPlayerRef.current && !denoisedAudioPlayerRef.current.paused) denoisedAudioPlayerRef.current.pause();
+          if (stabilizedVideoRef.current && !stabilizedVideoRef.current.paused) stabilizedVideoRef.current.pause();
+          realTimeStabilizerRef.current.reset();
+          return;
+        }
       }
 
       // Smooth clip transform pass during continuous playback
@@ -1749,6 +1783,7 @@ export const ProgramMonitor: React.FC = () => {
 
     switch (type) {
       case 'fade':
+      case 'fadeblack':
       case 'dip_black':
       case 'black':
         return {
@@ -1758,31 +1793,95 @@ export const ProgramMonitor: React.FC = () => {
       case 'fadewhite':
       case 'dip_white':
       case 'white':
+      case 'film_burn':
+      case 'flare':
         return {
           opacity: progress < 0.5 ? 1 : 0,
           filter: progress < 0.5 ? `brightness(${1 + progress * 4})` : undefined,
         };
 
+      case 'smoothleft':
+      case 'whipleft':
+      case 'slideleft':
+      case 'hlslice':
+        return {
+          transform: `translateX(-${progress * 100}%)`,
+          opacity: progress >= 1 ? 0 : 1,
+        };
+
+      case 'smoothright':
+      case 'whipright':
+      case 'slideright':
+      case 'hrslice':
+        return {
+          transform: `translateX(${progress * 100}%)`,
+          opacity: progress >= 1 ? 0 : 1,
+        };
+
+      case 'smoothup':
+      case 'whipup':
       case 'slideup':
         return {
           transform: `translateY(-${progress * 100}%)`,
           opacity: progress >= 1 ? 0 : 1,
         };
 
+      case 'smoothdown':
+      case 'whipdown':
       case 'slidedown':
         return {
           transform: `translateY(${progress * 100}%)`,
           opacity: progress >= 1 ? 0 : 1,
         };
 
+      case 'zoomin':
+        return {
+          transform: `scale(${1 + progress * 0.4})`,
+          opacity: Math.max(0, 1 - progress),
+        };
+
+      case 'zoomout':
+      case 'distance':
+        return {
+          transform: `scale(${Math.max(0.1, 1 - progress * 0.3)})`,
+          opacity: Math.max(0, 1 - progress),
+        };
+
+      case 'rotatecw':
+      case 'spincw':
+        return {
+          transform: `rotate(${progress * 90}deg) scale(${1 - progress * 0.3})`,
+          opacity: Math.max(0, 1 - progress),
+        };
+
+      case 'rotateccw':
+      case 'spinccw':
+        return {
+          transform: `rotate(-${progress * 90}deg) scale(${1 - progress * 0.3})`,
+          opacity: Math.max(0, 1 - progress),
+        };
+
+      case 'circleclose':
+        return {
+          clipPath: `circle(${Math.max(0, (1 - progress) * 75)}% at 50% 50%)`,
+          opacity: 1,
+        };
+
       case 'dissolve':
       case 'crossdissolve':
+      case 'pixelize':
+      case 'glitch':
         return {
           opacity: Math.max(0, 1 - progress),
         };
 
       case 'wipeleft':
       case 'wiperight':
+      case 'circleopen':
+      case 'radial':
+      case 'rectcrop':
+      case 'horzopen':
+      case 'vertopen':
         return {
           opacity: progress < 1 ? 1 : 0,
         };
@@ -1813,11 +1912,14 @@ export const ProgramMonitor: React.FC = () => {
 
       case 'dissolve':
       case 'crossdissolve':
+      case 'pixelize':
+      case 'glitch':
         return {
           opacity: progress,
         };
 
       case 'fade':
+      case 'fadeblack':
       case 'dip_black':
       case 'black':
         return {
@@ -1827,9 +1929,72 @@ export const ProgramMonitor: React.FC = () => {
       case 'fadewhite':
       case 'dip_white':
       case 'white':
+      case 'film_burn':
+      case 'flare':
         return {
           opacity: progress >= 0.5 ? 1 : 0,
           filter: progress >= 0.5 ? `brightness(${1 + (1 - progress) * 4})` : undefined,
+        };
+
+      case 'smoothleft':
+      case 'whipleft':
+      case 'slideleft':
+      case 'hlslice':
+        return {
+          transform: `translateX(${(1 - progress) * 100}%)`,
+          opacity: 1,
+        };
+
+      case 'smoothright':
+      case 'whipright':
+      case 'slideright':
+      case 'hrslice':
+        return {
+          transform: `translateX(-${(1 - progress) * 100}%)`,
+          opacity: 1,
+        };
+
+      case 'smoothup':
+      case 'whipup':
+      case 'slideup':
+        return {
+          transform: `translateY(${(1 - progress) * 100}%)`,
+          opacity: 1,
+        };
+
+      case 'smoothdown':
+      case 'whipdown':
+      case 'slidedown':
+        return {
+          transform: `translateY(-${(1 - progress) * 100}%)`,
+          opacity: 1,
+        };
+
+      case 'zoomin':
+        return {
+          transform: `scale(${0.7 + progress * 0.3})`,
+          opacity: progress,
+        };
+
+      case 'zoomout':
+      case 'distance':
+        return {
+          transform: `scale(${1.3 - progress * 0.3})`,
+          opacity: progress,
+        };
+
+      case 'rotatecw':
+      case 'spincw':
+        return {
+          transform: `rotate(-${(1 - progress) * 90}deg) scale(${0.7 + progress * 0.3})`,
+          opacity: progress,
+        };
+
+      case 'rotateccw':
+      case 'spinccw':
+        return {
+          transform: `rotate(${(1 - progress) * 90}deg) scale(${0.7 + progress * 0.3})`,
+          opacity: progress,
         };
 
       case 'wipeleft': {
@@ -1848,15 +2013,51 @@ export const ProgramMonitor: React.FC = () => {
         };
       }
 
-      case 'slideup':
+      case 'circleopen':
+      case 'radial':
         return {
-          transform: `translateY(${(1 - progress) * 100}%)`,
+          clipPath: `circle(${progress * 75}% at 50% 50%)`,
           opacity: 1,
         };
 
-      case 'slidedown':
+      case 'circleclose':
         return {
-          transform: `translateY(-${(1 - progress) * 100}%)`,
+          opacity: progress,
+        };
+
+      case 'rectcrop': {
+        const p = (1 - progress) * 50;
+        return {
+          clipPath: `inset(${p}% ${p}% ${p}% ${p}%)`,
+          opacity: 1,
+        };
+      }
+
+      case 'horzopen': {
+        const p = (1 - progress) * 50;
+        return {
+          clipPath: `inset(0 ${p}% 0 ${p}%)`,
+          opacity: 1,
+        };
+      }
+
+      case 'vertopen': {
+        const p = (1 - progress) * 50;
+        return {
+          clipPath: `inset(${p}% 0 ${p}% 0)`,
+          opacity: 1,
+        };
+      }
+
+      case 'wipetl':
+        return {
+          clipPath: `polygon(0 0, ${progress * 200}% 0, 0 ${progress * 200}%)`,
+          opacity: 1,
+        };
+
+      case 'wipetr':
+        return {
+          clipPath: `polygon(100% 0, 100% ${progress * 200}%, ${100 - progress * 200}% 0)`,
           opacity: 1,
         };
 

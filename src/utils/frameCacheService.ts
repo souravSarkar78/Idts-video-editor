@@ -19,6 +19,25 @@ const fileFramesIndex = new Map<string, FrameIndexEntry[]>();
 export const filePosterCache = new Map<string, string>();
 
 /**
+ * Purges frame and poster caches for a given file or all files
+ */
+export function purgeFileFrameCaches(filePath?: string): void {
+  if (filePath) {
+    filePosterCache.delete(filePath);
+    fileFramesIndex.delete(filePath);
+    for (const key of Array.from(frameCache.keys())) {
+      if (key.startsWith(`${filePath}@`)) {
+        frameCache.delete(key);
+      }
+    }
+  } else {
+    filePosterCache.clear();
+    fileFramesIndex.clear();
+    frameCache.clear();
+  }
+}
+
+/**
  * Normalizes time into a 0.5s bucket for cache grouping
  */
 export function timeBucket(timeSeconds: number): string {
