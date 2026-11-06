@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useCallback, useLayoutEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useLayoutEffect, useMemo } from 'react';
 import {
   Play,
   Pause,
@@ -281,8 +281,22 @@ export const Timeline: React.FC = () => {
   const scrubRafRef = useRef<number | null>(null);
   const [syncToast, setSyncToast] = useState<string | null>(null);
 
+  // Viewport scroll tracking for ruler virtualization and off-screen clip culling
+  const [viewportScroll, setViewportScroll] = useState<{ scrollLeft: number; clientWidth: number }>({
+    scrollLeft: 0,
+    clientWidth: 1400,
+  });
+
   // Synchronize vertical scrolling between track headers and timeline track lanes
   const handleRightScroll = () => {
+    if (scrollContainerRef.current) {
+      const sl = scrollContainerRef.current.scrollLeft;
+      const cw = scrollContainerRef.current.clientWidth;
+      setViewportScroll((prev) => {
+        if (Math.abs(prev.scrollLeft - sl) < 4 && Math.abs(prev.clientWidth - cw) < 10) return prev;
+        return { scrollLeft: sl, clientWidth: cw };
+      });
+    }
     if (isSyncingScrollRef.current) return;
     if (scrollContainerRef.current && trackHeadersScrollRef.current) {
       isSyncingScrollRef.current = true;
@@ -550,7 +564,7 @@ export const Timeline: React.FC = () => {
         const timelineSec = Math.max(maxClipEndSec > 0 ? maxClipEndSec + 10 : durationSeconds, 10);
         const minFitZoom = Math.max(0.02, visibleWidth / timelineSec);
 
-        const targetZoom = Math.max(minFitZoom * 0.85, Math.min(400, currentZoom * zoomFactor));
+        const targetZoom = Math.max(minFitZoom * 0.85, Math.min(3000, currentZoom * zoomFactor));
         applyAnchoredZoom(targetZoom);
       }
     };
@@ -559,17 +573,22 @@ export const Timeline: React.FC = () => {
     return () => scrollElem.removeEventListener('wheel', handleWheel);
   }, [durationSeconds, maxClipEndSec, applyAnchoredZoom]);
 
-  // Scrubbing logic
+  // Frame-accurate scrubbing logic with exact frame snapping
   const handleRulerScrub = useCallback(
     (e: React.MouseEvent<HTMLDivElement> | MouseEvent) => {
       if (!scrollContainerRef.current) return;
       const rect = scrollContainerRef.current.getBoundingClientRect();
       const scrollLeft = scrollContainerRef.current.scrollLeft;
       const clickX = e.clientX - rect.left + scrollLeft;
-      const newTime = Math.max(0, Math.min(clickX / zoom, durationSeconds));
+      const rawSec = clickX / zoom;
+      const fps = Math.max(1, project.fps || 30);
+      const frameDuration = 1 / fps;
+      // Snap cleanly to exact frame boundary
+      const snappedSec = Math.round(rawSec / frameDuration) * frameDuration;
+      const newTime = Math.max(0, Math.min(snappedSec, durationSeconds));
       setPlayhead(newTime);
     },
-    [zoom, durationSeconds, setPlayhead]
+    [zoom, durationSeconds, project.fps, setPlayhead]
   );
 
   const handleRulerMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -1061,20 +1080,63 @@ export const Timeline: React.FC = () => {
     [selectClip, tracks, setInspectorTab]
   );
 
-  // Ruler ticks generator
+  // Viewport visible time range (used for virtualized ruler ticks and off-screen clip culling)
   const totalRulerSeconds = Math.max(durationSeconds, 60);
-  const stepInterval =
-    zoom < 0.2 ? 600 :
-    zoom < 0.8 ? 300 :
-    zoom < 2 ? 60 :
-    zoom < 8 ? 30 :
-    zoom < 25 ? 10 :
-    zoom < 60 ? 5 : 1;
+  const visibleTimeRange = useMemo(() => {
+    const startSec = Math.max(0, (viewportScroll.scrollLeft - 150) / zoom);
+    const endSec = Math.min(totalRulerSeconds, (viewportScroll.scrollLeft + viewportScroll.clientWidth + 150) / zoom);
+    return { startSec, endSec };
+  }, [viewportScroll.scrollLeft, viewportScroll.clientWidth, zoom, totalRulerSeconds]);
 
-  const rulerTicks: number[] = [];
-  for (let sec = 0; sec <= totalRulerSeconds; sec += stepInterval) {
-    rulerTicks.push(sec);
+  // Frame-accurate multi-tier tick interval
+  const timelineFps = Math.max(1, project.fps || 30);
+  const frameSec = 1 / timelineFps;
+  const pxPerFrame = zoom * frameSec;
+
+  let stepInterval: number;
+  if (pxPerFrame >= 35) {
+    // Single-frame zoom: each frame gets its own distinct tick!
+    stepInterval = frameSec;
+  } else if (pxPerFrame >= 18) {
+    stepInterval = frameSec * 2;
+  } else if (pxPerFrame >= 8) {
+    stepInterval = frameSec * 5;
+  } else if (pxPerFrame >= 4) {
+    stepInterval = frameSec * (timelineFps >= 50 ? 15 : 10);
+  } else if (zoom >= 60) {
+    stepInterval = 1.0;
+  } else if (zoom >= 25) {
+    stepInterval = 5.0;
+  } else if (zoom >= 10) {
+    stepInterval = 10.0;
+  } else if (zoom >= 3) {
+    stepInterval = 30.0;
+  } else if (zoom >= 0.8) {
+    stepInterval = 60.0;
+  } else if (zoom >= 0.2) {
+    stepInterval = 300.0;
+  } else {
+    stepInterval = 600.0;
   }
+
+  // Virtualized ruler ticks: ONLY generate ticks within the visible scroll window (20-40 ticks max)
+  const rulerTicks = useMemo(() => {
+    const ticks: { sec: number; isMajor: boolean; frameNum?: number }[] = [];
+    const firstTick = Math.max(0, Math.floor(visibleTimeRange.startSec / stepInterval) * stepInterval);
+    const lastTick = Math.min(totalRulerSeconds, Math.ceil(visibleTimeRange.endSec / stepInterval) * stepInterval);
+
+    for (let sec = firstTick; sec <= lastTick + 0.0001; sec += stepInterval) {
+      const totalFrames = Math.round(sec * timelineFps);
+      const isWholeSecond = Math.abs(sec - Math.round(sec)) < 0.001;
+      const frameNum = totalFrames % Math.round(timelineFps);
+      ticks.push({
+        sec,
+        isMajor: isWholeSecond,
+        frameNum,
+      });
+    }
+    return ticks;
+  }, [visibleTimeRange.startSec, visibleTimeRange.endSec, stepInterval, totalRulerSeconds, timelineFps]);
 
   const syncedCount = allClips.filter((c) => c.synced || c.isSynced).length;
 
@@ -1372,15 +1434,15 @@ export const Timeline: React.FC = () => {
             <input
               type="range"
               min={0.1}
-              max={300}
-              step={0.1}
+              max={3000}
+              step={0.5}
               value={zoom}
               onChange={(e) => applyAnchoredZoom(Number(e.target.value))}
               className="w-16 h-1 bg-[#222630] rounded-lg appearance-none cursor-pointer accent-[#00F0FF]"
               title={`Zoom: ${zoom.toFixed(1)} px/sec`}
             />
             <button
-              onClick={() => applyAnchoredZoom(Math.min(zoom * 1.25, 400))}
+              onClick={() => applyAnchoredZoom(Math.min(zoom * 1.25, 3000))}
               className="text-[#8A92A6] hover:text-[#00F0FF] transition-colors cursor-pointer"
               title="Zoom In (Ctrl+Scroll Up)"
             >
@@ -1459,18 +1521,37 @@ export const Timeline: React.FC = () => {
             style={{ width: `${totalRulerSeconds * zoom}px` }}
             className="h-7 bg-[#14161B] border-b border-[#222630] relative cursor-pointer select-none shrink-0"
           >
-            {rulerTicks.map((sec) => (
-              <div
-                key={sec}
-                style={{ left: `${sec * zoom}px` }}
-                className="absolute top-0 bottom-0 border-l border-[#222630] flex flex-col justify-end pb-1 pl-1"
-              >
-                <span className="timecode-display text-[9px] font-mono text-[#64748B] font-medium leading-none">
-                  {formatTimecode(sec, project.fps)}
-                </span>
-                <div className="absolute bottom-0 left-0 w-[1px] h-2 bg-[#64748B]" />
-              </div>
-            ))}
+            {rulerTicks.map((tick: { sec: number; isMajor: boolean; frameNum?: number }) => {
+              const sec = tick.sec;
+              const isMajor = tick.isMajor;
+              const isSingleFrameLevel = stepInterval <= frameSec * 2;
+              const frameLabel = tick.frameNum !== undefined ? `:${('00' + tick.frameNum).slice(-2)}` : '';
+
+              return (
+                <div
+                  key={Math.round(sec * 1000)}
+                  style={{ left: `${sec * zoom}px` }}
+                  className={`absolute top-0 bottom-0 border-l flex flex-col justify-end pb-1 pl-1 select-none pointer-events-none ${
+                    isMajor ? 'border-[#3E4554]' : 'border-[#222630]'
+                  }`}
+                >
+                  <span
+                    className={`timecode-display text-[9px] font-mono leading-none ${
+                      isMajor ? 'text-[#8A92A6] font-bold' : 'text-[#566176] font-medium'
+                    }`}
+                  >
+                    {isSingleFrameLevel
+                      ? (isMajor ? formatTimecode(sec, timelineFps) : frameLabel)
+                      : (isMajor ? formatTimecode(sec, timelineFps) : (stepInterval < 1 ? frameLabel : ''))}
+                  </span>
+                  <div
+                    className={`absolute bottom-0 left-0 w-[1px] ${
+                      isMajor ? 'h-2.5 bg-[#8A92A6]' : 'h-1.5 bg-[#3E4554]'
+                    }`}
+                  />
+                </div>
+              );
+            })}
           </div>
 
           {/* Track Lanes (Drop Targets for Media Pool Clips) */}
@@ -1557,6 +1638,7 @@ export const Timeline: React.FC = () => {
                   onStartResize={(e) => handleStartTrackResize(track.id, e, trackHeight)}
                   onResetHeight={() => resetTrackHeight(track.id)}
                   zoom={zoom}
+                  visibleTimeRange={visibleTimeRange}
                   selectedClipId={selectedClipId}
                   selectedClipIds={selectedClipIds}
                   draggingClipId={draggingClip?.id || null}
@@ -2115,6 +2197,7 @@ interface DynamicTrackLaneProps {
   updateTransition?: (id: string, updates: Partial<Transition>) => void;
   removeTransition?: (id: string) => void;
   activeDragTransition?: { transitionType: string; label: string; mouseX: number; mouseY: number } | null;
+  visibleTimeRange?: { startSec: number; endSec: number };
   onSelectClip: (id: string, isMulti?: boolean) => void;
   onStartDragClip: (
     id: string,
@@ -2221,6 +2304,7 @@ const DynamicTrackLane: React.FC<DynamicTrackLaneProps> = React.memo(({
   updateTransition,
   removeTransition,
   activeDragTransition = null,
+  visibleTimeRange,
   edgeDragMode = 'trim',
   onSelectClip,
   onStartDragClip,
@@ -2323,6 +2407,7 @@ const DynamicTrackLane: React.FC<DynamicTrackLaneProps> = React.memo(({
             isExternalDragging={isExternalDragging}
             edgeDragMode={edgeDragMode}
             isStabilizationAnalyzing={isStabilizationAnalyzing?.[clip.id]}
+            visibleTimeRange={visibleTimeRange}
             onSelectClip={onSelectClip}
             onContextMenu={onContextMenu}
             onStartDragClip={onStartDragClip}

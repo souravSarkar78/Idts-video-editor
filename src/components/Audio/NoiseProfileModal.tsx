@@ -13,6 +13,8 @@ import {
   Sliders,
   Scissors,
   Check,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react';
 import { Waves, Shield } from '@/components/Icons';
 import { useTimelineStore } from '../../store/timelineStore';
@@ -44,7 +46,6 @@ export const NoiseProfileModal: React.FC = () => {
     noiseModalClipId,
     setIsNoiseModalOpen,
     tracks,
-    playhead,
     fps,
     captureNoiseProfile,
     clearNoiseProfile,
@@ -60,7 +61,6 @@ export const NoiseProfileModal: React.FC = () => {
       noiseModalClipId: state.noiseModalClipId,
       setIsNoiseModalOpen: state.setIsNoiseModalOpen,
       tracks: state.tracks,
-      playhead: state.playhead,
       fps: state.project?.fps || 30,
       captureNoiseProfile: state.captureNoiseProfile,
       clearNoiseProfile: state.clearNoiseProfile,
@@ -118,8 +118,12 @@ export const NoiseProfileModal: React.FC = () => {
   const [feedbackMsg, setFeedbackMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [cleanPeaks, setCleanPeaks] = useState<number[] | null>(null);
+  const [waveformZoom, setWaveformZoom] = useState<number>(1.0);
+  const waveformZoomRef = useRef<number>(1.0);
+  waveformZoomRef.current = waveformZoom;
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const outerScrollContainerRef = useRef<HTMLDivElement>(null);
   const waveformContainerRef = useRef<HTMLDivElement>(null);
   const mediaPlayerRef = useRef<HTMLVideoElement | null>(null);
   const auditionRafRef = useRef<number | null>(null);
@@ -128,11 +132,67 @@ export const NoiseProfileModal: React.FC = () => {
   const activeRequestIdRef = useRef<number>(0);
   const handleTogglePlayPauseRef = useRef<() => void>(() => {});
 
+  // Zoom level handler (via UI slider and +/- buttons)
+  const handleZoomChange = (newZoom: number) => {
+    const clamped = Math.min(10.0, Math.max(1.0, Number(newZoom.toFixed(1))));
+    setWaveformZoom(clamped);
+    waveformZoomRef.current = clamped;
+
+    const el = outerScrollContainerRef.current;
+    if (el) {
+      const playheadRatio = clipDuration > 0 ? modalPlayhead / clipDuration : 0;
+      requestAnimationFrame(() => {
+        if (!el) return;
+        const newContentWidth = el.scrollWidth;
+        el.scrollLeft = playheadRatio * newContentWidth - el.clientWidth / 2;
+      });
+    }
+  };
+
+  // Ctrl + Mouse Wheel listener for smooth interactive zoom centered around mouse cursor
+  useEffect(() => {
+    const el = outerScrollContainerRef.current;
+    if (!el) return;
+
+    const onWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const zoomFactor = e.deltaY < 0 ? 1.2 : 0.83;
+        const currentZoom = waveformZoomRef.current;
+        const targetZoom = Math.min(10.0, Math.max(1.0, Number((currentZoom * zoomFactor).toFixed(1))));
+        if (targetZoom === currentZoom) return;
+
+        const rect = el.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const scrollLeft = el.scrollLeft;
+        const contentWidth = el.scrollWidth;
+        const cursorRatio = contentWidth > 0 ? (scrollLeft + mouseX) / contentWidth : 0;
+
+        waveformZoomRef.current = targetZoom;
+        setWaveformZoom(targetZoom);
+
+        requestAnimationFrame(() => {
+          if (!el) return;
+          const newContentWidth = el.scrollWidth;
+          el.scrollLeft = cursorRatio * newContentWidth - mouseX;
+        });
+      }
+    };
+
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => {
+      el.removeEventListener('wheel', onWheel);
+    };
+  }, []);
+
   // Initial range positioning: try centering around current playhead if within clip, else start at 0
   useEffect(() => {
     if (isNoiseModalOpen && targetClip) {
+      const currentTimelinePlayhead = useTimelineStore.getState().playhead;
       const clipStart = targetClip.startPositionSeconds || 0;
-      const relPlayhead = playhead - clipStart;
+      const relPlayhead = currentTimelinePlayhead - clipStart;
       const initialDur = Math.min(3.0, Math.max(1.0, clipDuration * 0.3));
 
       let initialStart = 0;
@@ -147,6 +207,8 @@ export const NoiseProfileModal: React.FC = () => {
       setPlaybackMode('none');
       fullCleanWavRef.current = null;
       setCleanPeaks(null);
+      setWaveformZoom(1.0);
+      waveformZoomRef.current = 1.0;
 
       if (targetClip.filePath) {
         fetchWaveformData(targetClip.filePath);
@@ -154,52 +216,21 @@ export const NoiseProfileModal: React.FC = () => {
     }
   }, [isNoiseModalOpen, targetClip?.id]);
 
-  // Pre-load / generate clean waveform data on modal open for overlay comparison
+  // Pre-load clean waveform data if already available from a previous apply (zero CPU blocking)
   useEffect(() => {
     if (!isNoiseModalOpen || !targetClip) return;
 
     let isMounted = true;
-    const loadCleanPeaks = async () => {
-      // 1. If clip already has a denoisedAudioPath from previous apply, fetch it immediately
-      const savedDenoised = targetClip.audioProcessing?.noiseProfile?.denoisedAudioPath;
-      if (savedDenoised) {
-        try {
-          const peaks = await fetchWaveformData(savedDenoised);
-          if (peaks && peaks.length > 0 && isMounted) {
-            setCleanPeaks(peaks);
-            return;
-          }
-        } catch {}
-      }
-
-      // 2. Otherwise, generate preview waveform in background
-      try {
-        const redDb = np.reductionIntensityDb ?? 12.0;
-        const sens = np.sensitivity ?? 6.0;
-        const gs = np.frequencySmoothingBands ?? 6;
-        const residue = np.auditionResidue ?? false;
-        const wav = await previewSpectralDenoise(
-          targetClip.id,
-          0.0,
-          clipDuration,
-          redDb,
-          sens,
-          gs,
-          residue
-        );
-        if (wav && isMounted) {
-          fullCleanWavRef.current = wav;
-          const peaks = await fetchWaveformData(wav);
+    const savedDenoised = targetClip.audioProcessing?.noiseProfile?.denoisedAudioPath;
+    if (savedDenoised) {
+      fetchWaveformData(savedDenoised)
+        .then((peaks) => {
           if (peaks && peaks.length > 0 && isMounted) {
             setCleanPeaks(peaks);
           }
-        }
-      } catch (e) {
-        console.warn('Initial clean waveform preview generation failed:', e);
-      }
-    };
-
-    loadCleanPeaks();
+        })
+        .catch(() => {});
+    }
 
     return () => {
       isMounted = false;
@@ -280,6 +311,13 @@ export const NoiseProfileModal: React.FC = () => {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+
+    const container = waveformContainerRef.current;
+    const baseW = container ? container.clientWidth : 960;
+    const targetW = Math.max(960, Math.round(baseW));
+    if (canvas.width !== targetW) {
+      canvas.width = targetW;
+    }
 
     const width = canvas.width;
     const height = canvas.height;
@@ -380,7 +418,7 @@ export const NoiseProfileModal: React.FC = () => {
         ctx.fillRect(x, midY - cleanBarH, Math.max(1, barWidth - 1), cleanBarH * 2);
       }
     }
-  }, [peaks, cleanPeaks, np.noiseReductionEnabled, np.reductionIntensityDb, np.auditionResidue]);
+  }, [peaks, cleanPeaks, np.noiseReductionEnabled, np.reductionIntensityDb, np.auditionResidue, waveformZoom]);
 
   // Handle Dragging Selection Range
   const [draggingMode, setDraggingMode] = useState<'move' | 'left' | 'right' | null>(null);
@@ -468,6 +506,18 @@ export const NoiseProfileModal: React.FC = () => {
     }
   };
 
+  // Smoothly keep playhead needle in view when zoomed in
+  const autoScrollPlayhead = useCallback((posSec: number) => {
+    const container = outerScrollContainerRef.current;
+    if (!container || waveformZoomRef.current <= 1.0 || clipDuration <= 0) return;
+    const needleX = (posSec / clipDuration) * container.scrollWidth;
+    const viewLeft = container.scrollLeft;
+    const viewRight = viewLeft + container.clientWidth;
+    if (needleX < viewLeft + 30 || needleX > viewRight - 50) {
+      container.scrollLeft = Math.max(0, needleX - container.clientWidth / 2);
+    }
+  }, [clipDuration]);
+
   // 1. Master bypass toggle switch for noise reduction (Step 2 Switch)
   const handleToggleNoiseReduction = async (enabled: boolean) => {
     if (!targetClip) return;
@@ -509,6 +559,7 @@ export const NoiseProfileModal: React.FC = () => {
             const curr = media.currentTime;
             const rel = Math.max(0, curr - clipInPoint);
             setModalPlayhead(rel);
+            autoScrollPlayhead(rel);
             // Full clip without boundaries: loop at clip end
             if (rel >= clipDuration || media.ended) {
               setModalPlayhead(0);
@@ -578,6 +629,7 @@ export const NoiseProfileModal: React.FC = () => {
               }
               const curr = media.currentTime;
               setModalPlayhead(curr);
+              autoScrollPlayhead(curr);
               // Full clip without boundaries: loop at clip end
               if (curr >= clipDuration || media.ended) {
                 setModalPlayhead(0);
@@ -626,10 +678,14 @@ export const NoiseProfileModal: React.FC = () => {
           const gs = currentNp.frequencySmoothingBands ?? 6;
           const residue = currentNp.auditionResidue ?? false;
 
+          // Fast preview window of 20s around current playhead during live auditioning
+          const previewStart = Math.max(0, modalPlayhead - 1.0);
+          const previewDur = Math.min(20.0, clipDuration - previewStart);
+
           const updatedWav = await previewSpectralDenoise(
             targetClip.id,
-            0.0,
-            clipDuration,
+            previewStart,
+            previewDur,
             redDb,
             sens,
             gs,
@@ -640,17 +696,13 @@ export const NoiseProfileModal: React.FC = () => {
 
           if (updatedWav) {
             fullCleanWavRef.current = updatedWav;
-            const peaks = await fetchWaveformData(updatedWav);
-            if (peaks && peaks.length > 0 && reqId === activeRequestIdRef.current) {
-              setCleanPeaks(peaks);
-            }
             const media = mediaPlayerRef.current;
             if (media && playbackMode === 'clean' && !media.paused) {
               const currentPos = media.currentTime;
               const newSrc = getMediaUrl(updatedWav);
               if (media.src !== newSrc) {
                 media.src = newSrc;
-                media.currentTime = currentPos;
+                media.currentTime = Math.max(0, currentPos - previewStart);
                 media.play().catch(() => {});
               }
             }
@@ -662,7 +714,7 @@ export const NoiseProfileModal: React.FC = () => {
             setIsLiveUpdating(false);
           }
         }
-      }, 250);
+      }, 350);
     }
   };
 
@@ -709,6 +761,7 @@ export const NoiseProfileModal: React.FC = () => {
         const curr = media.currentTime;
         const rel = Math.max(0, curr - clipInPoint);
         setModalPlayhead(rel);
+        autoScrollPlayhead(rel);
 
         // Always loop strictly within the selected raw sample range:
         if (rel >= endSec || rel >= clipDuration || media.ended) {
@@ -874,6 +927,7 @@ export const NoiseProfileModal: React.FC = () => {
         const curr = media.currentTime;
         const rel = Math.max(0, curr - clipInPoint);
         setModalPlayhead(rel);
+        autoScrollPlayhead(rel);
 
         // Whole clip with NO boundaries: stop at end of clip
         if (rel >= clipDuration || media.ended) {
@@ -1184,110 +1238,181 @@ export const NoiseProfileModal: React.FC = () => {
               )}
             </div>
 
-            {/* Noise Sample Badge */}
-            <div className="font-mono text-[10px] flex items-center gap-1.5 text-[#8A92A6]">
-              <span>Noise Sample:</span>
-              <span className="text-[#00F0FF] font-bold">{startSec.toFixed(2)}s → {endSec.toFixed(2)}s ({durationSec.toFixed(1)}s)</span>
+            {/* Right Header Area: Sample Info & Waveform Zoom Controls */}
+            <div className="flex items-center gap-3">
+              {/* Noise Sample Badge */}
+              <div className="font-mono text-[10px] flex items-center gap-1.5 text-[#8A92A6]">
+                <span>Noise Sample:</span>
+                <span className="text-[#00F0FF] font-bold">{startSec.toFixed(2)}s → {endSec.toFixed(2)}s ({durationSec.toFixed(1)}s)</span>
+              </div>
+
+              {/* Waveform Zoom Controls (Slider, Buttons & Ctrl+Wheel indicator) */}
+              <div className="flex items-center gap-1.5 bg-[#12141A] border border-[#222630] rounded-md px-2 py-0.5 text-xs select-none shadow-xs">
+                <button
+                  type="button"
+                  onClick={() => handleZoomChange(waveformZoom - 0.5)}
+                  disabled={waveformZoom <= 1.0}
+                  className="text-[#8A92A6] hover:text-[#00F0FF] disabled:opacity-30 disabled:pointer-events-none p-0.5 rounded cursor-pointer transition-colors"
+                  title="Zoom Out (Ctrl + Scroll Down)"
+                >
+                  <ZoomOut size={12} />
+                </button>
+                <input
+                  type="range"
+                  min="1"
+                  max="10"
+                  step="0.1"
+                  value={waveformZoom}
+                  onChange={(e) => handleZoomChange(parseFloat(e.target.value))}
+                  className="w-16 h-1 bg-[#222630] rounded appearance-none cursor-pointer accent-[#00F0FF]"
+                  title="Waveform Zoom Slider (or Ctrl + Mouse Wheel)"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleZoomChange(waveformZoom + 0.5)}
+                  disabled={waveformZoom >= 10.0}
+                  className="text-[#8A92A6] hover:text-[#00F0FF] disabled:opacity-30 disabled:pointer-events-none p-0.5 rounded cursor-pointer transition-colors"
+                  title="Zoom In (Ctrl + Scroll Up)"
+                >
+                  <ZoomIn size={12} />
+                </button>
+                <span className="font-mono text-[10px] text-[#00F0FF] font-bold min-w-[28px] text-right">
+                  {waveformZoom.toFixed(1)}x
+                </span>
+                {waveformZoom > 1.0 && (
+                  <button
+                    type="button"
+                    onClick={() => handleZoomChange(1.0)}
+                    className="text-[9px] font-mono text-[#64748B] hover:text-[#00F0FF] ml-0.5 transition-colors cursor-pointer"
+                    title="Reset Zoom to 1x"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
+          {/* Outer Zoomable & Scrollable Waveform Viewport */}
           <div
-            ref={waveformContainerRef}
-            onClick={handleContainerClick}
-            className="relative w-full h-24 bg-[#07080B] border border-[#1C202B] rounded-lg overflow-hidden cursor-crosshair group shadow-inner"
+            ref={outerScrollContainerRef}
+            className="relative w-full overflow-x-auto overflow-y-hidden rounded-lg border border-[#1C202B] bg-[#07080B] shadow-inner select-none scrollbar-thin scrollbar-thumb-[#222630] scrollbar-track-transparent"
+            title="Tip: Hold Ctrl and scroll mouse wheel to zoom in/out at cursor"
           >
-            {/* Canvas Waveform */}
-            <canvas
-              ref={canvasRef}
-              width={960}
-              height={96}
-              className="absolute inset-0 w-full h-full pointer-events-none opacity-90 transition-opacity"
-            />
-
-            {/* Dimmed Left Mask */}
+            {/* Inner Scaled Canvas & Interactive Selection Container */}
             <div
-              style={{ width: `${Math.max(0, leftPercent)}%` }}
-              className="absolute top-0 bottom-0 left-0 bg-black/70 backdrop-blur-[1px] pointer-events-none transition-[width] duration-75"
-            />
-
-            {/* Dimmed Right Mask */}
-            <div
+              ref={waveformContainerRef}
+              onClick={handleContainerClick}
               style={{
-                left: `${Math.min(100, leftPercent + widthPercent)}%`,
-                right: 0,
+                width: `${waveformZoom * 100}%`,
+                minWidth: '100%',
               }}
-              className="absolute top-0 bottom-0 bg-black/70 backdrop-blur-[1px] pointer-events-none transition-[left] duration-75"
-            />
-
-            {/* Active Noise Sampling Selection Box (Step 1) */}
-            <div
-              style={{
-                left: `${leftPercent}%`,
-                width: `${widthPercent}%`,
-              }}
-              onMouseDown={(e) => handleMouseDown(e, 'move')}
-              className="absolute top-0 bottom-0 border-2 border-dashed border-[#00F0FF] bg-[#00F0FF]/10 shadow-[0_0_15px_rgba(0,240,255,0.25)] cursor-grab active:cursor-grabbing group-hover:border-[#38f2ff] transition-[left,width] duration-75 flex items-center justify-between z-10"
+              className="relative h-24 cursor-crosshair group"
             >
-              {/* Left Trim Handle */}
+              {/* Canvas Waveform */}
+              <canvas
+                ref={canvasRef}
+                height={96}
+                className="absolute inset-0 w-full h-full pointer-events-none opacity-90 transition-opacity"
+              />
+
+              {/* Dimmed Left Mask */}
               <div
-                onMouseDown={(e) => handleMouseDown(e, 'left')}
-                className="w-3.5 h-full -ml-1.5 bg-[#00F0FF] hover:bg-white cursor-ew-resize flex items-center justify-center opacity-90 transition-colors z-20 rounded-l-sm"
-                title="Drag to adjust sample start"
+                style={{ width: `${Math.max(0, leftPercent)}%` }}
+                className="absolute top-0 bottom-0 left-0 bg-black/70 backdrop-blur-[1px] pointer-events-none transition-[width] duration-75"
+              />
+
+              {/* Dimmed Right Mask */}
+              <div
+                style={{
+                  left: `${Math.min(100, leftPercent + widthPercent)}%`,
+                  right: 0,
+                }}
+                className="absolute top-0 bottom-0 bg-black/70 backdrop-blur-[1px] pointer-events-none transition-[left] duration-75"
+              />
+
+              {/* Active Noise Sampling Selection Box (Step 1) */}
+              <div
+                style={{
+                  left: `${leftPercent}%`,
+                  width: `${widthPercent}%`,
+                }}
+                onMouseDown={(e) => handleMouseDown(e, 'move')}
+                className="absolute top-0 bottom-0 border-2 border-dashed border-[#00F0FF] bg-[#00F0FF]/10 shadow-[0_0_15px_rgba(0,240,255,0.25)] cursor-grab active:cursor-grabbing group-hover:border-[#38f2ff] transition-[left,width] duration-75 flex items-center justify-between z-10"
               >
-                <div className="w-0.5 h-4 bg-[#090B0E] rounded-full" />
+                {/* Left Trim Handle */}
+                <div
+                  onMouseDown={(e) => handleMouseDown(e, 'left')}
+                  className="w-3.5 h-full -ml-1.5 bg-[#00F0FF] hover:bg-white cursor-ew-resize flex items-center justify-center opacity-90 transition-colors z-20 rounded-l-sm"
+                  title="Drag to adjust sample start"
+                >
+                  <div className="w-0.5 h-4 bg-[#090B0E] rounded-full" />
+                </div>
+
+                {/* Center Label / Grip */}
+                <div className="px-2 py-0.5 rounded bg-[#090B0E]/85 border border-[#00F0FF]/40 text-[9px] font-mono text-[#00F0FF] font-bold pointer-events-none shadow flex items-center gap-1">
+                  <Waves size={10} />
+                  <span>Noise Sample ({durationSec.toFixed(1)}s)</span>
+                </div>
+
+                {/* Right Trim Handle */}
+                <div
+                  onMouseDown={(e) => handleMouseDown(e, 'right')}
+                  className="w-3.5 h-full -mr-1.5 bg-[#00F0FF] hover:bg-white cursor-ew-resize flex items-center justify-center opacity-90 transition-colors z-20 rounded-r-sm"
+                  title="Drag to adjust sample duration"
+                >
+                  <div className="w-0.5 h-4 bg-[#090B0E] rounded-full" />
+                </div>
               </div>
 
-              {/* Center Label / Grip */}
-              <div className="px-2 py-0.5 rounded bg-[#090B0E]/85 border border-[#00F0FF]/40 text-[9px] font-mono text-[#00F0FF] font-bold pointer-events-none shadow flex items-center gap-1">
-                <Waves size={10} />
-                <span>Noise Sample ({durationSec.toFixed(1)}s)</span>
-              </div>
-
-              {/* Right Trim Handle */}
+              {/* Entire-Clip Playhead Needle (Draggable & Clickable) */}
               <div
-                onMouseDown={(e) => handleMouseDown(e, 'right')}
-                className="w-3.5 h-full -mr-1.5 bg-[#00F0FF] hover:bg-white cursor-ew-resize flex items-center justify-center opacity-90 transition-colors z-20 rounded-r-sm"
-                title="Drag to adjust sample duration"
-              >
-                <div className="w-0.5 h-4 bg-[#090B0E] rounded-full" />
-              </div>
-            </div>
-
-            {/* Entire-Clip Playhead Needle (Draggable & Clickable) */}
-            <div
-              style={{ left: `${(modalPlayhead / clipDuration) * 100}%` }}
-              className={`absolute top-0 bottom-0 w-1 pointer-events-none z-30 transition-[left] duration-75 ${
-                playbackMode === 'clean'
-                  ? 'bg-[#10B981] shadow-[0_0_12px_#10B981]'
-                  : playbackMode === 'sample'
-                  ? 'bg-[#00F0FF] shadow-[0_0_12px_#00F0FF]'
-                  : playbackMode === 'raw'
-                  ? 'bg-amber-400 shadow-[0_0_12px_#f59e0b]'
-                  : 'bg-[#00F0FF] shadow-[0_0_8px_#00f0ff]'
-              }`}
-            >
-              {/* Needle Floating Time Tag */}
-              <div
-                className={`absolute -top-0.5 -translate-x-1/2 px-1 py-0.2 rounded text-[8px] font-mono font-bold shadow ${
+                style={{ left: `${(modalPlayhead / clipDuration) * 100}%` }}
+                className={`absolute top-0 bottom-0 w-1 pointer-events-none z-30 transition-[left] duration-75 ${
                   playbackMode === 'clean'
-                    ? 'bg-[#10B981] text-black'
+                    ? 'bg-[#10B981] shadow-[0_0_12px_#10B981]'
                     : playbackMode === 'sample'
-                    ? 'bg-[#00F0FF] text-black'
+                    ? 'bg-[#00F0FF] shadow-[0_0_12px_#00F0FF]'
                     : playbackMode === 'raw'
-                    ? 'bg-amber-400 text-black'
-                    : 'bg-[#00F0FF] text-black'
+                    ? 'bg-amber-400 shadow-[0_0_12px_#f59e0b]'
+                    : 'bg-[#00F0FF] shadow-[0_0_8px_#00f0ff]'
                 }`}
               >
-                {modalPlayhead.toFixed(1)}s
+                {/* Needle Floating Time Tag */}
+                <div
+                  className={`absolute -top-0.5 -translate-x-1/2 px-1 py-0.2 rounded text-[8px] font-mono font-bold shadow ${
+                    playbackMode === 'clean'
+                      ? 'bg-[#10B981] text-black'
+                      : playbackMode === 'sample'
+                      ? 'bg-[#00F0FF] text-black'
+                      : playbackMode === 'raw'
+                      ? 'bg-amber-400 text-black'
+                      : 'bg-[#00F0FF] text-black'
+                  }`}
+                >
+                  {modalPlayhead.toFixed(1)}s
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Timecode Scale Bar */}
-          <div className="flex items-center justify-between text-[9px] font-mono text-[#525D73] px-1">
-            <span>00:00.00</span>
-            <span>{formatTimecode(clipDuration / 2, fps)}</span>
-            <span>{formatTimecode(clipDuration, fps)}</span>
+            {/* Timecode Scale Bar (Synchronously zoomed and scrolled with waveform) */}
+            <div
+              style={{ width: `${waveformZoom * 100}%`, minWidth: '100%' }}
+              className="flex items-center justify-between text-[9px] font-mono text-[#525D73] px-2 py-0.5 border-t border-[#1C202B]/60 bg-[#0A0C10]"
+            >
+              <span>00:00.00</span>
+              {waveformZoom >= 2.0 && (
+                <>
+                  <span>{formatTimecode(clipDuration * 0.25, fps)}</span>
+                  <span>{formatTimecode(clipDuration * 0.5, fps)}</span>
+                  <span>{formatTimecode(clipDuration * 0.75, fps)}</span>
+                </>
+              )}
+              {waveformZoom < 2.0 && (
+                <span>{formatTimecode(clipDuration / 2, fps)}</span>
+              )}
+              <span>{formatTimecode(clipDuration, fps)}</span>
+            </div>
           </div>
         </div>
 

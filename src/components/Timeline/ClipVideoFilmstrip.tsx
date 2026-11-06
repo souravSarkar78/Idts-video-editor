@@ -17,6 +17,8 @@ interface ClipVideoFilmstripProps {
   durationSeconds?: number;
   totalDurationSeconds?: number;
   fps?: number;
+  visibleTimeRange?: { startSec: number; endSec: number };
+  clipStartSec?: number;
 }
 
 export const ClipVideoFilmstrip: React.FC<ClipVideoFilmstripProps> = React.memo(({
@@ -27,13 +29,39 @@ export const ClipVideoFilmstrip: React.FC<ClipVideoFilmstripProps> = React.memo(
   durationSeconds = 10,
   totalDurationSeconds = 60,
   fps = 30,
+  visibleTimeRange,
+  clipStartSec = 0,
 }) => {
+  const pxPerSec = durationSeconds > 0 ? widthPx / durationSeconds : 35;
+  const effectiveFps = Math.max(1, fps);
+  const pxPerFrame = pxPerSec / effectiveFps;
+
   // Approximate 16:9 thumbnail width on the timeline
-  const approxTileWidth = 84;
-  // Span the width of the clip smoothly without creating excessive DOM nodes
-  const numTiles = Math.max(1, Math.min(80, Math.ceil(widthPx / approxTileWidth)));
-  // Each tile gets exact width so numTiles * tileWidth covers 100% of the clip width
-  const tileWidth = widthPx / numTiles;
+  const aspectTileWidth = Math.round(heightPx * (16 / 9));
+
+  // Determine individual tile width:
+  // If zoomed in to single-frame level (pxPerFrame >= 24), each tile represents exactly 1 frame!
+  // Otherwise, each tile is roughly 16:9 thumbnail size (~80px).
+  const isFrameLevel = pxPerFrame >= 24;
+  const tileWidth = isFrameLevel ? pxPerFrame : Math.max(48, Math.min(aspectTileWidth, 84));
+
+  // Viewport windowing: only compute tiles that overlap the screen
+  let windowStartPx = 0;
+  let windowEndPx = widthPx;
+
+  if (visibleTimeRange) {
+    const vStartSec = visibleTimeRange.startSec - clipStartSec;
+    const vEndSec = visibleTimeRange.endSec - clipStartSec;
+    windowStartPx = Math.max(0, (vStartSec - 0.2) * pxPerSec);
+    windowEndPx = Math.min(widthPx, (vEndSec + 0.2) * pxPerSec);
+  }
+
+  const startTileIdx = Math.max(0, Math.floor(windowStartPx / tileWidth));
+  const endTileIdx = Math.min(Math.ceil(widthPx / tileWidth), Math.ceil(windowEndPx / tileWidth));
+  const visibleIndices: number[] = [];
+  for (let i = startTileIdx; i < endTileIdx; i++) {
+    visibleIndices.push(i);
+  }
 
   // Revision state triggered when new frames are added to global cache
   const [, setCacheRev] = useState(0);
@@ -182,13 +210,12 @@ export const ClipVideoFilmstrip: React.FC<ClipVideoFilmstripProps> = React.memo(
   return (
     <div
       style={{ height: `${heightPx}px` }}
-      className="absolute inset-0 flex overflow-hidden pointer-events-none select-none bg-[#0E1016]"
+      className="absolute inset-0 overflow-hidden pointer-events-none select-none bg-[#0E1016]"
     >
-      {Array.from({ length: numTiles }).map((_, index) => {
+      {visibleIndices.map((index) => {
         // Precise timestamp corresponding to the center of this tile on the timeline
-        const frameTime =
-          inPointSeconds +
-          ((index + 0.5) / numTiles) * durationSeconds;
+        const frameTime = inPointSeconds + ((index + 0.5) * tileWidth) / pxPerSec;
+        const tileLeft = index * tileWidth;
 
         // 1. Closest authentic frame within 2 seconds
         let imgUrl: string | undefined = getNearestCachedFrame(filePath, frameTime, 2.0) || undefined;
@@ -201,20 +228,29 @@ export const ClipVideoFilmstrip: React.FC<ClipVideoFilmstripProps> = React.memo(
         return (
           <div
             key={index}
-            style={{ width: `${tileWidth}px`, height: `${heightPx}px` }}
-            className="shrink-0 relative border-r border-black/40 overflow-hidden bg-[#12151E] flex items-center justify-center group"
+            style={{
+              position: 'absolute',
+              left: `${tileLeft}px`,
+              width: `${tileWidth}px`,
+              height: `${heightPx}px`,
+            }}
+            className="border-r border-black/50 overflow-hidden bg-[#12151E] flex items-center justify-center group"
           >
             {imgUrl ? (
               <img
                 src={imgUrl}
                 alt=""
-                className="w-full h-full object-cover select-none pointer-events-none"
+                className="h-full object-cover select-none pointer-events-none"
+                style={{
+                  width: isFrameLevel ? '100%' : `${aspectTileWidth}px`,
+                  maxWidth: '100%',
+                }}
               />
             ) : (
               <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-[#181C26] to-[#0E1017] text-[#475569]">
                 <Film size={12} className="opacity-40 animate-pulse" />
                 <span className="text-[8px] font-mono opacity-50 mt-0.5">
-                  {formatTimecode(frameTime, fps).slice(3, 8)}
+                  {formatTimecode(frameTime, effectiveFps).slice(3, 8)}
                 </span>
               </div>
             )}

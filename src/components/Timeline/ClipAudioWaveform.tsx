@@ -9,6 +9,8 @@ interface ClipAudioWaveformProps {
   volumeDb?: number;
   volumeKeyframes?: VolumeKeyframePoint[];
   color?: string;
+  strokeColor?: string;
+  baselineColor?: string;
   widthPx: number;
   heightPx?: number;
   inPointSeconds?: number;
@@ -17,6 +19,8 @@ interface ClipAudioWaveformProps {
   noiseReductionEnabled?: boolean;
   reductionIntensityDb?: number;
   sensitivity?: number;
+  visibleTimeRange?: { startSec: number; endSec: number };
+  clipStartSec?: number;
 }
 
 export const ClipAudioWaveform: React.FC<ClipAudioWaveformProps> = React.memo(({
@@ -25,7 +29,9 @@ export const ClipAudioWaveform: React.FC<ClipAudioWaveformProps> = React.memo(({
   waveformStatus,
   volumeDb = 0,
   volumeKeyframes = [],
-  color = '#FFFFFF',
+  color = '#7B88EB',
+  strokeColor,
+  baselineColor = '#3A3D4D',
   widthPx,
   heightPx = 28,
   inPointSeconds = 0,
@@ -34,6 +40,8 @@ export const ClipAudioWaveform: React.FC<ClipAudioWaveformProps> = React.memo(({
   noiseReductionEnabled = false,
   reductionIntensityDb = 12.0,
   sensitivity = 6.0,
+  visibleTimeRange,
+  clipStartSec = 0,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rawPeaks = useTimelineStore((state) => state.waveformData[filePath]);
@@ -57,40 +65,76 @@ export const ClipAudioWaveform: React.FC<ClipAudioWaveformProps> = React.memo(({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Ensure canvas internal pixel buffer matches container dimensions
-    const targetW = Math.max(24, Math.round(widthPx));
-    const targetH = heightPx;
-    if (canvas.width !== targetW || canvas.height !== targetH) {
-      canvas.width = targetW;
-      canvas.height = targetH;
+    const pxPerSec = durationSeconds > 0 ? widthPx / durationSeconds : 35;
+
+    // Viewport windowing: compute visible sub-segment of this clip to avoid huge off-screen canvas buffers
+    let segmentInPoint = inPointSeconds;
+    let segmentDur = durationSeconds;
+    let canvasLeftPx = 0;
+    let canvasWidthPx = widthPx;
+
+    if (visibleTimeRange) {
+      const clipStart = clipStartSec;
+      const clipEnd = clipStart + durationSeconds;
+
+      // Add a 100px buffer on left and right for smooth continuous scrubbing
+      const bufferSec = 100 / Math.max(1, pxPerSec);
+      const vStart = Math.max(clipStart, visibleTimeRange.startSec - bufferSec);
+      const vEnd = Math.min(clipEnd, visibleTimeRange.endSec + bufferSec);
+
+      if (vEnd > vStart) {
+        const offsetSec = vStart - clipStart;
+        segmentInPoint = inPointSeconds + offsetSec;
+        segmentDur = vEnd - vStart;
+        canvasLeftPx = offsetSec * pxPerSec;
+        canvasWidthPx = segmentDur * pxPerSec;
+      }
     }
 
-    const w = canvas.width;
-    const h = canvas.height;
-    ctx.clearRect(0, 0, w, h);
+    // Position canvas exactly over visible portion of clip with 1:1 pixel match (no CSS stretching)
+    const targetW = Math.max(24, Math.round(canvasWidthPx));
+    const targetH = heightPx;
+    const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
+    const bufferW = Math.round(targetW * dpr);
+    const bufferH = Math.round(targetH * dpr);
 
-    const baseY = h - 2;
-    const maxAvailableH = h - 4;
+    canvas.style.left = `${Math.round(canvasLeftPx)}px`;
+    canvas.style.width = `${targetW}px`;
+    canvas.style.height = `${targetH}px`;
 
-    // Subtle bottom baseline
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+    if (canvas.width !== bufferW || canvas.height !== bufferH) {
+      canvas.width = bufferW;
+      canvas.height = bufferH;
+    }
+
+    ctx.save();
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, targetW, targetH);
+
+    const w = targetW;
+    const h = targetH;
+    const midY = h / 2;
+    const usableH = Math.max(2, midY - 2);
+
+    // 1. Zero-Crossing Baseline at exactly 50% track height (0 dB silence)
+    ctx.strokeStyle = baselineColor;
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(0, baseY);
-    ctx.lineTo(w, baseY);
+    ctx.moveTo(0, midY);
+    ctx.lineTo(w, midY);
     ctx.stroke();
 
     // If waveform is pending background generation, draw a subtle pulsing midline shimmer
     if (waveformStatus?.type === 'pending' && (!peaks || peaks.length === 0)) {
-      const midY = Math.round(h / 2);
-      ctx.strokeStyle = 'rgba(0, 240, 255, 0.45)';
+      ctx.strokeStyle = 'rgba(123, 136, 235, 0.55)';
       ctx.setLineDash([6, 4]);
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(0, midY);
       ctx.lineTo(w, midY);
       ctx.stroke();
       ctx.setLineDash([]);
+      ctx.restore();
       return;
     }
 
@@ -104,7 +148,7 @@ export const ClipAudioWaveform: React.FC<ClipAudioWaveformProps> = React.memo(({
         hash |= 0;
       }
 
-      // Generate realistic natural audio profile matching reference image
+      // Generate realistic natural speech/audio profile matching oscillogram reference
       const totalPoints = 360;
       for (let i = 0; i < totalPoints; i++) {
         const prog = i / (totalPoints - 1);
@@ -133,78 +177,119 @@ export const ClipAudioWaveform: React.FC<ClipAudioWaveformProps> = React.memo(({
     }
 
     if (!activePeaks || activePeaks.length === 0) {
+      ctx.restore();
       return;
     }
 
-    // Calculate slice of peaks corresponding to this clip segment
+    // Calculate slice of peaks corresponding to visible clip segment
     const totalSec = totalDurationSeconds > 0 ? totalDurationSeconds : 60;
-    const startRatio = inPointSeconds / totalSec;
-    const durRatio = durationSeconds / totalSec;
+    const startRatio = segmentInPoint / totalSec;
+    const durRatio = segmentDur / totalSec;
     const startIdx = Math.max(0, Math.floor(startRatio * activePeaks.length));
     const count = Math.max(8, Math.floor(durRatio * activePeaks.length));
     const slice = activePeaks.slice(startIdx, Math.min(activePeaks.length, startIdx + count));
 
-    if (slice.length === 0) return;
+    if (slice.length === 0) {
+      ctx.restore();
+      return;
+    }
 
-    // High-frequency deterministic noise generator for natural acoustic needle crests
+    // Soft lavender/blue accent stroke color (#7B88EB) matching reference image
+    const activeStrokeColor = strokeColor || (color && color !== '#FFFFFF' ? color : '#7B88EB');
+
+    // High-frequency deterministic noise generator for natural acoustic needle dynamics
     const getMicroNoise = (xCoord: number, seed: number) => {
       const s = Math.sin(xCoord * 12.9898 + (seed % 100) * 78.233) * 43758.5453;
       return s - Math.floor(s);
     };
 
-    // Color gradient: Cyan/Emerald tinted crest for clean denoised audio, platinum white for raw audio
-    const gradient = ctx.createLinearGradient(0, 0, 0, h);
-    if (noiseReductionEnabled) {
-      gradient.addColorStop(0, '#00F0FF');
-      gradient.addColorStop(0.35, 'rgba(0, 240, 255, 0.90)');
-      gradient.addColorStop(1, 'rgba(16, 185, 129, 0.70)');
-    } else {
-      gradient.addColorStop(0, '#FFFFFF');
-      gradient.addColorStop(0.35, 'rgba(241, 245, 249, 0.95)');
-      gradient.addColorStop(1, 'rgba(148, 163, 184, 0.75)');
-    }
+    /**
+     * Draw Continuous Line / Polyline Oscillogram (True Bipolar Min-Max Peak-to-Peak)
+     * Connects alternating min and max sample points continuously across every horizontal pixel column.
+     * ZERO fill (completely transparent between peaks and zero axis).
+     */
+    const renderContinuousLine = (lineColor: string, isCleanLayer: boolean) => {
+      ctx.strokeStyle = lineColor;
+      ctx.lineWidth = 1.0;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
 
-    ctx.fillStyle = gradient;
+      let isFirst = true;
 
-    // Single-pass batched path rendering (< 0.05ms GPU execution)
-    ctx.beginPath();
-    for (let x = 0; x < w; x += 1) {
-      const progress = x / w;
-      const peakIdx = Math.min(slice.length - 1, Math.floor(progress * slice.length));
-      const pNext = Math.min(slice.length - 1, peakIdx + 1);
-      const frac = progress * slice.length - peakIdx;
-      const amp0 = slice[peakIdx] ?? 0;
-      const amp1 = slice[pNext] ?? 0;
-      let envelope = amp0 * (1 - frac) + amp1 * frac;
+      // Distinct needle spacing: 2px step gives 1px needle strokes with 1px gaps so individual spikes stand out clearly
+      const stepX = 2;
+      for (let x = 0; x < w; x += stepX) {
+        const bucketStartRatio = x / w;
+        const bucketEndRatio = (x + 1) / w;
 
-      if (noiseReductionEnabled) {
-        const nrDb = reductionIntensityDb ?? 12.0;
-        const sens = sensitivity ?? 6.0;
-        const reductionFactor = Math.pow(10, -nrDb / 20);
-        // Dynamic noise threshold based on sensitivity (camera hiss is ~0.15 - 0.35)
-        const noiseGateThreshold = Math.min(0.45, 0.12 + (sens / 12.0) * 0.28);
-        if (envelope < noiseGateThreshold) {
-          const ratio = Math.max(0, envelope / noiseGateThreshold);
-          envelope = envelope * (reductionFactor + (1 - reductionFactor) * Math.pow(ratio, 2.0));
+        const idx0 = Math.floor(bucketStartRatio * slice.length);
+        const idx1 = Math.max(idx0 + 1, Math.floor(bucketEndRatio * slice.length));
+
+        let peakVal = 0;
+        for (let k = idx0; k < idx1 && k < slice.length; k++) {
+          if (slice[k] > peakVal) peakVal = slice[k];
+        }
+
+        let envelope = peakVal;
+
+        if (isCleanLayer && noiseReductionEnabled) {
+          const nrDb = reductionIntensityDb ?? 12.0;
+          const sens = sensitivity ?? 6.0;
+          const reductionFactor = Math.pow(10, -nrDb / 20);
+          const noiseGateThreshold = Math.min(0.45, 0.12 + (sens / 12.0) * 0.28);
+          if (envelope < noiseGateThreshold) {
+            const ratio = Math.max(0, envelope / noiseGateThreshold);
+            envelope = envelope * (reductionFactor + (1 - reductionFactor) * Math.pow(ratio, 2.0));
+          }
+        }
+
+        // Silence clamp threshold: smooth handling for quiet regions down to center baseline
+        if (envelope <= 0.015) {
+          if (isFirst) {
+            ctx.moveTo(x, midY);
+            isFirst = false;
+          } else {
+            ctx.lineTo(x, midY);
+          }
+          continue;
+        }
+
+        // Dynamic acoustic needle jitter
+        const noise = getMicroNoise(x, 57);
+        const spikeFactor = 0.85 + 0.15 * noise;
+        const amp = Math.min(1.0, envelope * spikeFactor);
+
+        // True Bipolar sample values: symmetrical crests above (+amp) and below (-amp) the center baseline
+        const yMin = midY - amp * usableH; // positive peak (upwards)
+        const yMax = midY + amp * usableH; // negative peak (downwards)
+
+        if (isFirst) {
+          ctx.moveTo(x, yMin);
+          ctx.lineTo(x, yMax);
+          isFirst = false;
+        } else {
+          // Connect alternating min and max points in a continuous unbroken polyline
+          ctx.lineTo(x, yMin);
+          ctx.lineTo(x, yMax);
         }
       }
 
-      if (envelope <= 0.02) {
-        // Subtle flat baseline for cleaned silence
-        ctx.rect(x, baseY - 1, 1, 1);
-        continue;
-      }
+      ctx.stroke();
+    };
 
-      // Add high-frequency acoustic texture (spikes)
-      const noise = getMicroNoise(x, 57);
-      const spikeFactor = 0.72 + 0.28 * noise;
-      const barH = Math.max(1.5, envelope * maxAvailableH * spikeFactor);
-      const topY = baseY - barH;
-
-      ctx.rect(x, topY, 1, barH);
+    if (noiseReductionEnabled) {
+      // Background: Original raw audio oscillogram with subtle translucent opacity
+      renderContinuousLine('rgba(123, 136, 235, 0.25)', false);
+      // Foreground: Clean denoised audio oscillogram in luminous emerald accent
+      renderContinuousLine('#10B981', true);
+    } else {
+      // Single continuous polyline oscillogram in clean soft blue/lavender accent
+      renderContinuousLine(activeStrokeColor, false);
     }
-    ctx.fill();
-  }, [peaks, waveformStatus, widthPx, heightPx, color, inPointSeconds, durationSeconds, totalDurationSeconds, noiseReductionEnabled, reductionIntensityDb, sensitivity]);
+
+    ctx.restore();
+  }, [peaks, waveformStatus, widthPx, heightPx, color, strokeColor, baselineColor, inPointSeconds, durationSeconds, totalDurationSeconds, noiseReductionEnabled, reductionIntensityDb, sensitivity, visibleTimeRange, clipStartSec]);
 
   // Volume Rubber-Banding Coordinate Helpers
   // Map dB (-60 to +12) to Y pixel coordinate: +12dB is at 4px, 0dB is ~middle-high, -60dB is at (heightPx - 4px)
@@ -337,9 +422,8 @@ export const ClipAudioWaveform: React.FC<ClipAudioWaveformProps> = React.memo(({
       {/* Audio Waveform Canvas */}
       <canvas
         ref={canvasRef}
-        width={Math.max(24, Math.round(widthPx))}
         height={heightPx}
-        className="absolute inset-0 w-full h-full pointer-events-none opacity-85"
+        className="absolute top-0 bottom-0 pointer-events-none opacity-95"
       />
 
       {/* Interactive Rubber-Band Volume Envelope SVG Overlay */}

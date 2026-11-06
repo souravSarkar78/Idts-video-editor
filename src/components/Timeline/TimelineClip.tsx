@@ -32,6 +32,7 @@ export interface TimelineClipProps {
   isExternalDragging: boolean;
   edgeDragMode: 'trim' | 'stretch';
   isStabilizationAnalyzing?: number;
+  visibleTimeRange?: { startSec: number; endSec: number };
   onSelectClip: (clipId: string, shiftKey?: boolean) => void;
   onContextMenu: (menuState: {
     x: number;
@@ -72,6 +73,7 @@ export const TimelineClip: React.FC<TimelineClipProps> = React.memo(
     isExternalDragging,
     edgeDragMode,
     isStabilizationAnalyzing,
+    visibleTimeRange,
     onSelectClip,
     onContextMenu,
     onStartDragClip,
@@ -92,6 +94,37 @@ export const TimelineClip: React.FC<TimelineClipProps> = React.memo(
       clip.filePath === 'adjustment_layer' ||
       (clip.name && clip.name.toLowerCase().includes('adjustment layer'))
     );
+
+    // Off-screen culling: When zoomed in, skip mounting heavy filmstrips & canvas waveforms for clips far outside viewport
+    const isOffscreen = visibleTimeRange
+      ? (startSec + durSec < visibleTimeRange.startSec - 0.5) || (startSec > visibleTimeRange.endSec + 0.5)
+      : false;
+
+    if (isOffscreen) {
+      return (
+        <div
+          data-clip-id={clip.id}
+          style={{
+            left: `${leftPx}px`,
+            width: `${Math.max(20, widthPx)}px`,
+            height: `${trackHeight - 4}px`,
+            top: '2px',
+          }}
+          className={`absolute rounded-xs overflow-hidden select-none cursor-pointer border ${
+            isSelected ? 'border-[#00F0FF] shadow-xs' : 'border-[#222630]'
+          } bg-[#14161F]`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelectClip(clip.id, e.shiftKey);
+          }}
+        >
+          <div className="absolute top-0 left-0 right-0 h-1 z-10" style={{ backgroundColor: color }} />
+          <div className="absolute top-1 left-2 text-[10px] text-white/70 truncate pointer-events-none">
+            {clip.name}
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div
@@ -240,6 +273,8 @@ export const TimelineClip: React.FC<TimelineClipProps> = React.memo(
                     durationSeconds={durSec}
                     totalDurationSeconds={clip.metadata?.durationSeconds || durSec}
                     fps={fps}
+                    visibleTimeRange={visibleTimeRange}
+                    clipStartSec={startSec}
                   />
 
                   {/* Top Color Accent Line */}
@@ -322,7 +357,8 @@ export const TimelineClip: React.FC<TimelineClipProps> = React.memo(
                     waveformStatus={clip.waveformStatus}
                     volumeDb={clip.volumeDb ?? 0}
                     volumeKeyframes={clip.volumeKeyframes}
-                    color="#FFFFFF"
+                    strokeColor="#7B88EB"
+                    baselineColor="#3A3D4D"
                     widthPx={widthPx}
                     heightPx={Math.max(16, Math.min(30, Math.round(trackHeight * 0.32) - 2))}
                     inPointSeconds={clip.inPointSeconds || 0}
@@ -331,6 +367,8 @@ export const TimelineClip: React.FC<TimelineClipProps> = React.memo(
                     noiseReductionEnabled={clip.audioProcessing?.noiseProfile?.noiseReductionEnabled}
                     reductionIntensityDb={clip.audioProcessing?.noiseProfile?.reductionIntensityDb}
                     sensitivity={clip.audioProcessing?.noiseProfile?.sensitivity}
+                    visibleTimeRange={visibleTimeRange}
+                    clipStartSec={startSec}
                   />
                 </div>
               </div>
@@ -345,6 +383,8 @@ export const TimelineClip: React.FC<TimelineClipProps> = React.memo(
                   durationSeconds={durSec}
                   totalDurationSeconds={clip.metadata?.durationSeconds || durSec}
                   fps={fps}
+                  visibleTimeRange={visibleTimeRange}
+                  clipStartSec={startSec}
                 />
                 {/* Top Color Accent Line */}
                 <div className="absolute top-0 left-0 right-0 h-1 z-10" style={{ backgroundColor: color }} />
@@ -431,7 +471,7 @@ export const TimelineClip: React.FC<TimelineClipProps> = React.memo(
                 </div>
               </div>
 
-              {/* White Continuous Oscillating Waveform */}
+              {/* Continuous Line / Polyline Oscilloscope Waveform */}
               <div className="absolute inset-0 pt-3">
                 <ClipAudioWaveform
                   filePath={
@@ -444,7 +484,8 @@ export const TimelineClip: React.FC<TimelineClipProps> = React.memo(
                   waveformStatus={clip.waveformStatus}
                   volumeDb={clip.volumeDb ?? 0}
                   volumeKeyframes={clip.volumeKeyframes}
-                  color="#FFFFFF"
+                  strokeColor="#7B88EB"
+                  baselineColor="#3A3D4D"
                   widthPx={widthPx}
                   heightPx={Math.max(24, trackHeight - 16)}
                   inPointSeconds={clip.inPointSeconds || 0}
@@ -453,6 +494,8 @@ export const TimelineClip: React.FC<TimelineClipProps> = React.memo(
                   noiseReductionEnabled={clip.audioProcessing?.noiseProfile?.noiseReductionEnabled}
                   reductionIntensityDb={clip.audioProcessing?.noiseProfile?.reductionIntensityDb}
                   sensitivity={clip.audioProcessing?.noiseProfile?.sensitivity}
+                  visibleTimeRange={visibleTimeRange}
+                  clipStartSec={startSec}
                 />
               </div>
             </div>
@@ -688,6 +731,7 @@ export const TimelineClip: React.FC<TimelineClipProps> = React.memo(
       prevProps.edgeDragMode === nextProps.edgeDragMode &&
       prevProps.color === nextProps.color &&
       prevProps.isStabilizationAnalyzing === nextProps.isStabilizationAnalyzing &&
+      prevProps.visibleTimeRange === nextProps.visibleTimeRange &&
       prevProps.fps === nextProps.fps
     );
   }
