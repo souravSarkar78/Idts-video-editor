@@ -19,6 +19,8 @@ interface ClipAudioWaveformProps {
   noiseReductionEnabled?: boolean;
   reductionIntensityDb?: number;
   sensitivity?: number;
+  visibleTimeRange?: { startSec: number; endSec: number };
+  clipStartSec?: number;
 }
 
 export const ClipAudioWaveform: React.FC<ClipAudioWaveformProps> = React.memo(({
@@ -38,6 +40,8 @@ export const ClipAudioWaveform: React.FC<ClipAudioWaveformProps> = React.memo(({
   noiseReductionEnabled = false,
   reductionIntensityDb = 12.0,
   sensitivity = 6.0,
+  visibleTimeRange,
+  clipStartSec = 0,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rawPeaks = useTimelineStore((state) => state.waveformData[filePath]);
@@ -61,12 +65,42 @@ export const ClipAudioWaveform: React.FC<ClipAudioWaveformProps> = React.memo(({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Retina / High-DPI support: scale internal pixel buffer by devicePixelRatio for crisp 1px strokes
-    const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
-    const targetW = Math.max(24, Math.round(widthPx));
+    const pxPerSec = durationSeconds > 0 ? widthPx / durationSeconds : 35;
+
+    // Viewport windowing: compute visible sub-segment of this clip to avoid huge off-screen canvas buffers
+    let segmentInPoint = inPointSeconds;
+    let segmentDur = durationSeconds;
+    let canvasLeftPx = 0;
+    let canvasWidthPx = widthPx;
+
+    if (visibleTimeRange) {
+      const clipStart = clipStartSec;
+      const clipEnd = clipStart + durationSeconds;
+
+      // Add a 100px buffer on left and right for smooth continuous scrubbing
+      const bufferSec = 100 / Math.max(1, pxPerSec);
+      const vStart = Math.max(clipStart, visibleTimeRange.startSec - bufferSec);
+      const vEnd = Math.min(clipEnd, visibleTimeRange.endSec + bufferSec);
+
+      if (vEnd > vStart) {
+        const offsetSec = vStart - clipStart;
+        segmentInPoint = inPointSeconds + offsetSec;
+        segmentDur = vEnd - vStart;
+        canvasLeftPx = offsetSec * pxPerSec;
+        canvasWidthPx = segmentDur * pxPerSec;
+      }
+    }
+
+    // Position canvas exactly over visible portion of clip with 1:1 pixel match (no CSS stretching)
+    const targetW = Math.max(24, Math.round(canvasWidthPx));
     const targetH = heightPx;
+    const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
     const bufferW = Math.round(targetW * dpr);
     const bufferH = Math.round(targetH * dpr);
+
+    canvas.style.left = `${Math.round(canvasLeftPx)}px`;
+    canvas.style.width = `${targetW}px`;
+    canvas.style.height = `${targetH}px`;
 
     if (canvas.width !== bufferW || canvas.height !== bufferH) {
       canvas.width = bufferW;
@@ -147,10 +181,10 @@ export const ClipAudioWaveform: React.FC<ClipAudioWaveformProps> = React.memo(({
       return;
     }
 
-    // Calculate slice of peaks corresponding to this clip segment
+    // Calculate slice of peaks corresponding to visible clip segment
     const totalSec = totalDurationSeconds > 0 ? totalDurationSeconds : 60;
-    const startRatio = inPointSeconds / totalSec;
-    const durRatio = durationSeconds / totalSec;
+    const startRatio = segmentInPoint / totalSec;
+    const durRatio = segmentDur / totalSec;
     const startIdx = Math.max(0, Math.floor(startRatio * activePeaks.length));
     const count = Math.max(8, Math.floor(durRatio * activePeaks.length));
     const slice = activePeaks.slice(startIdx, Math.min(activePeaks.length, startIdx + count));
@@ -183,7 +217,9 @@ export const ClipAudioWaveform: React.FC<ClipAudioWaveformProps> = React.memo(({
 
       let isFirst = true;
 
-      for (let x = 0; x < w; x++) {
+      // Distinct needle spacing: 2px step gives 1px needle strokes with 1px gaps so individual spikes stand out clearly
+      const stepX = 2;
+      for (let x = 0; x < w; x += stepX) {
         const bucketStartRatio = x / w;
         const bucketEndRatio = (x + 1) / w;
 
@@ -253,7 +289,7 @@ export const ClipAudioWaveform: React.FC<ClipAudioWaveformProps> = React.memo(({
     }
 
     ctx.restore();
-  }, [peaks, waveformStatus, widthPx, heightPx, color, strokeColor, baselineColor, inPointSeconds, durationSeconds, totalDurationSeconds, noiseReductionEnabled, reductionIntensityDb, sensitivity]);
+  }, [peaks, waveformStatus, widthPx, heightPx, color, strokeColor, baselineColor, inPointSeconds, durationSeconds, totalDurationSeconds, noiseReductionEnabled, reductionIntensityDb, sensitivity, visibleTimeRange, clipStartSec]);
 
   // Volume Rubber-Banding Coordinate Helpers
   // Map dB (-60 to +12) to Y pixel coordinate: +12dB is at 4px, 0dB is ~middle-high, -60dB is at (heightPx - 4px)
@@ -386,9 +422,8 @@ export const ClipAudioWaveform: React.FC<ClipAudioWaveformProps> = React.memo(({
       {/* Audio Waveform Canvas */}
       <canvas
         ref={canvasRef}
-        width={Math.max(24, Math.round(widthPx))}
         height={heightPx}
-        className="absolute inset-0 w-full h-full pointer-events-none opacity-95"
+        className="absolute top-0 bottom-0 pointer-events-none opacity-95"
       />
 
       {/* Interactive Rubber-Band Volume Envelope SVG Overlay */}

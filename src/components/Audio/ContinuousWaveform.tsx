@@ -122,7 +122,7 @@ export function renderContinuousOscillogram(
   ctx.beginPath();
   let isFirst = true;
 
-  for (let x = 0; x < w; x++) {
+  for (let x = 0; x < w; x += 2) {
     const bucketStartRatio = x / w;
     const bucketEndRatio = (x + 1) / w;
 

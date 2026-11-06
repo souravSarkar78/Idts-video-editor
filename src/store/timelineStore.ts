@@ -1985,8 +1985,8 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
     set({ isPlaying: false });
   },
 
-  setZoom: (zoom) => set({ zoom: Math.max(0.05, Math.min(zoom, 400)) }),
-  zoomIn: () => set((state) => ({ zoom: Math.min(state.zoom * 1.25, 400) })),
+  setZoom: (zoom) => set({ zoom: Math.max(0.05, Math.min(zoom, 3000)) }),
+  zoomIn: () => set((state) => ({ zoom: Math.min(state.zoom * 1.25, 3000) })),
   zoomOut: () => set((state) => ({ zoom: Math.max(state.zoom / 1.25, 0.05) })),
 
   // Media Pool & Bins
