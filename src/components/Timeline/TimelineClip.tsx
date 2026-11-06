@@ -322,7 +322,8 @@ export const TimelineClip: React.FC<TimelineClipProps> = React.memo(
                     waveformStatus={clip.waveformStatus}
                     volumeDb={clip.volumeDb ?? 0}
                     volumeKeyframes={clip.volumeKeyframes}
-                    color="#FFFFFF"
+                    strokeColor="#7B88EB"
+                    baselineColor="#3A3D4D"
                     widthPx={widthPx}
                     heightPx={Math.max(16, Math.min(30, Math.round(trackHeight * 0.32) - 2))}
                     inPointSeconds={clip.inPointSeconds || 0}
@@ -431,7 +432,7 @@ export const TimelineClip: React.FC<TimelineClipProps> = React.memo(
                 </div>
               </div>
 
-              {/* White Continuous Oscillating Waveform */}
+              {/* Continuous Line / Polyline Oscilloscope Waveform */}
               <div className="absolute inset-0 pt-3">
                 <ClipAudioWaveform
                   filePath={
@@ -444,7 +445,8 @@ export const TimelineClip: React.FC<TimelineClipProps> = React.memo(
                   waveformStatus={clip.waveformStatus}
                   volumeDb={clip.volumeDb ?? 0}
                   volumeKeyframes={clip.volumeKeyframes}
-                  color="#FFFFFF"
+                  strokeColor="#7B88EB"
+                  baselineColor="#3A3D4D"
                   widthPx={widthPx}
                   heightPx={Math.max(24, trackHeight - 16)}
                   inPointSeconds={clip.inPointSeconds || 0}
