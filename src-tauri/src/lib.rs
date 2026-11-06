@@ -633,17 +633,21 @@ fn detect_track_silence_intervals(
 
 /// Captures two-pass spectral noise profile from media audio sample and synthesizes seamless room tone tile
 #[tauri::command]
-fn capture_noise_profile(
+async fn capture_noise_profile(
     source_path: String,
     start_sec: f64,
     duration_sec: f64,
 ) -> Result<(String, String), String> {
-    crate::engine::audio_denoise::capture_noise_profile(source_path, start_sec, duration_sec)
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::engine::audio_denoise::capture_noise_profile(source_path, start_sec, duration_sec)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
 }
 
 /// Renders a fast preview snippet of clean denoised audio
 #[tauri::command]
-fn preview_spectral_denoise(
+async fn preview_spectral_denoise(
     source_path: String,
     profile_path: Option<String>,
     start_sec: f64,
@@ -654,21 +658,25 @@ fn preview_spectral_denoise(
     audition_noise: bool,
 ) -> Result<String, String> {
     let mode = if audition_noise { Some("n".to_string()) } else { Some("o".to_string()) };
-    crate::engine::audio_denoise::preview_spectral_denoise(
-        source_path,
-        profile_path,
-        start_sec,
-        duration_sec,
-        reduction_db,
-        sensitivity,
-        smoothing_bands,
-        mode,
-    )
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::engine::audio_denoise::preview_spectral_denoise(
+            source_path,
+            profile_path,
+            start_sec,
+            duration_sec,
+            reduction_db,
+            sensitivity,
+            smoothing_bands,
+            mode,
+        )
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
 }
 
 /// Applies spectral FFT noise reduction using FFmpeg's afftdn filter
 #[tauri::command]
-fn apply_spectral_denoise(
+async fn apply_spectral_denoise(
     input_path: String,
     profile_path: String,
     reduction_db: f32,
@@ -677,19 +685,23 @@ fn apply_spectral_denoise(
     audition_noise: bool,
 ) -> Result<String, String> {
     let mode = if audition_noise { Some("n".to_string()) } else { Some("o".to_string()) };
-    crate::engine::audio_denoise::apply_spectral_denoise(
-        input_path,
-        profile_path,
-        reduction_db,
-        sensitivity,
-        smoothing_bands,
-        mode,
-    )
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::engine::audio_denoise::apply_spectral_denoise(
+            input_path,
+            profile_path,
+            reduction_db,
+            sensitivity,
+            smoothing_bands,
+            mode,
+        )
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
 }
 
 /// Auto-cuts silence with edge padding margin and intelligent ambient noise fill bridging
 #[tauri::command]
-fn auto_cut_silence_with_ambient_fill(
+async fn auto_cut_silence_with_ambient_fill(
     source_path: String,
     total_duration_sec: f64,
     threshold_db: f32,
@@ -699,19 +711,23 @@ fn auto_cut_silence_with_ambient_fill(
     ambient_fill_intensity: f32,
     room_tone_path: Option<String>,
 ) -> Result<crate::engine::audio_denoise::AutoCutResult, String> {
-    let raw_silences = crate::engine::silence::detect_track_silence_intervals(
-        source_path,
-        threshold_db,
-        min_duration_sec,
-    )?;
-    Ok(crate::engine::audio_denoise::plan_auto_cut_silence_with_ambient(
-        total_duration_sec,
-        raw_silences,
-        padding_ms,
-        ambient_recovery,
-        ambient_fill_intensity,
-        room_tone_path,
-    ))
+    tauri::async_runtime::spawn_blocking(move || {
+        let raw_silences = crate::engine::silence::detect_track_silence_intervals(
+            source_path,
+            threshold_db,
+            min_duration_sec,
+        )?;
+        Ok(crate::engine::audio_denoise::plan_auto_cut_silence_with_ambient(
+            total_duration_sec,
+            raw_silences,
+            padding_ms,
+            ambient_recovery,
+            ambient_fill_intensity,
+            room_tone_path,
+        ))
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
 }
 
 /// Transcribes track audio using local Whisper speech recognition or acoustic cadence engine
