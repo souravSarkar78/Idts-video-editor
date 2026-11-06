@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { RotateCw, Activity, Shield, Grid3X3 } from '@/components/Icons';
 import { useShallow } from 'zustand/react/shallow';
-import { useTimelineStore, isTauri, getInterpolatedClipTransform, calculateTotalProjectDuration } from '../../store/timelineStore';
+import { useTimelineStore, isTauri, getInterpolatedClipTransform, calculateTotalProjectDuration, ActiveVideoLayer } from '../../store/timelineStore';
 import { formatTimecode } from '../../utils/timecode';
 import { Clip, ColorGradingProfile, StabilizationDebugMode } from '../../types/ipc';
 import { getActiveAudioClock } from '../Audio/TimelineAudioPlayer';
@@ -222,6 +222,7 @@ export const ProgramMonitor: React.FC = () => {
     isAlignmentGridActive,
     setIsAlignmentGridActive,
     updateClipStabilization,
+    getActiveVideoLayers,
   } = useTimelineStore(
     useShallow((state) => ({
       playhead: state.playhead,
@@ -233,6 +234,7 @@ export const ProgramMonitor: React.FC = () => {
       stepFrames: state.stepFrames,
       setPlayhead: state.setPlayhead,
       getActiveVideoClip: state.getActiveVideoClip,
+      getActiveVideoLayers: state.getActiveVideoLayers,
       isMulticamActive: state.isMulticamActive,
       toggleMulticamActive: state.toggleMulticamActive,
       switchMulticamAngle: state.switchMulticamAngle,
@@ -285,6 +287,7 @@ export const ProgramMonitor: React.FC = () => {
   const incomingVideoRef = useRef<HTMLVideoElement>(null);
   const stabilizedVideoRef = useRef<HTMLVideoElement>(null);
   const denoisedAudioPlayerRef = useRef<HTMLAudioElement>(null);
+  const underlayVideosRef = useRef<{ [trackId: string]: HTMLVideoElement | null }>({});
   const realTimeStabilizerRef = useRef<RealTimeMotionStabilizer>(new RealTimeMotionStabilizer());
   const [isWipeDragging, setIsWipeDragging] = useState<boolean>(false);
   const [isStabilizedVideoLoaded, setIsStabilizedVideoLoaded] = useState<boolean>(false);
@@ -411,8 +414,15 @@ export const ProgramMonitor: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isMulticamActive, switchMulticamAngle]);
 
-  // Compute the topmost active video clip covering the playhead
+  // Compute the active video clips and stacked layers covering the playhead
   const activeLayer = getActiveVideoClip();
+  const activeVideoLayers = getActiveVideoLayers();
+  const underlayLayers = useMemo(() => {
+    if (!activeLayer) return [];
+    return activeVideoLayers.filter((l) => l.clip.id !== activeLayer.clip.id);
+  }, [activeVideoLayers, activeLayer?.clip?.id]);
+  const underlayLayersRef = useRef<ActiveVideoLayer[]>([]);
+  underlayLayersRef.current = underlayLayers;
   const totalSeconds = (project.durationMs || 120000) / 1000;
 
   const allVideoTracks = (tracks || []).filter(
@@ -1303,6 +1313,16 @@ export const ProgramMonitor: React.FC = () => {
           const targetTime = getClipSeekTime(activeClip, playhead, isCurStab);
           safeSeek(activePlayerRef.current, curActiveVid, targetTime);
         }
+
+        // Sync underlay videos on manual jump
+        (underlayLayersRef.current || []).forEach((layer) => {
+          const uVid = underlayVideosRef.current[layer.track.id];
+          if (uVid) {
+            const fClip = getFreshClip(layer.clip) || layer.clip;
+            const stab = Boolean(fClip.stabilizationProfile?.enabled || fClip.stabilization?.enabled);
+            uVid.currentTime = getClipSeekTime(fClip, playhead, stab);
+          }
+        });
       }
       return;
     }
@@ -1310,6 +1330,9 @@ export const ProgramMonitor: React.FC = () => {
     if (!currentActiveClip) {
       if (videoRef.current && !videoRef.current.paused) videoRef.current.pause();
       if (incomingVideoRef.current && !incomingVideoRef.current.paused) incomingVideoRef.current.pause();
+      Object.values(underlayVideosRef.current).forEach((uVid) => {
+        if (uVid && !uVid.paused) uVid.pause();
+      });
       return;
     }
 
@@ -1341,6 +1364,19 @@ export const ProgramMonitor: React.FC = () => {
       safeSeek(activePlayerRef.current, curActiveVid, targetTime);
     }
 
+    // Synchronize underlay tracks when paused or scrubbing
+    (underlayLayersRef.current || []).forEach((layer) => {
+      const uVid = underlayVideosRef.current[layer.track.id];
+      if (uVid) {
+        const fClip = getFreshClip(layer.clip) || layer.clip;
+        const stab = Boolean(fClip.stabilizationProfile?.enabled || fClip.stabilization?.enabled);
+        const targetTime = getClipSeekTime(fClip, playhead, stab);
+        if (Math.abs(uVid.currentTime - targetTime) > 0.02) {
+          uVid.currentTime = targetTime;
+        }
+      }
+    });
+
     if (denoisedAudioPlayerRef.current && currentActiveClip) {
       const fresh = getFreshClip(currentActiveClip) || currentActiveClip;
       const np = fresh.audioProcessing?.noiseProfile;
@@ -1371,6 +1407,9 @@ export const ProgramMonitor: React.FC = () => {
       if (incomingVideoRef.current && !incomingVideoRef.current.paused) incomingVideoRef.current.pause();
       if (denoisedAudioPlayerRef.current && !denoisedAudioPlayerRef.current.paused) denoisedAudioPlayerRef.current.pause();
       if (stabilizedVideoRef.current && !stabilizedVideoRef.current.paused) stabilizedVideoRef.current.pause();
+      Object.values(underlayVideosRef.current).forEach((uVid) => {
+        if (uVid && !uVid.paused) uVid.pause();
+      });
       return;
     }
 
@@ -1407,6 +1446,25 @@ export const ProgramMonitor: React.FC = () => {
         (curVid as any).preservesPitch = curClip.speedProfile?.pitchCorrection ?? true;
         playVideoSafely(targetActive, curVid);
       }
+
+      // Start all underlay layers in sync
+      (underlayLayersRef.current || []).forEach((layer) => {
+        const uVid = underlayVideosRef.current[layer.track.id];
+        if (uVid) {
+          const fClip = getFreshClip(layer.clip) || layer.clip;
+          const stab = Boolean(fClip.stabilizationProfile?.enabled || fClip.stabilization?.enabled);
+          const targetTime = getClipSeekTime(fClip, playhead, stab);
+          if (Math.abs(uVid.currentTime - targetTime) > 0.08) {
+            uVid.currentTime = targetTime;
+          }
+          const speed = fClip.speedProfile?.speedMultiplier ?? 1.0;
+          uVid.playbackRate = Math.max(0.1, Math.min(16.0, speed));
+          (uVid as any).preservesPitch = fClip.speedProfile?.pitchCorrection ?? true;
+          if (uVid.paused) {
+            uVid.play().catch(() => {});
+          }
+        }
+      });
       if (isComparisonOverlayActive && stabilizedVideoRef.current && stabilizedPreviewSrc) {
         const stabTargetTime = getClipSeekTime(currentActiveClip, playhead, true);
         if (Math.abs(stabilizedVideoRef.current.currentTime - stabTargetTime) > 0.08) {
@@ -1435,6 +1493,9 @@ export const ProgramMonitor: React.FC = () => {
       if (incomingVideoRef.current && !incomingVideoRef.current.paused) incomingVideoRef.current.pause();
       if (denoisedAudioPlayerRef.current && !denoisedAudioPlayerRef.current.paused) denoisedAudioPlayerRef.current.pause();
       if (stabilizedVideoRef.current && !stabilizedVideoRef.current.paused) stabilizedVideoRef.current.pause();
+      Object.values(underlayVideosRef.current).forEach((uVid) => {
+        if (uVid && !uVid.paused) uVid.pause();
+      });
     }
 
     let lastTime = performance.now();
@@ -1519,6 +1580,9 @@ export const ProgramMonitor: React.FC = () => {
         // Empty space or cleared track: pause both players so video never plays on empty timeline
         if (videoRef.current && !videoRef.current.paused) videoRef.current.pause();
         if (incomingVideoRef.current && !incomingVideoRef.current.paused) incomingVideoRef.current.pause();
+        Object.values(underlayVideosRef.current).forEach((uVid) => {
+          if (uVid && !uVid.paused) uVid.pause();
+        });
       }
 
       // Pre-roll standby player if approaching upcoming clip (within 0.8s)
@@ -1560,6 +1624,9 @@ export const ProgramMonitor: React.FC = () => {
           nextPlayhead = 0.0;
           if (videoRef.current) safeSeek('player1', videoRef.current, 0);
           if (incomingVideoRef.current) safeSeek('player2', incomingVideoRef.current, 0);
+          Object.values(underlayVideosRef.current).forEach((uVid) => {
+            if (uVid) uVid.currentTime = 0;
+          });
         } else {
           // Automatically pause playback
           state.setIsPlaying(false);
@@ -1570,6 +1637,9 @@ export const ProgramMonitor: React.FC = () => {
           if (incomingVideoRef.current && !incomingVideoRef.current.paused) incomingVideoRef.current.pause();
           if (denoisedAudioPlayerRef.current && !denoisedAudioPlayerRef.current.paused) denoisedAudioPlayerRef.current.pause();
           if (stabilizedVideoRef.current && !stabilizedVideoRef.current.paused) stabilizedVideoRef.current.pause();
+          Object.values(underlayVideosRef.current).forEach((uVid) => {
+            if (uVid && !uVid.paused) uVid.pause();
+          });
           realTimeStabilizerRef.current.reset();
           return;
         }
@@ -1579,6 +1649,9 @@ export const ProgramMonitor: React.FC = () => {
           nextPlayhead = 0.0;
           if (videoRef.current) safeSeek('player1', videoRef.current, 0);
           if (incomingVideoRef.current) safeSeek('player2', incomingVideoRef.current, 0);
+          Object.values(underlayVideosRef.current).forEach((uVid) => {
+            if (uVid) uVid.currentTime = 0;
+          });
         } else {
           state.setIsPlaying(false);
           state.setPlayhead(effectiveBoundary);
@@ -1586,6 +1659,9 @@ export const ProgramMonitor: React.FC = () => {
           if (incomingVideoRef.current && !incomingVideoRef.current.paused) incomingVideoRef.current.pause();
           if (denoisedAudioPlayerRef.current && !denoisedAudioPlayerRef.current.paused) denoisedAudioPlayerRef.current.pause();
           if (stabilizedVideoRef.current && !stabilizedVideoRef.current.paused) stabilizedVideoRef.current.pause();
+          Object.values(underlayVideosRef.current).forEach((uVid) => {
+            if (uVid && !uVid.paused) uVid.pause();
+          });
           realTimeStabilizerRef.current.reset();
           return;
         }
@@ -1604,8 +1680,38 @@ export const ProgramMonitor: React.FC = () => {
         if (clipTransform) {
           activeVideoEl.style.transform = `translate(${clipTransform.positionX.toFixed(2)}px, ${clipTransform.positionY.toFixed(2)}px) rotate(${clipTransform.rotation}deg) scale(${(clipTransform.scale * userZoom).toFixed(3)})`;
           activeVideoEl.style.transformOrigin = 'center center';
+          activeVideoEl.style.opacity = String(clipTransform.opacity);
         }
       }
+
+      // Sync and transform underlay layers
+      (underlayLayersRef.current || []).forEach((layer) => {
+        const uVid = underlayVideosRef.current[layer.track.id];
+        if (uVid) {
+          const fClip = getFreshClip(layer.clip) || layer.clip;
+          const stab = Boolean(fClip.stabilizationProfile?.enabled || fClip.stabilization?.enabled);
+          const targetTime = getClipSeekTime(fClip, nextPlayhead, stab);
+
+          if (uVid.paused) {
+            uVid.play().catch(() => {});
+          }
+          if (masterVideo) {
+            uVid.playbackRate = masterVideo.playbackRate;
+          }
+          if (Math.abs(uVid.currentTime - targetTime) > 0.3) {
+            uVid.currentTime = targetTime;
+          }
+
+          const tf = getInterpolatedClipTransform(fClip, nextPlayhead);
+          if (tf) {
+            const sp = fClip.stabilizationProfile ?? fClip.stabilization;
+            const uz = (sp?.enabled && (sp.zoomPercent ?? 0) > 0) ? 1.0 + (sp.zoomPercent ?? 0) / 100.0 : 1.0;
+            uVid.style.transform = `translate(${tf.positionX.toFixed(2)}px, ${tf.positionY.toFixed(2)}px) rotate(${tf.rotation}deg) scale(${(tf.scale * uz).toFixed(3)})`;
+            uVid.style.transformOrigin = 'center center';
+            uVid.style.opacity = String(tf.opacity);
+          }
+        }
+      });
 
       // Keep stabilized preview synchronized in lockstep during split wipe playback
       if (isComparisonOverlayActive && stabilizedVideoRef.current && currentActiveClip && stabilizedPreviewSrc) {
@@ -1632,8 +1738,11 @@ export const ProgramMonitor: React.FC = () => {
       if (videoRef.current && !videoRef.current.paused) videoRef.current.pause();
       if (incomingVideoRef.current && !incomingVideoRef.current.paused) incomingVideoRef.current.pause();
       if (stabilizedVideoRef.current && !stabilizedVideoRef.current.paused) stabilizedVideoRef.current.pause();
+      Object.values(underlayVideosRef.current).forEach((uVid) => {
+        if (uVid && !uVid.paused) uVid.pause();
+      });
     };
-  }, [isPlaying, isScrubbing, isVideoLoaded, isIncomingVideoLoaded, player1Clip, player2Clip, currentActiveClip, tracks, safeSeek, playVideoSafely, stabilizedPreviewSrc]);
+  }, [isPlaying, isScrubbing, player1Clip, player2Clip, currentActiveClip, tracks, safeSeek, playVideoSafely, stabilizedPreviewSrc]);
 
   // Audio VU meter dynamics during playback
   useEffect(() => {
@@ -2282,6 +2391,9 @@ export const ProgramMonitor: React.FC = () => {
         }
       : {};
 
+    const currentLayerInfo = activeVideoLayers.find((l) => l.clip.id === thisClip?.id);
+    const resolvedZIndex = currentLayerInfo ? currentLayerInfo.zIndex : 10;
+
     if (activeTransitionInfo && activeTransitionInfo.isActive) {
       const fromClipId = activeTransitionInfo.fromClip?.id;
       const toClipId = activeTransitionInfo.toClip?.id;
@@ -2290,14 +2402,14 @@ export const ProgramMonitor: React.FC = () => {
         return {
           ...getIncomingTransitionStyle(activeTransitionInfo),
           ...dynamicTransformStyle,
-          zIndex: 10,
+          zIndex: resolvedZIndex,
         };
       }
       if (thisClip?.id === fromClipId) {
         return {
           ...getPrimaryTransitionStyle(activeTransitionInfo),
           ...dynamicTransformStyle,
-          zIndex: 5,
+          zIndex: Math.max(1, resolvedZIndex - 1),
         };
       }
     }
@@ -2309,13 +2421,13 @@ export const ProgramMonitor: React.FC = () => {
       return {
         ...dynamicTransformStyle,
         opacity: dynamicTransformStyle.opacity !== undefined ? dynamicTransformStyle.opacity : 1,
-        zIndex: 10,
+        zIndex: resolvedZIndex,
         pointerEvents: 'auto',
       };
     } else {
       return {
         opacity: 0,
-        zIndex: 5,
+        zIndex: Math.max(1, resolvedZIndex - 1),
         pointerEvents: 'none',
       };
     }
@@ -2666,6 +2778,55 @@ export const ProgramMonitor: React.FC = () => {
             />
           )}
 
+          {/* Multi-Track Stacked Video Layers (Underlying Tracks) */}
+          {underlayLayers.map((layer) => {
+            const thisClip = getFreshClip(layer.clip) || layer.clip;
+            const src = resolveVideoUrl(thisClip);
+            if (!src) return null;
+
+            const transform = thisClip ? getInterpolatedClipTransform(thisClip, playhead) : null;
+            const stabProfile = thisClip?.stabilizationProfile ?? thisClip?.stabilization;
+            const isStab = Boolean(stabProfile?.enabled);
+            const stabZoom = isStab ? (stabProfile?.zoomPercent ?? 0) : 0;
+            const userZoomScale = (isStab && stabZoom > 0) ? (1.0 + stabZoom / 100.0) : 1.0;
+
+            const layerStyle: React.CSSProperties = {
+              transform: transform
+                ? `translate(${transform.positionX.toFixed(2)}px, ${transform.positionY.toFixed(2)}px) rotate(${transform.rotation}deg) scale(${(transform.scale * userZoomScale).toFixed(3)})`
+                : (userZoomScale !== 1.0 ? `scale(${userZoomScale.toFixed(3)})` : undefined),
+              transformOrigin: 'center center',
+              opacity: transform ? transform.opacity : 1,
+              zIndex: layer.zIndex,
+              pointerEvents: 'none',
+              filter: getInspectorFilterStyle(thisClip),
+            };
+
+            return (
+              <video
+                key={`underlay-${layer.track.id}`}
+                ref={(el) => {
+                  underlayVideosRef.current[layer.track.id] = el;
+                }}
+                src={src}
+                preload="auto"
+                disablePictureInPicture
+                disableRemotePlayback
+                onLoadedMetadata={(e) => {
+                  const vid = e.currentTarget;
+                  const seekTime = getClipSeekTime(thisClip, playhead, isStab);
+                  vid.currentTime = seekTime;
+                  if (isPlaying && !isScrubbing) {
+                    vid.play().catch(() => {});
+                  }
+                }}
+                style={layerStyle}
+                className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+                playsInline
+                muted={Boolean(layer.track.muted || layer.track.isMuted)}
+              />
+            );
+          })}
+
           {/* Dedicated Denoised Audio Player for pristine background-hiss-free playback */}
           <audio ref={denoisedAudioPlayerRef} playsInline preload="auto" className="hidden" />
 
@@ -2722,7 +2883,7 @@ export const ProgramMonitor: React.FC = () => {
           )}
 
           {/* Program Monitor Direct Manipulation Transform Bounding Box */}
-          {selectedClip && selectedClipTransform && currentActiveClip?.id === selectedClip.id && inspectorTab === 'video' && (
+          {selectedClip && selectedClipTransform && activeVideoLayers.some((l) => l.clip.id === selectedClip.id) && inspectorTab === 'video' && (
             <div
               style={{
                 position: 'absolute',
@@ -2732,7 +2893,7 @@ export const ProgramMonitor: React.FC = () => {
                 transformOrigin: 'center center',
                 transform: `translate(${selectedClipTransform.positionX}px, ${selectedClipTransform.positionY}px) rotate(${selectedClipTransform.rotation}deg) scale(${selectedClipTransform.scale})`,
                 pointerEvents: 'none',
-                zIndex: 25,
+                zIndex: 60,
               }}
               className="border-2 border-[#00F0FF] shadow-[0_0_12px_rgba(0,240,255,0.4)] select-none"
             >

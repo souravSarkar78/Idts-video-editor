@@ -62,6 +62,7 @@ export const Header: React.FC = () => {
     rippleDeleteClip,
     selectedClipId,
     triggerAutoSave,
+    setProjectName,
   } = useTimelineStore(
     useShallow((state) => ({
       project: state.project,
@@ -87,6 +88,7 @@ export const Header: React.FC = () => {
       rippleDeleteClip: state.rippleDeleteClip,
       selectedClipId: state.selectedClipId,
       triggerAutoSave: state.triggerAutoSave,
+      setProjectName: state.setProjectName,
     }))
   );
 
@@ -147,10 +149,10 @@ export const Header: React.FC = () => {
 
   // Project name inline editing
   const [isEditingName, setIsEditingName] = useState(false);
-  const [tempName, setTempName] = useState(project.name || '1001');
+  const [tempName, setTempName] = useState(project.name || 'Untitled Project');
 
   useEffect(() => {
-    setTempName(project.name || '1001');
+    setTempName(project.name || 'Untitled Project');
   }, [project.name]);
 
   // Close File menu on outside click
@@ -255,10 +257,9 @@ export const Header: React.FC = () => {
 
   const handleNameSubmit = () => {
     if (tempName.trim()) {
-      useTimelineStore.setState((state) => ({
-        project: { ...state.project, name: tempName.trim() },
-        isDirty: true,
-      }));
+      setProjectName(tempName.trim());
+    } else {
+      setTempName(project.name || 'Untitled Project');
     }
     setIsEditingName(false);
   };
@@ -659,7 +660,7 @@ export const Header: React.FC = () => {
               className="px-2.5 py-0.5 rounded-md hover:bg-[#1C202B] cursor-pointer text-xs font-semibold text-[#D1D5DB] hover:text-white transition-colors truncate flex items-center gap-1.5"
               title="Click to rename project"
             >
-              <span className="truncate">{project.name || '1001'}</span>
+              <span className="truncate">{project.name || 'Untitled Project'}</span>
               {isDirty && <span className="text-amber-400 font-bold text-xs">*</span>}
             </div>
           )}

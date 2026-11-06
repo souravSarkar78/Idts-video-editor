@@ -36,6 +36,7 @@ import {
   Type,
   Compass,
   Loader2,
+  Clock,
 } from 'lucide-react';
 import { Diamond, Subtitles, Waves } from '@/components/Icons';
 import { useShallow } from 'zustand/react/shallow';
@@ -132,6 +133,7 @@ export const Timeline: React.FC = () => {
     syncAllTracks,
     executeTauriSync,
     setSyncModalOpen,
+    setSyncModalTab,
     addAssetToTrack,
     importFiles,
     lastSyncMessage,
@@ -227,6 +229,7 @@ export const Timeline: React.FC = () => {
       syncAllTracks: state.syncAllTracks,
       executeTauriSync: state.executeTauriSync,
       setSyncModalOpen: state.setSyncModalOpen,
+      setSyncModalTab: state.setSyncModalTab,
       addAssetToTrack: state.addAssetToTrack,
       importFiles: state.importFiles,
       lastSyncMessage: state.lastSyncMessage,
@@ -1318,7 +1321,10 @@ export const Timeline: React.FC = () => {
 
           {/* Sync Settings / Placement Strategy */}
           <button
-            onClick={() => setSyncModalOpen(true)}
+            onClick={() => {
+              setSyncModalTab('filename');
+              setSyncModalOpen(true);
+            }}
             className="w-7 h-7 flex items-center justify-center rounded-md bg-[#1C202B] hover:bg-[#252B3A] border border-[#222630] hover:border-[#00F0FF]/50 text-[#8A92A6] hover:text-[#00F0FF] transition-all cursor-pointer"
             title={`Sync Placement Settings: ${
               syncPlacementMode === 'compact'
@@ -1329,6 +1335,19 @@ export const Timeline: React.FC = () => {
             } (Click to open settings)`}
           >
             <Sliders size={13} className="text-[#00F0FF]" />
+          </button>
+
+          {/* Camera Clock Manual Time Offsets (Fine-tune non-master cameras relative to Track 1) */}
+          <button
+            onClick={() => {
+              setSyncModalTab('camera_offsets');
+              setSyncModalOpen(true);
+            }}
+            className="h-7 px-2 flex items-center gap-1 rounded-md bg-[#1C202B] hover:bg-[#252B3A] border border-[#222630] hover:border-[#10B981]/50 text-[#8A92A6] hover:text-[#10B981] transition-all cursor-pointer"
+            title="Camera Time Offsets: Put offset time in day, hour, min, sec, ms for secondary cameras relative to Master"
+          >
+            <Clock size={13} className="text-[#10B981]" />
+            <span className="font-mono text-[10px] text-[#10B981] font-bold">± Offset</span>
           </button>
 
           <div className="h-4 w-[1px] bg-[#222630] mx-0.5" />

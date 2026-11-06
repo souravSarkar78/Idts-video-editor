@@ -893,6 +893,36 @@ pub fn sync_active_timeline_tracks(
         });
     }
 
+    // Apply manual camera offsets relative to the master anchor track
+    if let Some(offsets) = &request.camera_offsets {
+        let ref_track_id = request
+            .reference_track_id
+            .as_deref()
+            .unwrap_or_else(|| {
+                request.tracks.first().map(|t| t.id.as_str()).unwrap_or("")
+            });
+
+        for offset in offsets {
+            // Master camera clips are never shifted by camera manual offset
+            if offset.track_id == ref_track_id {
+                continue;
+            }
+
+            let add_ms = (offset.total_offset_seconds * 1000.0).round() as i64;
+            if let Some(track_offset) = results.iter_mut().find(|r| r.track_id == offset.track_id) {
+                if let Some(clip_offsets) = &mut track_offset.clip_offsets {
+                    for co in clip_offsets.iter_mut() {
+                        co.offset_ms = (co.offset_ms + add_ms).max(0);
+                        co.offset_seconds = co.offset_ms as f64 / 1000.0;
+                    }
+                    let new_min_ms = clip_offsets.iter().map(|c| c.offset_ms).min().unwrap_or(0);
+                    track_offset.offset_ms = new_min_ms;
+                    track_offset.offset_seconds = new_min_ms as f64 / 1000.0;
+                }
+            }
+        }
+    }
+
     Ok(results)
 }
 

@@ -185,7 +185,6 @@ export const App: React.FC = () => {
     initWaveformEventListener();
     checkCrashRecovery();
     const cleanupAutosave = initAutoSaveWorker();
-    updateAppTitle(project.name || 'Untitled Project', isDirty, currentProjectPath);
 
     const handleBeforeUnload = () => {
       if (isTauri) {
@@ -202,6 +201,11 @@ export const App: React.FC = () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, []);
+
+  // Keep native window title and document title dynamically synced with project name, path, and dirty state
+  useEffect(() => {
+    updateAppTitle(project.name || 'Untitled Project', isDirty, currentProjectPath);
+  }, [project.name, isDirty, currentProjectPath]);
 
   // Ensure Web Audio context is seamlessly unlocked on first user gesture
   useEffect(() => {
@@ -275,8 +279,9 @@ export const App: React.FC = () => {
         return;
       }
 
-      // Ignore global timeline shortcuts if modal dialogs (like Noise Profile Modal) are open
-      if (useTimelineStore.getState().isNoiseModalOpen) {
+      // Ignore global timeline shortcuts if modal dialogs (like Noise Profile or Sync Modal) are open
+      const timelineState = useTimelineStore.getState();
+      if (timelineState.isNoiseModalOpen || timelineState.isSyncModalOpen) {
         return;
       }
 

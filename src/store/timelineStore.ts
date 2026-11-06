@@ -52,10 +52,29 @@ import {
   ProcessHealthStats,
   WaveformChunkPayload,
   WaveformStatus,
+  CameraTimeOffset,
 } from '../types/ipc';
 import { loadAudioBuffer, unlockAudioContext, purgeAudioBufferCache } from '../utils/audioMastering';
 import { filePosterCache, purgeFileFrameCaches } from '../utils/frameCacheService';
 import { BUILT_IN_FILTER_CATEGORIES, BUILT_IN_FILTER_PRESETS } from '../components/Filters/defaultPresets';
+
+export function computeCameraOffsetSeconds(offset: {
+  sign?: '+' | '-';
+  days?: number;
+  hours?: number;
+  minutes?: number;
+  seconds?: number;
+  milliseconds?: number;
+}): number {
+  const signMultiplier = offset.sign === '-' ? -1 : 1;
+  const d = Math.max(0, offset.days || 0);
+  const h = Math.max(0, offset.hours || 0);
+  const m = Math.max(0, offset.minutes || 0);
+  const s = Math.max(0, offset.seconds || 0);
+  const ms = Math.max(0, offset.milliseconds || 0);
+  const totalSec = d * 86400 + h * 3600 + m * 60 + s + ms / 1000;
+  return signMultiplier * totalSec;
+}
 
 export const DEFAULT_COLOR_GRADING_PROFILE: ColorGradingProfile = {
   exposure: 0,
@@ -409,6 +428,13 @@ export interface ActiveDragAssetInfo {
   mouseY: number;
 }
 
+export interface ActiveVideoLayer {
+  clip: Clip;
+  track: MediaTrack;
+  trackIndex: number;
+  zIndex: number;
+}
+
 export interface TimelineState {
   project: TimelineProject;
   tracks: MediaTrack[];
@@ -662,7 +688,17 @@ export interface TimelineState {
   executeTauriSync: (customPattern?: string) => Promise<{ success: boolean; message: string; count: number }>;
   applySyncResults: (candidates: SyncCandidate[]) => void;
   setSyncModalOpen: (open: boolean) => void;
+  syncModalTab: 'filename' | 'waveform' | 'metadata' | 'camera_offsets';
+  setSyncModalTab: (tab: 'filename' | 'waveform' | 'metadata' | 'camera_offsets') => void;
+  syncMasterTrackId: string | null;
+  setSyncMasterTrackId: (trackId: string | null) => void;
+  cameraOffsets: Record<string, CameraTimeOffset>;
+  setCameraOffset: (trackId: string, offset: Partial<CameraTimeOffset>) => void;
+  applyManualCameraOffset: (targetTrackId?: string) => { success: boolean; message: string; count: number };
+  resetCameraOffset: (trackId: string) => void;
+  resetAllCameraOffsets: () => void;
   getActiveVideoClip: () => { clip: Clip; track: MediaTrack } | null;
+  getActiveVideoLayers: () => ActiveVideoLayer[];
   resetToSampleData: () => void;
 
   // Milestone 4: Waveforms, Multicam Angle Switching & Inspector
@@ -716,6 +752,7 @@ export interface TimelineState {
   openProject: (pathOverride?: string) => Promise<boolean>;
   createNewProject: () => void;
   loadProjectData: (data: ProjectData, filePath?: string) => void;
+  setProjectName: (name: string) => void;
 
   // Milestone 12: Production Recovery, Process Lifecycle & System Health
   recoverySnapshot: AutosaveSnapshotInfo | null;
@@ -1227,6 +1264,9 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
   lastSyncMessage: null,
   syncPlacementMode: 'compact',
   syncGapCushionSec: 1.0,
+  syncModalTab: 'filename',
+  syncMasterTrackId: null,
+  cameraOffsets: {},
 
   // Phase 16: Video Stabilization state
   isStabilizationAnalyzing: {},
@@ -1877,6 +1917,8 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
 
   setSyncPlacementMode: (syncPlacementMode) => set({ syncPlacementMode }),
   setSyncGapCushionSec: (syncGapCushionSec) => set({ syncGapCushionSec }),
+  setSyncModalTab: (syncModalTab) => set({ syncModalTab }),
+  setSyncMasterTrackId: (syncMasterTrackId) => set({ syncMasterTrackId }),
 
   setActiveTab: (activeTab) => set({ activeTab }),
   setInspectorTab: (inspectorTab) => set({ inspectorTab }),
@@ -1915,6 +1957,12 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
     }
     if (isPlaying) {
       unlockAudioContext();
+      const { playhead, tracks } = get();
+      const totalDur = calculateTotalProjectDuration(tracks);
+      if (totalDur > 0 && playhead >= totalDur - 0.05) {
+        set({ playhead: 0, isPlaying: true });
+        return;
+      }
     }
     set({ isPlaying });
   },
@@ -1924,7 +1972,17 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
       get().stopVoiceoverRecording();
       return;
     }
-    set((state) => ({ isPlaying: !state.isPlaying }));
+    const { isPlaying, playhead, tracks } = get();
+    if (!isPlaying) {
+      const totalDur = calculateTotalProjectDuration(tracks);
+      if (totalDur > 0 && playhead >= totalDur - 0.05) {
+        set({ playhead: 0, isPlaying: true });
+        return;
+      }
+      set({ isPlaying: true });
+      return;
+    }
+    set({ isPlaying: false });
   },
 
   setZoom: (zoom) => set({ zoom: Math.max(0.05, Math.min(zoom, 400)) }),
@@ -4426,7 +4484,8 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
 
   // Track-Level Multi-Sync Action with Configurable Idle Gap Placement
   syncAllTracks: (options) => {
-    const { tracks, syncPlacementMode, syncGapCushionSec } = get();
+    const { tracks, syncPlacementMode, syncGapCushionSec, syncMasterTrackId, cameraOffsets } = get();
+    const effectiveMasterId = syncMasterTrackId || tracks[0]?.id;
     const pattern = typeof options === 'string' ? options : options?.pattern;
     const placementMode =
       (typeof options === 'object' && options?.placementMode) || syncPlacementMode || 'compact';
@@ -4524,16 +4583,23 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
 
     // Update tracks and clips
     const rawUpdatedTracks = tracks.map((track) => {
+      const isMaster = track.id === effectiveMasterId;
+      const camOffsetData = !isMaster ? cameraOffsets[track.id] : undefined;
+      const camOffsetSec = camOffsetData ? camOffsetData.totalOffsetSeconds : 0;
+
       const updatedClips = track.clips.map((clip) => {
         const calculatedStartSec = clipCalculatedStarts[clip.id];
         if (calculatedStartSec !== undefined) {
+          const finalStartSec = Math.max(0, calculatedStartSec + camOffsetSec);
           return {
             ...clip,
-            startTimeMs: Math.round(calculatedStartSec * 1000),
-            startPositionSeconds: calculatedStartSec,
+            baseStartPositionSeconds: calculatedStartSec,
+            cameraOffsetSeconds: camOffsetSec,
+            startTimeMs: Math.round(finalStartSec * 1000),
+            startPositionSeconds: finalStartSec,
             synced: true,
             isSynced: true,
-            syncDeltaSeconds: calculatedStartSec,
+            syncDeltaSeconds: finalStartSec,
           };
         }
         return clip;
@@ -4547,6 +4613,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
       return {
         ...track,
         timeOffsetSeconds: earliestSec,
+        cameraOffset: camOffsetData,
         clips: updatedClips,
       };
     });
@@ -4589,15 +4656,18 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
   },
 
   executeTauriSync: async (customPattern) => {
-    const { tracks, syncPlacementMode, syncGapCushionSec } = get();
+    const { tracks, syncPlacementMode, syncGapCushionSec, syncMasterTrackId, cameraOffsets } = get();
+    const effectiveMasterId = syncMasterTrackId || tracks[0]?.id;
 
     if (isTauri) {
       try {
         const cleanTracks = tracks.map(sanitizeTrackForIpc);
+        const offsetsList = Object.values(cameraOffsets);
         const request: SyncRequest = {
           mode: 'filename',
           pattern: customPattern,
           tracks: cleanTracks,
+          referenceTrackId: effectiveMasterId,
           placementMode:
             syncPlacementMode === 'compact'
               ? 'compact'
@@ -4605,6 +4675,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
               ? 'custom_gap'
               : 'absolute',
           maxGapSeconds: syncGapCushionSec,
+          cameraOffsets: offsetsList.length > 0 ? offsetsList : undefined,
         };
 
         const offsets = await tauriInvoke<TrackSyncOffset[]>('sync_active_timeline', { request });
@@ -4622,12 +4693,17 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
 
             const rawTracks = state.tracks.map((track) => {
               const syncOffset = offsets.find((o) => o.trackId === track.id);
+              const camOffsetData = track.id !== effectiveMasterId ? cameraOffsets[track.id] : undefined;
+              const camOffsetSec = camOffsetData ? camOffsetData.totalOffsetSeconds : 0;
+
               const updatedClips = track.clips.map((clip) => {
                 const co = clipOffsetMap[clip.id];
                 if (co) {
                   totalSynced++;
                   return {
                     ...clip,
+                    baseStartPositionSeconds: co.offsetSeconds,
+                    cameraOffsetSeconds: camOffsetSec,
                     startTimeMs: co.offsetMs,
                     startPositionSeconds: co.offsetSeconds,
                     synced: true,
@@ -4638,6 +4714,8 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
                   totalSynced++;
                   return {
                     ...clip,
+                    baseStartPositionSeconds: syncOffset.offsetSeconds,
+                    cameraOffsetSeconds: camOffsetSec,
                     startTimeMs: syncOffset.offsetMs,
                     startPositionSeconds: syncOffset.offsetSeconds,
                     synced: true,
@@ -4659,6 +4737,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
               return {
                 ...track,
                 timeOffsetSeconds: earliestSec,
+                cameraOffset: camOffsetData,
                 clips: updatedClips,
               };
             });
@@ -4739,14 +4818,222 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
 
   setSyncModalOpen: (isSyncModalOpen) => set({ isSyncModalOpen }),
 
+  setCameraOffset: (trackId, offsetUpdate) => {
+    set((state) => {
+      const existing = state.cameraOffsets[trackId] || {
+        trackId,
+        sign: '+',
+        days: 0,
+        hours: 0,
+        minutes: 0,
+        seconds: 0,
+        milliseconds: 0,
+        totalOffsetSeconds: 0,
+      };
+
+      const merged = { ...existing, ...offsetUpdate };
+      merged.totalOffsetSeconds = computeCameraOffsetSeconds(merged);
+
+      return {
+        cameraOffsets: {
+          ...state.cameraOffsets,
+          [trackId]: merged,
+        },
+      };
+    });
+  },
+
+  applyManualCameraOffset: (targetTrackId) => {
+    const { tracks, syncMasterTrackId, cameraOffsets } = get();
+    const effectiveMasterId = syncMasterTrackId || tracks[0]?.id;
+
+    let affectedClipsCount = 0;
+    const targetTracks = targetTrackId
+      ? tracks.filter((t) => t.id === targetTrackId)
+      : tracks.filter((t) => t.id !== effectiveMasterId);
+
+    const updatedTracks = tracks.map((track) => {
+      // Master anchor track clips are NOT modified by manual camera offset!
+      if (track.id === effectiveMasterId) {
+        return track;
+      }
+
+      const shouldApply = !targetTrackId || track.id === targetTrackId;
+      if (!shouldApply) {
+        return track;
+      }
+
+      const offsetData = cameraOffsets[track.id];
+      const offsetSec = offsetData ? offsetData.totalOffsetSeconds : 0;
+
+      const updatedClips = track.clips.map((clip) => {
+        affectedClipsCount++;
+        // Base start position before any manual offset was introduced
+        const baseStart =
+          clip.baseStartPositionSeconds !== undefined
+            ? clip.baseStartPositionSeconds
+            : (clip.startPositionSeconds ?? 0);
+
+        const newStartSec = Math.max(0, baseStart + offsetSec);
+        return {
+          ...clip,
+          baseStartPositionSeconds: baseStart,
+          cameraOffsetSeconds: offsetSec,
+          startPositionSeconds: newStartSec,
+          startTimeMs: Math.round(newStartSec * 1000),
+          synced: true,
+          isSynced: true,
+          syncDeltaSeconds: newStartSec,
+        };
+      });
+
+      const earliestSec =
+        updatedClips.length > 0
+          ? Math.min(...updatedClips.map((c) => c.startPositionSeconds ?? 0))
+          : 0;
+
+      return {
+        ...track,
+        timeOffsetSeconds: earliestSec,
+        cameraOffset: offsetData,
+        clips: updatedClips,
+      };
+    });
+
+    const maxEnd = Math.max(
+      ...updatedTracks
+        .flatMap((t) => t.clips)
+        .map((c) => (c.startPositionSeconds || 0) + (c.durationSeconds || 0)),
+      120
+    );
+
+    const targetDesc = targetTrackId
+      ? `track "${tracks.find((t) => t.id === targetTrackId)?.name || targetTrackId}"`
+      : `${targetTracks.length} camera track(s)`;
+
+    const msg = `Applied manual camera offset to ${affectedClipsCount} clip(s) across ${targetDesc} relative to master (${tracks.find((t) => t.id === effectiveMasterId)?.name || 'Track 1'})`;
+
+    set({
+      tracks: updatedTracks,
+      lastSyncMessage: msg,
+      project: {
+        ...get().project,
+        durationMs: Math.max(get().project.durationMs, Math.round(maxEnd * 1000)),
+      },
+    });
+
+    return {
+      success: true,
+      message: msg,
+      count: affectedClipsCount,
+    };
+  },
+
+  resetCameraOffset: (trackId) => {
+    set((state) => {
+      const updatedCameraOffsets = { ...state.cameraOffsets };
+      delete updatedCameraOffsets[trackId];
+
+      const updatedTracks = state.tracks.map((track) => {
+        if (track.id !== trackId) return track;
+
+        const updatedClips = track.clips.map((clip) => {
+          const baseStart =
+            clip.baseStartPositionSeconds !== undefined
+              ? clip.baseStartPositionSeconds
+              : (clip.startPositionSeconds ?? 0);
+
+          return {
+            ...clip,
+            startPositionSeconds: baseStart,
+            startTimeMs: Math.round(baseStart * 1000),
+            cameraOffsetSeconds: 0,
+            syncDeltaSeconds: baseStart,
+          };
+        });
+
+        const earliestSec =
+          updatedClips.length > 0
+            ? Math.min(...updatedClips.map((c) => c.startPositionSeconds ?? 0))
+            : 0;
+
+        return {
+          ...track,
+          timeOffsetSeconds: earliestSec,
+          cameraOffset: undefined,
+          clips: updatedClips,
+        };
+      });
+
+      const msg = `Reset camera offset for ${state.tracks.find((t) => t.id === trackId)?.name || trackId}`;
+      return {
+        cameraOffsets: updatedCameraOffsets,
+        tracks: updatedTracks,
+        lastSyncMessage: msg,
+      };
+    });
+  },
+
+  resetAllCameraOffsets: () => {
+    set((state) => {
+      const updatedTracks = state.tracks.map((track) => {
+        const updatedClips = track.clips.map((clip) => {
+          const baseStart =
+            clip.baseStartPositionSeconds !== undefined
+              ? clip.baseStartPositionSeconds
+              : (clip.startPositionSeconds ?? 0);
+
+          return {
+            ...clip,
+            startPositionSeconds: baseStart,
+            startTimeMs: Math.round(baseStart * 1000),
+            cameraOffsetSeconds: 0,
+            syncDeltaSeconds: baseStart,
+          };
+        });
+
+        const earliestSec =
+          updatedClips.length > 0
+            ? Math.min(...updatedClips.map((c) => c.startPositionSeconds ?? 0))
+            : 0;
+
+        return {
+          ...track,
+          timeOffsetSeconds: earliestSec,
+          cameraOffset: undefined,
+          clips: updatedClips,
+        };
+      });
+
+      return {
+        cameraOffsets: {},
+        tracks: updatedTracks,
+        lastSyncMessage: 'Reset all camera manual offsets back to synced base',
+      };
+    });
+  },
+
   // Returns the active topmost video clip covering the playhead position for the single Program Monitor canvas
   getActiveVideoClip: () => {
     const { tracks, playhead, activeCameraTrackId } = get();
 
-    // Priority to active multicam track selection if it has a clip at current playhead
+    const hasAnySolo = tracks.some(
+      (t) => (t.trackType === 'video' || t.type === 'video') && (t.solo || t.isSolo)
+    );
+
+    // Helper to check if a track is visible and active for video monitoring
+    const isTrackValid = (t: MediaTrack) => {
+      const isVideo = t.trackType === 'video' || t.type === 'video';
+      const isVisible = t.visible !== false && t.isVisible !== false;
+      const isMuted = t.muted || t.isMuted;
+      const passesSolo = !hasAnySolo || Boolean(t.solo || t.isSolo);
+      return isVideo && isVisible && !isMuted && passesSolo;
+    };
+
+    // Priority 1: Priority to active multicam track selection if it has a clip at current playhead
     if (activeCameraTrackId) {
       const activeTrack = tracks.find((t) => t.id === activeCameraTrackId);
-      if (activeTrack && activeTrack.visible !== false && !activeTrack.muted) {
+      if (activeTrack && isTrackValid(activeTrack)) {
         let bestClip: Clip | null = null;
         for (let i = 0; i < activeTrack.clips.length; i++) {
           const clip = activeTrack.clips[i];
@@ -4764,49 +5051,85 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
       }
     }
 
-    // Top-to-bottom search for visible, unmuted video tracks
-    for (const track of tracks) {
-      const isVideo = track.trackType === 'video' || track.type === 'video';
-      const isVisible = track.visible !== false && track.isVisible !== false;
-      const isMuted = track.muted || track.isMuted;
+    // Priority 2: Top-down track priority (First track = highest priority / shown on top)
+    const videoTracks = tracks.filter(isTrackValid);
 
-      if (isVideo && isVisible && !isMuted) {
-        let bestClip: Clip | null = null;
-        for (let i = 0; i < track.clips.length; i++) {
-          const clip = track.clips[i];
-          const start = clip.startPositionSeconds || 0;
-          const end = start + (clip.durationSeconds || 0);
-          if (playhead >= start && playhead <= end) {
-            if (!bestClip || start > (bestClip.startPositionSeconds || 0)) {
-              bestClip = clip;
-            }
+    for (let i = 0; i < videoTracks.length; i++) {
+      const track = videoTracks[i];
+      let bestClip: Clip | null = null;
+      for (let j = 0; j < track.clips.length; j++) {
+        const clip = track.clips[j];
+        const start = clip.startPositionSeconds || 0;
+        const end = start + (clip.durationSeconds || 0);
+        if (playhead >= start && playhead <= end) {
+          if (!bestClip || start > (bestClip.startPositionSeconds || 0)) {
+            bestClip = clip;
           }
         }
-        if (bestClip) {
-          return { clip: bestClip, track };
-        }
+      }
+      if (bestClip) {
+        return { clip: bestClip, track };
       }
     }
 
     // Fallback: Sub-frame boundary tolerance (0.05s) to eliminate micro-gap seams between snapped clips
-    for (const track of tracks) {
-      const isVideo = track.trackType === 'video' || track.type === 'video';
-      const isVisible = track.visible !== false && track.isVisible !== false;
-      const isMuted = track.muted || track.isMuted;
-
-      if (isVideo && isVisible && !isMuted) {
-        for (let i = 0; i < (track.clips || []).length; i++) {
-          const clip = track.clips[i];
-          const start = clip.startPositionSeconds || 0;
-          const end = start + (clip.durationSeconds || 0);
-          if (playhead >= start - 0.05 && playhead <= end + 0.05) {
-            return { clip, track };
-          }
+    for (let i = 0; i < videoTracks.length; i++) {
+      const track = videoTracks[i];
+      for (let j = 0; j < (track.clips || []).length; j++) {
+        const clip = track.clips[j];
+        const start = clip.startPositionSeconds || 0;
+        const end = start + (clip.durationSeconds || 0);
+        if (playhead >= start - 0.05 && playhead <= end + 0.05) {
+          return { clip, track };
         }
       }
     }
 
     return null;
+  },
+
+  // Returns all active video tracks and clips covering the playhead in visual stacking order
+  getActiveVideoLayers: () => {
+    const { tracks, playhead } = get();
+
+    const hasAnySolo = tracks.some(
+      (t) => (t.trackType === 'video' || t.type === 'video') && (t.solo || t.isSolo)
+    );
+
+    const videoTracks = tracks.filter((t) => {
+      const isVideo = t.trackType === 'video' || t.type === 'video';
+      const isVisible = t.visible !== false && t.isVisible !== false;
+      const isMuted = t.muted || t.isMuted;
+      const passesSolo = !hasAnySolo || Boolean(t.solo || t.isSolo);
+      return isVideo && isVisible && !isMuted && passesSolo;
+    });
+
+    const layers: ActiveVideoLayer[] = [];
+    const totalTracks = videoTracks.length;
+
+    videoTracks.forEach((track, trackIndex) => {
+      let activeClip: Clip | null = null;
+      for (const clip of track.clips || []) {
+        const start = clip.startPositionSeconds || 0;
+        const end = start + (clip.durationSeconds || 0);
+        if (playhead >= start - 0.05 && playhead <= end + 0.05) {
+          if (!activeClip || start > (activeClip.startPositionSeconds || 0)) {
+            activeClip = clip;
+          }
+        }
+      }
+      if (activeClip) {
+        // Track 1 (trackIndex 0) gets highest zIndex, lower tracks get progressively lower zIndex
+        layers.push({
+          clip: activeClip,
+          track,
+          trackIndex,
+          zIndex: 10 + (totalTracks - trackIndex) * 10,
+        });
+      }
+    });
+
+    return layers;
   },
 
   // Milestone 4: Waveform cache and fetch (Zero-blocking)
@@ -5315,31 +5638,61 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
     }));
   },
 
+  setProjectName: (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    set((state) => ({
+      project: { ...state.project, name: trimmed },
+      isDirty: true,
+      historyPast: state.historyPast.map((s) => ({
+        ...s,
+        project: { ...s.project, name: trimmed },
+      })),
+      historyFuture: state.historyFuture.map((s) => ({
+        ...s,
+        project: { ...s.project, name: trimmed },
+      })),
+    }));
+    const { currentProjectPath } = get();
+    updateAppTitle(trimmed, true, currentProjectPath);
+  },
+
   saveProject: async (asNewFile = false) => {
     const { project, tracks, assets, bins, playhead, activeCameraTrackId, currentProjectPath } = get();
 
     let targetPath = currentProjectPath;
     if (asNewFile || !targetPath) {
+      const defaultBaseName = project.name && project.name !== 'Untitled Project' ? project.name : 'Untitled_Project';
       if (isTauri) {
-        const defaultName = `${project.name || 'Untitled_Project'}.idts`;
+        const defaultName = `${defaultBaseName}.idts`;
         const chosen = await tauriInvoke<string | null>('save_project_dialog', { defaultName });
         if (!chosen) return false;
         targetPath = chosen;
       } else {
         const promptName = window.prompt(
           'Save Project As (.idts):',
-          `${project.name || 'Untitled_Project'}.idts`
+          `${defaultBaseName}.idts`
         );
         if (!promptName) return false;
         targetPath = promptName.toLowerCase().endsWith('.idts') ? promptName : `${promptName}.idts`;
       }
     }
 
+    // Extract saved project name from targetPath (e.g. "D:\Videos\MyVlog.idts" -> "MyVlog")
+    const baseFileName = targetPath.split(/[\\/]/).pop() || '';
+    const nameWithoutExt = baseFileName.replace(/\.idts$/i, '').trim();
+    const finalProjectName = nameWithoutExt || project.name || 'Untitled Project';
+
+    const updatedProject: TimelineProject = {
+      ...project,
+      name: finalProjectName,
+    };
+
     const projectData: ProjectData = {
       version: '1.0.0',
       metadata: {
         id: project.id,
-        name: project.name || 'Untitled Project',
+        name: finalProjectName,
         createdAt: new Date().toISOString(),
         modifiedAt: new Date().toISOString(),
         fps: project.fps || 30,
@@ -5362,8 +5715,20 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
     if (isTauri) {
       try {
         await tauriInvoke('save_project', { path: targetPath, projectData });
-        set({ currentProjectPath: targetPath, isDirty: false });
-        updateAppTitle(project.name || 'Untitled Project', false, targetPath);
+        set({
+          project: updatedProject,
+          currentProjectPath: targetPath,
+          isDirty: false,
+          historyPast: get().historyPast.map((s) => ({
+            ...s,
+            project: { ...s.project, name: finalProjectName },
+          })),
+          historyFuture: get().historyFuture.map((s) => ({
+            ...s,
+            project: { ...s.project, name: finalProjectName },
+          })),
+        });
+        updateAppTitle(finalProjectName, false, targetPath);
         return true;
       } catch (err) {
         console.error('Failed to save project:', err);
@@ -5371,8 +5736,20 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
       }
     } else {
       localStorage.setItem('idts_project_' + targetPath, JSON.stringify(projectData));
-      set({ currentProjectPath: targetPath, isDirty: false });
-      updateAppTitle(project.name || 'Untitled Project', false, targetPath);
+      set({
+        project: updatedProject,
+        currentProjectPath: targetPath,
+        isDirty: false,
+        historyPast: get().historyPast.map((s) => ({
+          ...s,
+          project: { ...s.project, name: finalProjectName },
+        })),
+        historyFuture: get().historyFuture.map((s) => ({
+          ...s,
+          project: { ...s.project, name: finalProjectName },
+        })),
+      });
+      updateAppTitle(finalProjectName, false, targetPath);
       return true;
     }
   },
@@ -5414,10 +5791,16 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
   },
 
   loadProjectData: (data: ProjectData, filePath?: string) => {
+    const fileBaseName = filePath ? filePath.split(/[\\/]/).pop()?.replace(/\.idts$/i, '').trim() : null;
+    const resolvedName =
+      data.metadata.name && data.metadata.name !== 'Untitled Project'
+        ? data.metadata.name
+        : (fileBaseName || data.metadata.name || 'Untitled Project');
+
     set({
       project: {
         id: data.metadata.id,
-        name: data.metadata.name,
+        name: resolvedName,
         fps: data.metadata.fps,
         width: data.metadata.width,
         height: data.metadata.height,
@@ -5438,7 +5821,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
       historyPast: [],
       historyFuture: [],
     });
-    updateAppTitle(data.metadata.name, false, filePath);
+    updateAppTitle(resolvedName, false, filePath);
   },
 
   checkCrashRecovery: async () => {

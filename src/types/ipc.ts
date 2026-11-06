@@ -79,6 +79,8 @@ export interface Clip {
   durationSeconds?: number;
   isSynced?: boolean;
   syncDeltaSeconds?: number;
+  baseStartPositionSeconds?: number;
+  cameraOffsetSeconds?: number;
   waveformPeaks?: number[];
   waveformStatus?: WaveformStatus;
   metadata?: ClipMetadata;
@@ -497,6 +499,7 @@ export interface MediaTrack {
   transitions?: Transition[];
   ducking?: DuckingConfig;
   trackGrading?: ColorGradingProfile;
+  cameraOffset?: CameraTimeOffset;
 }
 
 // Track is an alias for MediaTrack for frontend convenience
@@ -572,6 +575,17 @@ export interface SyncCandidate {
   isReference: boolean;
 }
 
+export interface CameraTimeOffset {
+  trackId: string;
+  sign: '+' | '-';
+  days: number;
+  hours: number;
+  minutes: number;
+  seconds: number;
+  milliseconds: number;
+  totalOffsetSeconds: number;
+}
+
 export type SyncPlacementMode = 'compact' | 'absolute' | 'custom_gap';
 
 export interface SyncRequest {
@@ -582,6 +596,7 @@ export interface SyncRequest {
   trackIds?: string[];
   placementMode?: SyncPlacementMode;
   maxGapSeconds?: number;
+  cameraOffsets?: CameraTimeOffset[];
 }
 
 export interface SyncResult {

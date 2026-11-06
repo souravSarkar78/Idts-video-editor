@@ -765,6 +765,10 @@ pub struct Clip {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sync_delta_seconds: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_start_position_seconds: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub camera_offset_seconds: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub waveform_peaks: Option<Vec<f32>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub waveform_status: Option<WaveformStatus>,
@@ -891,6 +895,8 @@ impl Clip {
             duration_seconds: Some(dur_sec),
             is_synced: Some(false),
             sync_delta_seconds: None,
+            base_start_position_seconds: Some(start_sec),
+            camera_offset_seconds: Some(0.0),
             waveform_peaks: None,
             waveform_status: Some(WaveformStatus::Pending),
             metadata: None,
@@ -971,6 +977,10 @@ pub struct MediaTrack {
     // Phase 7: Hierarchical Track-Level Color Grading
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub track_grading: Option<ColorGradingProfile>,
+
+    // Manual camera clock calibration offset relative to master anchor track
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub camera_offset: Option<CameraTimeOffset>,
 }
 
 fn default_visible() -> bool {
@@ -995,6 +1005,7 @@ impl MediaTrack {
             transitions: None,
             ducking: None,
             track_grading: None,
+            camera_offset: None,
         }
     }
 }
@@ -1514,6 +1525,20 @@ impl Default for SyncPlacementMode {
     }
 }
 
+/// Manual camera clock calibration offset relative to master anchor track
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CameraTimeOffset {
+    pub track_id: String,
+    pub sign: String, // "+" or "-"
+    pub days: u32,
+    pub hours: u32,
+    pub minutes: u32,
+    pub seconds: u32,
+    pub milliseconds: u32,
+    pub total_offset_seconds: f64,
+}
+
 /// Synchronization request payload from frontend to backend
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -1531,6 +1556,8 @@ pub struct SyncRequest {
     pub placement_mode: Option<SyncPlacementMode>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_gap_seconds: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub camera_offsets: Option<Vec<CameraTimeOffset>>,
 }
 
 /// Synchronization response payload from backend to frontend
