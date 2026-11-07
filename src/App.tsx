@@ -14,7 +14,7 @@ import { VoiceoverModal } from './components/Voiceover/VoiceoverModal';
 import { NoiseProfileModal } from './components/Audio/NoiseProfileModal';
 import { TimelineAudioPlayer } from './components/Audio/TimelineAudioPlayer';
 import { ErrorBoundary } from './components/ErrorBoundary/ErrorBoundary';
-import { Film, Music, Video, Sparkles, ChevronLeft, ChevronRight, AlertCircle, RefreshCw } from 'lucide-react';
+import { Film, Music, Video, Sparkles, ChevronLeft, ChevronRight, AlertCircle, CheckCircle2, Info, X, RefreshCw } from 'lucide-react';
 import { useTimelineStore, updateAppTitle, isTauri } from './store/timelineStore';
 import { useShortcutStore, normalizeKeyEvent } from './store/shortcutStore';
 import { filePosterCache, getNearestCachedFrame } from './utils/frameCacheService';
@@ -61,6 +61,8 @@ export const App: React.FC = () => {
     restoreCrashSnapshot,
     discardCrashSnapshot,
     initAutoSaveWorker,
+    appToast,
+    dismissToast,
   } = useTimelineStore(
     useShallow((state) => ({
       togglePlayPause: state.togglePlayPause,
@@ -102,6 +104,8 @@ export const App: React.FC = () => {
       restoreCrashSnapshot: state.restoreCrashSnapshot,
       discardCrashSnapshot: state.discardCrashSnapshot,
       initAutoSaveWorker: state.initAutoSaveWorker,
+      appToast: state.appToast,
+      dismissToast: state.dismissToast,
     }))
   );
 
@@ -668,6 +672,60 @@ export const App: React.FC = () => {
             <span className="text-[10px] text-[#A855F7] font-mono">
               Drop on cut joint between clips
             </span>
+          </div>
+        </div>
+      )}
+      {/* Global Sleek Desktop Notification Toast */}
+      {appToast && (
+        <div className="fixed top-14 right-6 z-[999999] max-w-sm w-full bg-[#14161F]/95 border border-[#2B3040] shadow-2xl rounded-xl p-3.5 backdrop-blur-md animate-in slide-in-from-top-2 duration-200 select-none ring-1 ring-white/10">
+          <div className="flex items-start gap-3">
+            <div
+              className={`p-1.5 rounded-lg shrink-0 ${
+                appToast.type === 'warning'
+                  ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                  : appToast.type === 'error'
+                  ? 'bg-red-500/15 text-red-400 border border-red-500/30'
+                  : appToast.type === 'success'
+                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                  : 'bg-[#00F0FF]/15 text-[#00F0FF] border border-[#00F0FF]/30'
+              }`}
+            >
+              {appToast.type === 'warning' || appToast.type === 'error' ? (
+                <AlertCircle size={16} />
+              ) : appToast.type === 'success' ? (
+                <CheckCircle2 size={16} />
+              ) : (
+                <Info size={16} />
+              )}
+            </div>
+
+            <div className="flex-1 min-w-0 pt-0.5">
+              {appToast.title && (
+                <div className="text-xs font-bold text-[#F0F3F8] leading-tight mb-1">
+                  {appToast.title}
+                </div>
+              )}
+              <div className="text-[11px] text-[#A0AEC0] leading-relaxed break-words">
+                {appToast.message}
+              </div>
+              {appToast.details && appToast.details.length > 0 && (
+                <div className="mt-1.5 max-h-24 overflow-y-auto space-y-0.5 text-[10px] font-mono text-[#8A92A6] bg-[#0D0E13] p-1.5 rounded border border-[#222630]">
+                  {appToast.details.map((item, idx) => (
+                    <div key={idx} className="truncate">
+                      • {item}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={dismissToast}
+              className="text-[#64748B] hover:text-white p-1 rounded-md hover:bg-white/10 transition-colors shrink-0 cursor-pointer"
+              title="Dismiss"
+            >
+              <X size={13} />
+            </button>
           </div>
         </div>
       )}

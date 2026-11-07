@@ -435,7 +435,25 @@ export interface ActiveVideoLayer {
   zIndex: number;
 }
 
+export interface AppToast {
+  id: string;
+  type: 'info' | 'warning' | 'error' | 'success';
+  title?: string;
+  message: string;
+  details?: string[];
+}
+
 export interface TimelineState {
+  // Desktop Toast Notifications
+  appToast: AppToast | null;
+  showToast: (toast: {
+    type?: 'info' | 'warning' | 'error' | 'success';
+    title?: string;
+    message: string;
+    details?: string[];
+  }) => void;
+  dismissToast: () => void;
+
   project: TimelineProject;
   tracks: MediaTrack[];
   bins: MediaBin[];
@@ -628,6 +646,7 @@ export interface TimelineState {
   moveAssetToBin: (assetId: string, binId?: string) => void;
   selectAsset: (assetId: string | null) => void;
   addAssetToTrack: (assetId: string, trackId: string, targetSeconds?: number) => void;
+  addAssetsToTrack: (assetIds: string[], trackId?: string, targetSeconds?: number) => void;
 
   // Dynamic Tracks
   addTrack: (trackType: 'video' | 'audio' | 'text', name?: string) => string;
@@ -1240,6 +1259,26 @@ const activeAnalyzeRequests = new Set<string>();
 const activePreviewRequests = new Set<string>();
 
 export const useTimelineStore = create<TimelineState>((set, get) => ({
+  appToast: null,
+  showToast: (toast) => {
+    const id = Date.now().toString(36);
+    set({
+      appToast: {
+        id,
+        type: toast.type || 'info',
+        title: toast.title,
+        message: toast.message,
+        details: toast.details,
+      },
+    });
+    setTimeout(() => {
+      if (get().appToast?.id === id) {
+        set({ appToast: null });
+      }
+    }, 5000);
+  },
+  dismissToast: () => set({ appToast: null }),
+
   project: INITIAL_PROJECT,
   tracks: INITIAL_TRACKS,
   bins: INITIAL_BINS,
@@ -2164,11 +2203,44 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
       return;
     }
 
-    const { activeBinId } = get();
+    const { activeBinId, assets } = get();
+    const existingPathSet = new Set(
+      assets.map((a) => (a.filePath ? a.filePath.replace(/\\/g, '/').toLowerCase() : ''))
+    );
+    const existingNameSet = new Set(assets.map((a) => a.name.toLowerCase()));
+
+    const duplicates: string[] = [];
+    const uniqueFiles: File[] = [];
+
+    fileList.forEach((file) => {
+      const filePath = (file as any).path ? (file as any).path.replace(/\\/g, '/').toLowerCase() : '';
+      if ((filePath && existingPathSet.has(filePath)) || existingNameSet.has(file.name.toLowerCase())) {
+        duplicates.push(file.name);
+      } else {
+        if (filePath) existingPathSet.add(filePath);
+        existingNameSet.add(file.name.toLowerCase());
+        uniqueFiles.push(file);
+      }
+    });
+
+    if (duplicates.length > 0) {
+      get().showToast({
+        type: 'warning',
+        title: 'Duplicate Media Skipped',
+        message:
+          duplicates.length === 1
+            ? `"${duplicates[0]}" is already in your Media Pool.`
+            : `${duplicates.length} files are already in your Media Pool:`,
+        details: duplicates.length > 1 ? duplicates : undefined,
+      });
+    }
+
+    if (uniqueFiles.length === 0) return;
+
     const targetBin = activeBinId === 'all' ? undefined : activeBinId;
     const newAssets: MediaAsset[] = [];
 
-    fileList.forEach((file, index) => {
+    uniqueFiles.forEach((file, index) => {
       const isAudio = file.type.startsWith('audio') || file.name.endsWith('.wav') || file.name.endsWith('.mp3');
       const durationSec = 30 + (index % 5) * 15;
 
@@ -2204,11 +2276,46 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
     const { activeBinId, assets, initIngestEventListener } = get();
     initIngestEventListener();
 
+    // Prevent duplicate imports: Normalize and check against existing assets
+    const existingPathSet = new Set(
+      assets.map((a) => (a.filePath ? a.filePath.replace(/\\/g, '/').toLowerCase() : ''))
+    );
+    const existingNameSet = new Set(assets.map((a) => a.name.toLowerCase()));
+
+    const duplicates: string[] = [];
+    const uniquePaths: string[] = [];
+
+    paths.forEach((p) => {
+      const normPath = p.replace(/\\/g, '/').toLowerCase();
+      const fileName = p.split(/[\\/]/).pop() || p;
+      if (existingPathSet.has(normPath) || existingNameSet.has(fileName.toLowerCase())) {
+        duplicates.push(fileName);
+      } else {
+        existingPathSet.add(normPath);
+        existingNameSet.add(fileName.toLowerCase());
+        uniquePaths.push(p);
+      }
+    });
+
+    if (duplicates.length > 0) {
+      get().showToast({
+        type: 'warning',
+        title: 'Duplicate Media Skipped',
+        message:
+          duplicates.length === 1
+            ? `"${duplicates[0]}" is already in your Media Pool.`
+            : `${duplicates.length} files are already in your Media Pool:`,
+        details: duplicates.length > 1 ? duplicates : undefined,
+      });
+    }
+
+    if (uniquePaths.length === 0) return;
+
     const targetBin = activeBinId === 'all' ? undefined : activeBinId;
     const timestamp = Date.now();
 
     // 1. Immediately insert placeholder skeleton cards for instantaneous UI response
-    const skeletonAssets: MediaAsset[] = paths.map((filePath, index) => {
+    const skeletonAssets: MediaAsset[] = uniquePaths.map((filePath, index) => {
       const fileName = filePath.split(/[\\/]/).pop() || filePath;
       const isAudio = /\.(wav|mp3|aac|m4a|flac|ogg)$/i.test(fileName);
       return {
@@ -2228,7 +2335,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
     set({
       assets: [...assets, ...skeletonAssets],
       isIngesting: true,
-      ingestTotal: paths.length,
+      ingestTotal: uniquePaths.length,
       ingestCurrent: 0,
       ingestStatusMessage: 'pending',
     });
@@ -2236,7 +2343,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
     // 2. Dispatch batch import to Rust backend queue
     if (isTauri) {
       try {
-        await tauriInvoke('import_media_batch', { filePaths: paths });
+        await tauriInvoke('import_media_batch', { filePaths: uniquePaths });
       } catch (err) {
         console.error('Failed to dispatch import_media_batch:', err);
         set({ isIngesting: false });
@@ -2365,6 +2472,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
   setActiveDragAsset: (activeDragAsset) => set({ activeDragAsset }),
 
   addAssetToTrack: (assetId, trackId, targetSeconds) => {
+    get().pushHistory(); // Enable instant Ctrl+Z undo
     const { assets, tracks, playhead } = get();
     const asset = assets.find((a) => a.id === assetId);
     if (!asset) return;
@@ -2468,6 +2576,136 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
         filePath: newClip.filePath,
         pointsPerSec: 25,
       }).catch(() => {});
+    }
+  },
+
+  addAssetsToTrack: (assetIds, trackId, targetSeconds) => {
+    if (assetIds.length === 0) return;
+    get().pushHistory(); // Single history push so Ctrl+Z undos adding all selected assets at once!
+
+    const { assets, tracks, playhead } = get();
+    const assetsToAdd = assetIds
+      .map((id) => assets.find((a) => a.id === id))
+      .filter((a): a is MediaAsset => Boolean(a));
+
+    if (assetsToAdd.length === 0) return;
+
+    let updatedTracks = [...tracks];
+    const newClipsCreated: Clip[] = [];
+    const trackTimeCursors: Record<string, number> = {};
+
+    assetsToAdd.forEach((asset, idx) => {
+      // Find matching destination track
+      let targetTrack: MediaTrack | undefined;
+      if (trackId) {
+        const candidate = updatedTracks.find((t) => t.id === trackId);
+        if (candidate && (candidate.trackType || candidate.type) === asset.mediaType) {
+          targetTrack = candidate;
+        }
+      }
+
+      if (!targetTrack) {
+        targetTrack = updatedTracks.find((t) => (t.trackType || t.type) === asset.mediaType);
+      }
+
+      if (!targetTrack) {
+        const isAudio = asset.mediaType === 'audio';
+        const newTrackId = `track-${isAudio ? 'a' : 'v'}-${Date.now().toString(36)}-${idx}`;
+        const count = updatedTracks.filter((t) => (t.trackType || t.type) === asset.mediaType).length + 1;
+        targetTrack = {
+          id: newTrackId,
+          name: isAudio ? `Audio ${count}` : `Video ${count}`,
+          type: isAudio ? 'audio' : 'video',
+          trackType: isAudio ? 'audio' : 'video',
+          clips: [],
+          muted: false,
+          locked: false,
+          visible: true,
+          volume: 1,
+          pan: 0,
+          solo: false,
+        };
+        updatedTracks.push(targetTrack);
+      }
+
+      const durSec = asset.durationSeconds || 30.0;
+      let startSec = trackTimeCursors[targetTrack.id];
+      if (startSec === undefined) {
+        startSec = targetSeconds !== undefined ? targetSeconds : playhead;
+      }
+
+      const clip: Clip = {
+        id: `clip-${Date.now()}-${idx}`,
+        trackId: targetTrack.id,
+        mediaId: asset.id,
+        name: asset.name,
+        filePath: asset.filePath,
+        mediaType: asset.mediaType,
+        startTimeMs: Math.round(startSec * 1000),
+        durationMs: Math.round(durSec * 1000),
+        sourceOffsetMs: 0,
+        synced: false,
+        isSynced: false,
+        startPositionSeconds: startSec,
+        durationSeconds: durSec,
+        inPointSeconds: 0,
+        outPointSeconds: durSec,
+        hasProxy: Boolean(asset.hasProxy),
+        proxyPath: asset.proxyPath,
+        waveformStatus: { type: 'pending' },
+        metadata: {
+          durationSeconds: durSec,
+          width: asset.width,
+          height: asset.height,
+          framerate: asset.framerate,
+          sampleRate: asset.sampleRate,
+          codec: asset.mediaType === 'audio' ? 'pcm_s24le' : 'h264_nvenc',
+          creationTime: asset.creationTime,
+          hasGyroData: Boolean(asset.hasGyroData),
+          gyroFormat: asset.gyroFormat,
+        },
+      };
+
+      newClipsCreated.push(clip);
+      trackTimeCursors[targetTrack.id] = startSec + durSec;
+
+      updatedTracks = updatedTracks.map((t) => {
+        if (t.id === targetTrack!.id) {
+          const updatedClips = [...t.clips, clip];
+          return {
+            ...t,
+            clips: updatedClips,
+            timeOffsetSeconds: Math.min(...updatedClips.map((c) => c.startPositionSeconds ?? 0)),
+          };
+        }
+        return t;
+      });
+    });
+
+    const maxClipEnd = Math.max(
+      ...updatedTracks.flatMap((t) => t.clips).map((c) => (c.startPositionSeconds || 0) + (c.durationSeconds || 0)),
+      120
+    );
+
+    set((state) => ({
+      tracks: updatedTracks,
+      selectedClipId: newClipsCreated[newClipsCreated.length - 1]?.id || state.selectedClipId,
+      project: {
+        ...state.project,
+        durationMs: Math.max(state.project.durationMs, Math.round(maxClipEnd * 1000)),
+      },
+    }));
+
+    if (isTauri) {
+      newClipsCreated.forEach((c) => {
+        if (c.filePath) {
+          tauriInvoke('start_background_waveform', {
+            clipId: c.id,
+            filePath: c.filePath,
+            pointsPerSec: 25,
+          }).catch(() => {});
+        }
+      });
     }
   },
 

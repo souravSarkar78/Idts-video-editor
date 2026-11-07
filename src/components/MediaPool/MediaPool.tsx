@@ -23,6 +23,9 @@ import {
   Split,
   Loader2,
   AlertCircle,
+  ZoomIn,
+  ZoomOut,
+  X,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useTimelineStore, isTauri, tauriInvoke } from '../../store/timelineStore';
@@ -62,6 +65,7 @@ export const MediaPool: React.FC = () => {
     setDraggedAsset,
     setActiveDragAsset,
     addAssetToTrack,
+    addAssetsToTrack,
     tracks,
     generateClipProxy,
     deleteClipProxy,
@@ -95,6 +99,7 @@ export const MediaPool: React.FC = () => {
       setDraggedAsset: state.setDraggedAsset,
       setActiveDragAsset: state.setActiveDragAsset,
       addAssetToTrack: state.addAssetToTrack,
+      addAssetsToTrack: state.addAssetsToTrack,
       tracks: state.tracks,
       generateClipProxy: state.generateClipProxy,
       deleteClipProxy: state.deleteClipProxy,
@@ -121,6 +126,25 @@ export const MediaPool: React.FC = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
+
+  // Thumbnail Size / Zoom Level (with persistent localStorage remembering user's choice)
+  const [gridCardSize, setGridCardSize] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('antigravity_mediapool_zoom');
+      if (saved) {
+        const val = parseInt(saved, 10);
+        if (!isNaN(val) && val >= 75 && val <= 200) return val;
+      }
+    } catch {}
+    return 100; // comfortable compact default (was 150 before)
+  });
+
+  const handleZoomChange = (val: number) => {
+    setGridCardSize(val);
+    try {
+      localStorage.setItem('antigravity_mediapool_zoom', val.toString());
+    } catch {}
+  };
 
   // Virtual Scrolling State
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -506,10 +530,16 @@ export const MediaPool: React.FC = () => {
         const currentPlayhead = store.playhead;
         const currentZoom = store.zoom;
 
+        const assetsToDrop =
+          selectedMediaIds.size > 1 && selectedMediaIds.has(asset.id)
+            ? filteredAssets.filter((a) => selectedMediaIds.has(a.id))
+            : [asset];
+        const assetIds = assetsToDrop.map((a) => a.id);
+
         if (binElem) {
           const binId = binElem.getAttribute('data-bin-id');
           if (binId && binId !== 'all') {
-            moveAssetToBin(asset.id, binId);
+            assetIds.forEach((id) => moveAssetToBin(id, binId));
           }
         } else if (trackLane) {
           const trackId = trackLane.getAttribute('data-track-id');
@@ -524,12 +554,12 @@ export const MediaPool: React.FC = () => {
               : rawSec;
           }
           if (trackId) {
-            store.addAssetToTrack(asset.id, trackId, targetSec);
+            store.addAssetsToTrack(assetIds, trackId, targetSec);
           }
         } else if (trackHeader) {
           const trackId = trackHeader.getAttribute('data-track-header-id');
           if (trackId) {
-            store.addAssetToTrack(asset.id, trackId, currentPlayhead);
+            store.addAssetsToTrack(assetIds, trackId, currentPlayhead);
           }
         } else if (timelineArea) {
           const scrollElem = document.querySelector('[data-timeline-scroll]');
@@ -544,12 +574,7 @@ export const MediaPool: React.FC = () => {
           }
           const matchingTrack =
             currentTracks.find((t) => (t.trackType || t.type) === asset.mediaType) || currentTracks[0];
-          if (matchingTrack) {
-            store.addAssetToTrack(asset.id, matchingTrack.id, targetSec);
-          } else {
-            const newId = store.addTrack(asset.mediaType === 'audio' ? 'audio' : 'video');
-            store.addAssetToTrack(asset.id, newId, targetSec);
-          }
+          store.addAssetsToTrack(assetIds, matchingTrack?.id, targetSec);
         }
 
         setActiveDragAsset(null);
@@ -576,11 +601,12 @@ export const MediaPool: React.FC = () => {
   };
 
   const handleQuickAdd = (asset: MediaAsset) => {
-    const targetTrack =
-      tracks.find((t) => (t.trackType || t.type) === asset.mediaType) || tracks[0];
-    if (targetTrack) {
-      addAssetToTrack(asset.id, targetTrack.id);
-    }
+    const assetsToAdd =
+      selectedMediaIds.size > 1 && selectedMediaIds.has(asset.id)
+        ? filteredAssets.filter((a) => selectedMediaIds.has(a.id))
+        : [asset];
+
+    addAssetsToTrack(assetsToAdd.map((a) => a.id));
   };
 
   if (activeTab === 'audio') {
@@ -616,11 +642,11 @@ export const MediaPool: React.FC = () => {
   }
 
   // Virtual Scrolling Calculations for Grid & List
-  const effWidth = Math.max(160, containerWidth - 24);
-  const numCols = Math.max(1, Math.floor((effWidth + 10) / (150 + 10)));
-  const colWidth = Math.floor((effWidth - (numCols - 1) * 10) / numCols);
-  const cardHeight = Math.round((colWidth * 9) / 16) + 32;
-  const gridRowHeight = cardHeight + 10;
+  const effWidth = Math.max(120, containerWidth - 24);
+  const numCols = Math.max(1, Math.floor((effWidth + 8) / (gridCardSize + 8)));
+  const colWidth = Math.floor((effWidth - (numCols - 1) * 8) / numCols);
+  const cardHeight = Math.round((colWidth * 9) / 16) + 30;
+  const gridRowHeight = cardHeight + 8;
   const totalGridRows = Math.ceil(filteredAssets.length / numCols);
   const startGridRow = Math.max(0, Math.floor(scrollTop / gridRowHeight) - 2);
   const endGridRow = Math.min(totalGridRows, Math.ceil((scrollTop + containerHeight) / gridRowHeight) + 2);
@@ -799,64 +825,90 @@ export const MediaPool: React.FC = () => {
 
       {/* MAIN ASSET POOL AREA */}
       <div className="flex-1 flex flex-col overflow-hidden bg-[#14161B]">
-        {/* Pool Toolbar: Import Buttons, Filters, Search & View Toggle */}
-        <div className="h-11 border-b border-[#222630] px-3 flex items-center justify-between gap-3 shrink-0 bg-[#121419]">
-          {/* CapCut Style Import CTA Buttons */}
-          <div className="flex items-center gap-2">
-            {!isSidebarOpen && (
+        {/* Pool Toolbar Header: 2 Structured Rows */}
+        <div className="border-b border-[#222630] bg-[#121419] shrink-0">
+          {/* Row 1: Primary Actions (Import, Folder, Proxies) & Search Bar */}
+          <div className="h-10 px-3 flex items-center justify-between gap-2 border-b border-[#222630]/60">
+            {/* Left: Sidebar Toggle, Import CTA Buttons & Proxies */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              {!isSidebarOpen && (
+                <button
+                  onClick={() => setIsSidebarOpen(true)}
+                  className="p-1.5 rounded bg-[#1A1D24] hover:bg-[#222630] border border-[#222630] text-[#8A92A6] hover:text-[#00F0FF] transition-colors"
+                  title="Show Bins & Folders"
+                >
+                  <ChevronRight size={13} />
+                </button>
+              )}
+
               <button
-                onClick={() => setIsSidebarOpen(true)}
-                className="p-1.5 rounded bg-[#1A1D24] hover:bg-[#222630] border border-[#222630] text-[#8A92A6] hover:text-[#00F0FF] transition-colors mr-0.5"
-                title="Show Bins & Folders"
+                onClick={handleNativeImportFiles}
+                disabled={isImporting}
+                className="flex items-center gap-1 px-2.5 py-1 bg-[#00F0FF] hover:bg-[#34f3ff] text-[#0D0E11] rounded text-[11px] font-bold transition-all shadow-[0_0_8px_rgba(0,240,255,0.3)] cursor-pointer"
+                title="Import Media Files"
               >
-                <ChevronRight size={13} />
+                <Plus size={13} strokeWidth={3} />
+                <span>{isImporting ? 'Probing...' : 'Import'}</span>
               </button>
-            )}
 
-            <button
-              onClick={handleNativeImportFiles}
-              disabled={isImporting}
-              className="flex items-center gap-1.5 px-3 py-1 bg-[#00F0FF] hover:bg-[#34f3ff] text-[#0D0E11] rounded text-xs font-bold transition-all shadow-[0_0_8px_rgba(0,240,255,0.3)] cursor-pointer"
-              title="Open Native Windows File Picker"
-            >
-              <Plus size={14} strokeWidth={3} />
-              <span>{isImporting ? 'Probing...' : 'Import'}</span>
-            </button>
+              <button
+                onClick={handleNativeImportFolder}
+                disabled={isImporting}
+                className="flex items-center gap-1 px-2 py-1 bg-[#1A1D24] hover:bg-[#222630] border border-[#222630] text-[#F0F3F8] rounded text-[11px] font-medium transition-colors cursor-pointer"
+                title="Select folder to import and probe all clips"
+              >
+                <Folder size={12} className="text-[#00F0FF]" />
+                <span className="hidden sm:inline">Folder</span>
+              </button>
 
-            <button
-              onClick={handleNativeImportFolder}
-              disabled={isImporting}
-              className="flex items-center gap-1.5 px-2.5 py-1 bg-[#1A1D24] hover:bg-[#222630] border border-[#222630] text-[#F0F3F8] rounded text-xs font-medium transition-colors cursor-pointer"
-              title="Select folder to import and probe all clips"
-            >
-              <Folder size={12} className="text-[#00F0FF]" />
-              <span>Folder</span>
-            </button>
+              {/* Optional Proxy Import Checkbox */}
+              <label
+                className="flex items-center gap-1.5 px-2 py-1 rounded bg-[#181B22] border border-[#222630] text-[10px] text-[#8A92A6] hover:text-[#F0F3F8] cursor-pointer select-none whitespace-nowrap shrink-0 transition-colors"
+                title="When checked, imported video files will automatically transcode lightweight editing proxies in the background"
+              >
+                <input
+                  type="checkbox"
+                  checked={createProxiesNow}
+                  onChange={(e) => {
+                    setCreateProxiesNow(e.target.checked);
+                    (window as any).__IDTS_AUTO_GEN_PROXIES__ = e.target.checked;
+                  }}
+                  className="rounded bg-[#0D0E11] border-[#222630] text-[#00F0FF] focus:ring-0 cursor-pointer w-3.5 h-3.5 accent-[#00F0FF] shrink-0"
+                />
+                <span>Proxies</span>
+              </label>
+            </div>
 
-            {/* Optional Proxy Import Checkbox */}
-            <label
-              className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#181B22] border border-[#222630] text-[11px] text-[#8A92A6] hover:text-[#F0F3F8] cursor-pointer select-none whitespace-nowrap shrink-0 transition-colors"
-              title="When checked, imported video files will automatically transcode lightweight editing proxies in the background"
-            >
+            {/* Right: Search Bar */}
+            <div className="relative flex-1 max-w-[160px] min-w-[70px]">
+              <Search size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#64748B]" />
               <input
-                type="checkbox"
-                checked={createProxiesNow}
-                onChange={(e) => {
-                  setCreateProxiesNow(e.target.checked);
-                  (window as any).__IDTS_AUTO_GEN_PROXIES__ = e.target.checked;
-                }}
-                className="rounded bg-[#0D0E11] border-[#222630] text-[#00F0FF] focus:ring-0 cursor-pointer w-3.5 h-3.5 accent-[#00F0FF] shrink-0"
+                type="text"
+                placeholder="Search..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-7 pr-5 py-1 text-[11px] bg-[#0D0E11] border border-[#222630] rounded text-[#F0F3F8] placeholder-[#64748B] focus:outline-none focus:border-[#00F0FF]/50"
               />
-              <span className="whitespace-nowrap">Create proxies on import</span>
-            </label>
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[#64748B] hover:text-white cursor-pointer"
+                >
+                  <X size={10} />
+                </button>
+              )}
+            </div>
+          </div>
 
+          {/* Row 2: Filter Pills & Multi-Select Batch Action Bar */}
+          <div className="h-8 px-3 flex items-center justify-between gap-2 bg-[#0F1116]">
             {/* Filter Pills */}
-            <div className="flex items-center bg-[#0D0E11] p-0.5 rounded border border-[#222630] text-[11px]">
+            <div className="flex items-center bg-[#0D0E11] p-0.5 rounded border border-[#222630] text-[10px]">
               <button
                 onClick={() => setFilterType('all')}
                 className={`px-2 py-0.5 rounded font-medium transition-colors ${
                   filterType === 'all'
-                    ? 'bg-[#222630] text-[#00F0FF]'
+                    ? 'bg-[#222630] text-[#00F0FF] font-semibold'
                     : 'text-[#8A92A6] hover:text-[#F0F3F8]'
                 }`}
               >
@@ -866,7 +918,7 @@ export const MediaPool: React.FC = () => {
                 onClick={() => setFilterType('video')}
                 className={`px-2 py-0.5 rounded font-medium transition-colors ${
                   filterType === 'video'
-                    ? 'bg-[#222630] text-[#00F0FF]'
+                    ? 'bg-[#222630] text-[#00F0FF] font-semibold'
                     : 'text-[#8A92A6] hover:text-[#F0F3F8]'
                 }`}
               >
@@ -876,55 +928,42 @@ export const MediaPool: React.FC = () => {
                 onClick={() => setFilterType('audio')}
                 className={`px-2 py-0.5 rounded font-medium transition-colors ${
                   filterType === 'audio'
-                    ? 'bg-[#222630] text-[#00F0FF]'
+                    ? 'bg-[#222630] text-[#00F0FF] font-semibold'
                     : 'text-[#8A92A6] hover:text-[#F0F3F8]'
                 }`}
               >
                 Audio
               </button>
             </div>
-          </div>
 
-          {/* Right Toolbar: Batch Delete, Search & Grid/List view toggle */}
-          <div className="flex items-center gap-2">
-            {selectedMediaIds.size > 0 && (
-              <button
-                onClick={() => initiateMediaDeletion(Array.from(selectedMediaIds))}
-                className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/40 transition-colors shadow-sm cursor-pointer"
-                title={`Delete ${selectedMediaIds.size} selected asset(s)`}
-              >
-                <Trash2 size={12} />
-                <span>Delete ({selectedMediaIds.size})</span>
-              </button>
+            {/* Right: Batch Selection Actions or Active Bin Label */}
+            {selectedMediaIds.size > 0 ? (
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  onClick={() => {
+                    const assetsToAdd = filteredAssets.filter((a) => selectedMediaIds.has(a.id));
+                    if (assetsToAdd.length > 0) addAssetsToTrack(assetsToAdd.map((a) => a.id));
+                  }}
+                  className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded bg-[#00F0FF] hover:bg-[#34f3ff] text-[#0D0E11] transition-all shadow-[0_0_6px_rgba(0,240,255,0.3)] cursor-pointer"
+                  title={`Add ${selectedMediaIds.size} selected asset(s) to timeline`}
+                >
+                  <Plus size={11} strokeWidth={3} />
+                  <span>Add ({selectedMediaIds.size})</span>
+                </button>
+                <button
+                  onClick={() => initiateMediaDeletion(Array.from(selectedMediaIds))}
+                  className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-semibold rounded bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/40 transition-colors shadow-sm cursor-pointer"
+                  title={`Delete ${selectedMediaIds.size} selected asset(s)`}
+                >
+                  <Trash2 size={11} />
+                  <span>Delete</span>
+                </button>
+              </div>
+            ) : (
+              <span className="text-[10px] font-mono text-[#555E70] truncate">
+                {activeBinId === 'all' ? 'All Media' : bins.find((b) => b.id === activeBinId)?.name || 'Media'}
+              </span>
             )}
-
-            <div className="relative">
-              <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#64748B]" />
-              <input
-                type="text"
-                placeholder="Search clips..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-28 focus:w-40 transition-all pl-7 pr-2 py-1 text-[11px] bg-[#0D0E11] border border-[#222630] rounded text-[#F0F3F8] placeholder-[#64748B] focus:outline-none focus:border-[#00F0FF]/50"
-              />
-            </div>
-
-            <div className="flex items-center bg-[#0D0E11] rounded border border-[#222630] p-0.5 text-[#8A92A6]">
-              <button
-                onClick={() => setViewMode('grid')}
-                className={`p-1 rounded ${viewMode === 'grid' ? 'bg-[#222630] text-[#00F0FF]' : 'hover:text-[#F0F3F8]'}`}
-                title="Grid View"
-              >
-                <Grid size={13} />
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className={`p-1 rounded ${viewMode === 'list' ? 'bg-[#222630] text-[#00F0FF]' : 'hover:text-[#F0F3F8]'}`}
-                title="List View"
-              >
-                <List size={13} />
-              </button>
-            </div>
           </div>
         </div>
 
@@ -1226,6 +1265,70 @@ export const MediaPool: React.FC = () => {
             </div>
           )}
         </div>
+
+        {/* Bottom Status Bar: Item Count, Zoom Slider & View Mode */}
+        <div className="h-8 border-t border-[#222630] px-3 flex items-center justify-between gap-2 shrink-0 bg-[#0E1015] select-none text-[11px] text-[#8A92A6]">
+          {/* Left: Summary / Selection Stats */}
+          <div className="flex items-center gap-1.5 font-mono text-[10px] truncate text-[#64748B]">
+            <span>
+              {filteredAssets.length} {filteredAssets.length === 1 ? 'item' : 'items'}
+            </span>
+            {selectedMediaIds.size > 0 && (
+              <span className="text-[#00F0FF] font-semibold">
+                • {selectedMediaIds.size} selected
+              </span>
+            )}
+          </div>
+
+          {/* Right: Zoom Slider & Grid/List View Mode Toggle */}
+          <div className="flex items-center gap-2 shrink-0">
+            {viewMode === 'grid' && (
+              <div
+                className="flex items-center gap-1.5 px-2 py-0.5 bg-[#14161B] rounded border border-[#222630] text-[10px] text-[#8A92A6]"
+                title="Thumbnail Size / Zoom"
+              >
+                <ZoomOut
+                  size={11}
+                  className="hover:text-white transition-colors cursor-pointer"
+                  onClick={() => handleZoomChange(Math.max(75, gridCardSize - 15))}
+                />
+                <input
+                  type="range"
+                  min={75}
+                  max={200}
+                  step={5}
+                  value={gridCardSize}
+                  onChange={(e) => handleZoomChange(Number(e.target.value))}
+                  className="w-16 sm:w-20 h-1 bg-[#222630] rounded appearance-none cursor-pointer accent-[#00F0FF]"
+                />
+                <ZoomIn
+                  size={11}
+                  className="hover:text-white transition-colors cursor-pointer"
+                  onClick={() => handleZoomChange(Math.min(200, gridCardSize + 15))}
+                />
+              </div>
+            )}
+
+            <div className="flex items-center bg-[#14161B] rounded border border-[#222630] p-0.5 text-[#8A92A6]">
+              <button
+                type="button"
+                onClick={() => setViewMode('grid')}
+                className={`p-1 rounded transition-colors ${viewMode === 'grid' ? 'bg-[#222630] text-[#00F0FF]' : 'hover:text-[#F0F3F8]'}`}
+                title="Grid View"
+              >
+                <Grid size={12} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('list')}
+                className={`p-1 rounded transition-colors ${viewMode === 'list' ? 'bg-[#222630] text-[#00F0FF]' : 'hover:text-[#F0F3F8]'}`}
+                title="List View"
+              >
+                <List size={12} />
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Floating Asset Context Menu */}
@@ -1279,7 +1382,11 @@ export const MediaPool: React.FC = () => {
             className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-[#1C202B] text-[#F0F3F8] transition-colors cursor-pointer text-left"
           >
             <Plus size={13} className="text-[#8A92A6]" />
-            <span>Add to Timeline Track</span>
+            <span>
+              {selectedMediaIds.size > 1 && selectedMediaIds.has(assetContextMenu.asset.id)
+                ? `Add ${selectedMediaIds.size} Selected to Timeline`
+                : 'Add to Timeline Track'}
+            </span>
           </button>
 
           <button
