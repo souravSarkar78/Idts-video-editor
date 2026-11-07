@@ -212,6 +212,8 @@ export const ProgramMonitor: React.FC = () => {
     setSplitStabilizationComparison,
     splitStabilizationPosition,
     setSplitStabilizationPosition,
+    isSilenceModalOpen,
+    isNoiseModalOpen,
     splitStabilizationMode,
     setSplitStabilizationMode,
     stabilizationPreviewUrls,
@@ -268,6 +270,8 @@ export const ProgramMonitor: React.FC = () => {
       setSplitStabilizationComparison: state.setSplitStabilizationComparison,
       splitStabilizationPosition: state.splitStabilizationPosition,
       setSplitStabilizationPosition: state.setSplitStabilizationPosition,
+      isSilenceModalOpen: state.isSilenceModalOpen,
+      isNoiseModalOpen: state.isNoiseModalOpen,
       splitStabilizationMode: state.splitStabilizationMode,
       setSplitStabilizationMode: state.setSplitStabilizationMode,
       stabilizationPreviewUrls: state.stabilizationPreviewUrls,
@@ -2883,20 +2887,25 @@ export const ProgramMonitor: React.FC = () => {
           )}
 
           {/* Program Monitor Direct Manipulation Transform Bounding Box */}
-          {selectedClip && selectedClipTransform && activeVideoLayers.some((l) => l.clip.id === selectedClip.id) && inspectorTab === 'video' && (
-            <div
-              style={{
-                position: 'absolute',
-                inset: 0,
-                width: '100%',
-                height: '100%',
-                transformOrigin: 'center center',
-                transform: `translate(${selectedClipTransform.positionX}px, ${selectedClipTransform.positionY}px) rotate(${selectedClipTransform.rotation}deg) scale(${selectedClipTransform.scale})`,
-                pointerEvents: 'none',
-                zIndex: 60,
-              }}
-              className="border-2 border-[#00F0FF] shadow-[0_0_12px_rgba(0,240,255,0.4)] select-none"
-            >
+          {selectedClip &&
+            selectedClipTransform &&
+            activeVideoLayers.some((l) => l.clip.id === selectedClip.id) &&
+            inspectorTab === 'video' &&
+            !isSilenceModalOpen &&
+            !isNoiseModalOpen && (
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  width: '100%',
+                  height: '100%',
+                  transformOrigin: 'center center',
+                  transform: `translate(${selectedClipTransform.positionX}px, ${selectedClipTransform.positionY}px) rotate(${selectedClipTransform.rotation}deg) scale(${selectedClipTransform.scale})`,
+                  pointerEvents: 'none',
+                  zIndex: 20,
+                }}
+                className="border-2 border-[#00F0FF] shadow-[0_0_12px_rgba(0,240,255,0.4)] select-none"
+              >
               {/* Center Anchor Point Handle */}
               <div
                 onMouseDown={(e) => handleStartTransformDrag('center', e)}

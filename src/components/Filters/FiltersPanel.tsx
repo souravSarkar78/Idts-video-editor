@@ -422,10 +422,10 @@ export const FiltersPanel: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setCardScale('normal')}
-                className={`px-2 py-0.5 rounded transition-all ${
+                className={`px-2.5 py-1 rounded transition-all cursor-pointer ${
                   cardScale === 'normal'
-                    ? 'bg-[#222834] text-white font-bold'
-                    : 'text-[#64748B] hover:text-white'
+                    ? 'bg-[#00F0FF] text-black font-bold shadow-xs'
+                    : 'text-[#8A92A6] hover:text-white'
                 }`}
                 title="Normal size"
               >
@@ -434,10 +434,10 @@ export const FiltersPanel: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setCardScale('large')}
-                className={`px-2 py-0.5 rounded transition-all ${
+                className={`px-2.5 py-1 rounded transition-all cursor-pointer ${
                   cardScale === 'large'
                     ? 'bg-[#00F0FF] text-black font-bold shadow-xs'
-                    : 'text-[#64748B] hover:text-white'
+                    : 'text-[#8A92A6] hover:text-white'
                 }`}
                 title="Large size"
               >
@@ -450,21 +450,33 @@ export const FiltersPanel: React.FC = () => {
           <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
             {filteredPresets.length > 0 ? (
               <div
-                className={`grid ${
-                  cardScale === 'large'
-                    ? 'grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-x-4 gap-y-5'
-                    : 'grid-cols-[repeat(auto-fill,minmax(110px,1fr))] gap-x-3 gap-y-4'
-                }`}
+                className="grid transition-all duration-200"
+                style={{
+                  gridTemplateColumns:
+                    cardScale === 'large'
+                      ? 'repeat(auto-fill, minmax(145px, 1fr))'
+                      : 'repeat(auto-fill, minmax(96px, 1fr))',
+                  gap: cardScale === 'large' ? '18px 14px' : '14px 10px',
+                }}
               >
                 {filteredPresets.map((preset) => {
+                  const pLut = preset.lutPath?.toLowerCase();
+                  const cLut = activeClip?.lutPath?.toLowerCase();
+                  const gLut = activeClip?.colorGrading?.lutPath?.toLowerCase();
+
                   const isActive = Boolean(
-                    activeClip && (activeClip.filterId === preset.id || activeClip.lutPath === preset.lutPath)
+                    activeClip && (
+                      (Boolean(activeClip.filterId) && activeClip.filterId === preset.id) ||
+                      (pLut && cLut && (cLut === pLut || cLut.endsWith(pLut) || pLut.endsWith(cLut))) ||
+                      (pLut && gLut && (gLut === pLut || gLut.endsWith(pLut) || pLut.endsWith(gLut)))
+                    )
                   );
                   return (
                     <FilterCard
                       key={preset.id}
                       preset={preset}
                       isActive={isActive}
+                      cardScale={cardScale}
                       sampleMode={samplePreviewMode}
                       videoFrameSnapshot={videoFrameSnapshot}
                       onApply={(p) => applyFilterPreset(p, activeClip?.id)}

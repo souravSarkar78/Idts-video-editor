@@ -798,7 +798,10 @@ export interface TimelineState {
   autoCutSilence: (
     targetTrackId: string,
     thresholdDb: number,
-    minDurationSec: number
+    minDurationSec: number,
+    mode?: 'split_keep' | 'ripple_remove',
+    targetClipId?: string,
+    precomputedIntervals?: Array<[number, number]>
   ) => Promise<{ cutCount: number; removedSec: number; error?: string }>;
 
   // Spectral Noise Profile Modal
@@ -6135,8 +6138,15 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
   },
 
 
-  autoCutSilence: async (targetTrackId, thresholdDb, minDurationSec) => {
-    const { tracks, pushHistory } = get();
+  autoCutSilence: async (
+    targetTrackId,
+    thresholdDb,
+    minDurationSec,
+    mode = 'split_keep',
+    targetClipId?: string,
+    precomputedIntervals?: Array<[number, number]>
+  ) => {
+    const { tracks, pushHistory, waveformData } = get();
     const track = tracks.find((t) => t.id === targetTrackId);
     if (!track || track.clips.length === 0) {
       return { cutCount: 0, removedSec: 0 };
@@ -6148,28 +6158,86 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
 
     const newClips: Clip[] = [];
     let cumulativeShift = 0;
+    const nowTimestamp = Date.now();
+    let idCounter = 1;
 
     for (const clip of track.clips) {
+      // If targeting a specific clip only, skip all others instantly
+      if (targetClipId && clip.id !== targetClipId) {
+        const curStart = Math.max(
+          0,
+          (clip.startPositionSeconds ?? (clip.startTimeMs ? clip.startTimeMs / 1000 : 0)) -
+            (mode === 'ripple_remove' ? cumulativeShift : 0)
+        );
+        newClips.push({
+          ...clip,
+          startPositionSeconds: curStart,
+          startTimeMs: Math.round(curStart * 1000),
+        });
+        continue;
+      }
+
       const curIn = clip.inPointSeconds ?? (clip.sourceOffsetMs ? clip.sourceOffsetMs / 1000 : 0);
       const curDur = clip.durationSeconds ?? (clip.durationMs ? clip.durationMs / 1000 : 10);
       const curOut = curIn + curDur;
-      const curStart = Math.max(0, (clip.startPositionSeconds ?? (clip.startTimeMs ? clip.startTimeMs / 1000 : 0)) - cumulativeShift);
+      const curStart = Math.max(
+        0,
+        (clip.startPositionSeconds ?? (clip.startTimeMs ? clip.startTimeMs / 1000 : 0)) -
+          (mode === 'ripple_remove' ? cumulativeShift : 0)
+      );
 
       let silenceIntervals: Array<[number, number]> = [];
-      try {
-        if (isTauri) {
-          const res = await tauriInvoke<Array<[number, number]>>('detect_track_silence', {
-            path: clip.filePath,
-            thresholdDb,
-            durationSec: minDurationSec,
-          });
-          if (res) {
-            silenceIntervals = res;
+
+      // 1. If precomputed intervals are passed for this target clip, use them directly (0ms latency!)
+      if (targetClipId && clip.id === targetClipId && precomputedIntervals && precomputedIntervals.length > 0) {
+        silenceIntervals = precomputedIntervals;
+      } else {
+        // 2. High-speed in-memory peak check first (instantaneous, 0ms)
+        const peaks = (clip.filePath && waveformData[clip.filePath]) || [];
+        if (peaks.length > 0) {
+          const totalSec = clip.durationSeconds || curDur || 10;
+          const ptsPerSec = peaks.length / totalSec;
+          const linearThresh = Math.pow(10, thresholdDb / 20);
+          let inSil = false;
+          let silStart = 0;
+
+          for (let p = 0; p < peaks.length; p++) {
+            const t = p / ptsPerSec;
+            if (peaks[p] < linearThresh) {
+              if (!inSil) {
+                inSil = true;
+                silStart = t;
+              }
+            } else {
+              if (inSil) {
+                inSil = false;
+                if (t - silStart >= minDurationSec) {
+                  silenceIntervals.push([silStart, t]);
+                }
+              }
+            }
+          }
+          if (inSil && (peaks.length / ptsPerSec) - silStart >= minDurationSec) {
+            silenceIntervals.push([silStart, peaks.length / ptsPerSec]);
           }
         }
-      } catch (err: any) {
-        lastError = String(err?.message || err);
-        console.warn('detect_track_silence error:', err);
+
+        // 3. Fallback to Tauri sidecar only if no waveform cache is available
+        if (silenceIntervals.length === 0 && isTauri && clip.filePath) {
+          try {
+            const res = await tauriInvoke<Array<[number, number]>>('detect_track_silence', {
+              path: clip.filePath,
+              thresholdDb,
+              durationSec: minDurationSec,
+            });
+            if (res && res.length > 0) {
+              silenceIntervals = res;
+            }
+          } catch (err: any) {
+            lastError = String(err?.message || err);
+            console.warn('detect_track_silence error:', err);
+          }
+        }
       }
 
       const visibleSilences: Array<[number, number]> = [];
@@ -6191,51 +6259,118 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
       }
 
       visibleSilences.sort((a, b) => a[0] - b[0]);
-      const audibleSlices: Array<[number, number]> = [];
-      let cursor = curIn;
 
-      for (const [silStart, silEnd] of visibleSilences) {
-        if (silStart > cursor + 0.05) {
-          audibleSlices.push([cursor, silStart]);
+      if (mode === 'split_keep') {
+        // NON-DESTRUCTIVE SPLIT / TRIM:
+        // Slices clip at silence cuts so the user can analyze, adjust trim handles, or decide whether to keep
+        let cursor = curIn;
+        let partIdx = 1;
+        let silIdx = 1;
+
+        for (const [silStart, silEnd] of visibleSilences) {
+          // Audible slice preceding silence
+          if (silStart > cursor + 0.05) {
+            const sliceDur = silStart - cursor;
+            const pieceStart = curStart + (cursor - curIn);
+            newClips.push({
+              ...clip,
+              id: partIdx === 1 ? clip.id : `clip-${nowTimestamp}-${idCounter++}`,
+              name: `${clip.name} (Part ${partIdx++})`,
+              inPointSeconds: cursor,
+              outPointSeconds: silStart,
+              durationSeconds: sliceDur,
+              durationMs: Math.round(sliceDur * 1000),
+              startPositionSeconds: pieceStart,
+              startTimeMs: Math.round(pieceStart * 1000),
+            });
+          }
+
+          // Silent segment retained in place as an independent trimmed clip
+          const silDur = silEnd - silStart;
+          const silTimelineStart = curStart + (silStart - curIn);
+          totalRemovedSec += silDur;
+          totalCuts++;
+
+          newClips.push({
+            ...clip,
+            id: `silence-${nowTimestamp}-${idCounter++}`,
+            name: `${clip.name} [Silence ${silIdx++}]`,
+            inPointSeconds: silStart,
+            outPointSeconds: silEnd,
+            durationSeconds: silDur,
+            durationMs: Math.round(silDur * 1000),
+            startPositionSeconds: silTimelineStart,
+            startTimeMs: Math.round(silTimelineStart * 1000),
+            volumeDb: -60,
+          });
+
+          cursor = silEnd;
         }
-        totalRemovedSec += silEnd - silStart;
-        cursor = silEnd;
+
+        // Final audible slice following last silence
+        if (curOut > cursor + 0.05) {
+          const sliceDur = curOut - cursor;
+          const pieceStart = curStart + (cursor - curIn);
+          newClips.push({
+            ...clip,
+            id: `clip-${nowTimestamp}-${idCounter++}`,
+            name: `${clip.name} (Part ${partIdx++})`,
+            inPointSeconds: cursor,
+            outPointSeconds: curOut,
+            durationSeconds: sliceDur,
+            durationMs: Math.round(sliceDur * 1000),
+            startPositionSeconds: pieceStart,
+            startTimeMs: Math.round(pieceStart * 1000),
+          });
+        }
+      } else {
+        // RIPPLE REMOVE MODE (excises silence and ripples timeline)
+        const audibleSlices: Array<[number, number]> = [];
+        let cursor = curIn;
+
+        for (const [silStart, silEnd] of visibleSilences) {
+          if (silStart > cursor + 0.05) {
+            audibleSlices.push([cursor, silStart]);
+          }
+          totalRemovedSec += silEnd - silStart;
+          cursor = silEnd;
+        }
+
+        if (curOut > cursor + 0.05) {
+          audibleSlices.push([cursor, curOut]);
+        }
+
+        if (audibleSlices.length === 0) {
+          cumulativeShift += curDur;
+          totalCuts++;
+          continue;
+        }
+
+        totalCuts += audibleSlices.length - 1;
+        let pieceStart = curStart;
+
+        for (let i = 0; i < audibleSlices.length; i++) {
+          const [inSlice, outSlice] = audibleSlices[i];
+          const sliceDur = outSlice - inSlice;
+
+          newClips.push({
+            ...clip,
+            id: i === 0 ? clip.id : `clip-${nowTimestamp}-${idCounter++}`,
+            name: i === 0 ? clip.name : `${clip.name} (Part ${i + 1})`,
+            inPointSeconds: inSlice,
+            outPointSeconds: outSlice,
+            durationSeconds: sliceDur,
+            durationMs: Math.round(sliceDur * 1000),
+            startPositionSeconds: pieceStart,
+            startTimeMs: Math.round(pieceStart * 1000),
+          });
+
+          pieceStart += sliceDur;
+        }
+
+        const clipRemoved = curDur - (pieceStart - curStart);
+        cumulativeShift += clipRemoved;
       }
-
-      if (curOut > cursor + 0.05) {
-        audibleSlices.push([cursor, curOut]);
-      }
-
-      if (audibleSlices.length === 0) {
-        cumulativeShift += curDur;
-        totalCuts++;
-        continue;
-      }
-
-      totalCuts += audibleSlices.length - 1;
-      let pieceStart = curStart;
-
-      for (let i = 0; i < audibleSlices.length; i++) {
-        const [inSlice, outSlice] = audibleSlices[i];
-        const sliceDur = outSlice - inSlice;
-
-        newClips.push({
-          ...clip,
-          id: i === 0 ? clip.id : `clip-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-          name: i === 0 ? clip.name : `${clip.name} (Part ${i + 1})`,
-          inPointSeconds: inSlice,
-          outPointSeconds: outSlice,
-          durationSeconds: sliceDur,
-          durationMs: Math.round(sliceDur * 1000),
-          startPositionSeconds: pieceStart,
-          startTimeMs: Math.round(pieceStart * 1000),
-        });
-
-        pieceStart += sliceDur;
-      }
-
-      const clipRemoved = curDur - (pieceStart - curStart);
-      cumulativeShift += clipRemoved;
     }
 
     if (totalCuts > 0) {

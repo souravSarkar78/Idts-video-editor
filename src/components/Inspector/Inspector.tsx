@@ -243,7 +243,42 @@ export const Inspector: React.FC = () => {
   const currentDefish = selectedClip?.lensEffects?.defishEnabled ?? false;
   const currentDefishStrength = Math.round((selectedClip?.lensEffects?.defishStrength ?? 0) * 100);
   const currentBlur = selectedClip?.lensEffects?.gaussianBlur ?? 0;
-  const [isStabilizationCollapsed, setIsStabilizationCollapsed] = useState(false);
+  // Section collapse state: 1st section open by default, others collapsed
+  const [videoSections, setVideoSections] = useState({
+    properties: true,
+    transform: false,
+    lens: false,
+    stabilization: false,
+    speed: false,
+  });
+  const toggleVideoSection = (key: keyof typeof videoSections) => {
+    setVideoSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const [audioSections, setAudioSections] = useState({
+    volume: true,
+    spectral: false,
+    eq: false,
+    ducking: false,
+    envelopes: false,
+    meter: false,
+  });
+  const toggleAudioSection = (key: keyof typeof audioSections) => {
+    setAudioSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const [textSections, setTextSections] = useState({
+    content: true,
+    font: false,
+    colors: false,
+    alignment: false,
+    transcript: false,
+  });
+  const toggleTextSection = (key: keyof typeof textSections) => {
+    setTextSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const isStabilizationCollapsed = !videoSections.stabilization;
   const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
 
   const stabProfile = selectedClip?.stabilizationProfile ?? selectedClip?.stabilization;
@@ -801,441 +836,489 @@ export const Inspector: React.FC = () => {
             {/* TAB: TEXT / TYPOGRAPHY & TITLE STYLING */}
             {inspectorTab === 'text' && selectedClip && (
               <div className="space-y-3">
-                {/* Text Content Editor */}
-                <div className="p-3 rounded-lg bg-[#0D0E11] border border-[#222630] space-y-2.5">
-                  <div className="flex items-center justify-between text-xs font-bold text-[#F0F3F8]">
-                    <div className="flex items-center gap-1.5">
+                {/* 1. Text Content Editor & Quick Style Presets - Open by default */}
+                <div className="rounded-lg bg-[#0D0E11] border border-[#222630] overflow-hidden">
+                  <div
+                    onClick={() => toggleTextSection('content')}
+                    className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#14161F]/60 transition-colors select-none"
+                  >
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-[#F0F3F8]">
                       <Type size={13} className="text-[#C084FC]" />
                       <span>Text & Title Content</span>
                     </div>
-                    <span className="text-[10px] text-[#C084FC] font-mono font-semibold bg-[#A855F7]/15 px-2 py-0.5 rounded">
-                      {(selectedClip.durationSeconds || selectedClip.durationMs / 1000).toFixed(2)}s
-                    </span>
-                  </div>
-
-                  <textarea
-                    value={selectedClip.textContent ?? ''}
-                    onChange={(e) => updateTextClipContent(selectedClip.id, e.target.value)}
-                    placeholder="Enter caption or title text..."
-                    rows={3}
-                    className="w-full bg-[#14161B] border border-[#222630] rounded-md p-2.5 text-xs text-[#F0F3F8] placeholder-[#525D73] focus:outline-none focus:border-[#C084FC] resize-y font-medium transition-colors"
-                  />
-                </div>
-
-                {/* Quick Style Presets */}
-                <div className="p-3 rounded-lg bg-[#0D0E11] border border-[#222630] space-y-2">
-                  <div className="flex items-center justify-between text-xs font-bold text-[#F0F3F8]">
-                    <div className="flex items-center gap-1.5">
-                      <Sparkles size={13} className="text-[#00F0FF]" />
-                      <span>Quick Style Presets</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-[#C084FC] font-mono font-semibold bg-[#A855F7]/15 px-2 py-0.5 rounded">
+                        {(selectedClip.durationSeconds || selectedClip.durationMs / 1000).toFixed(2)}s
+                      </span>
+                      <span className="text-[#8A92A6]">
+                        {textSections.content ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                      </span>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <button
-                      onClick={() => applyTextPreset(selectedClip.id, 'youtube_lower_third')}
-                      className="px-2.5 py-1.5 rounded bg-[#14161B] hover:bg-[#1A1E27] border border-[#222630] hover:border-[#EAB308]/50 text-left cursor-pointer transition-colors group"
-                    >
-                      <div className="text-[11px] font-bold text-[#F0F3F8] group-hover:text-[#EAB308]">
-                        YouTube Lower-3rd
-                      </div>
-                      <div className="text-[9px] text-[#64748B]">Bold yellow/dark stroke</div>
-                    </button>
+                  {textSections.content && (
+                    <div className="p-3 pt-0 border-t border-[#1C202B] space-y-3 mt-1">
+                      <textarea
+                        value={selectedClip.textContent ?? ''}
+                        onChange={(e) => updateTextClipContent(selectedClip.id, e.target.value)}
+                        placeholder="Enter caption or title text..."
+                        rows={3}
+                        className="w-full bg-[#14161B] border border-[#222630] rounded-md p-2.5 text-xs text-[#F0F3F8] placeholder-[#525D73] focus:outline-none focus:border-[#C084FC] resize-y font-medium transition-colors"
+                      />
 
-                    <button
-                      onClick={() => applyTextPreset(selectedClip.id, 'cinematic')}
-                      className="px-2.5 py-1.5 rounded bg-[#14161B] hover:bg-[#1A1E27] border border-[#222630] hover:border-[#00F0FF]/50 text-left cursor-pointer transition-colors group"
-                    >
-                      <div className="text-[11px] font-bold text-[#F0F3F8] group-hover:text-[#00F0FF]">
-                        Cinematic Subtitle
-                      </div>
-                      <div className="text-[9px] text-[#64748B]">Clean letterbox caption</div>
-                    </button>
+                      {/* Quick Style Presets */}
+                      <div className="space-y-1.5 pt-1 border-t border-[#1C202B]">
+                        <span className="text-[10px] text-[#8A92A6] font-semibold block">Quick Style Presets</span>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <button
+                            onClick={() => applyTextPreset(selectedClip.id, 'youtube_lower_third')}
+                            className="px-2.5 py-1.5 rounded bg-[#14161B] hover:bg-[#1A1E27] border border-[#222630] hover:border-[#EAB308]/50 text-left cursor-pointer transition-colors group"
+                          >
+                            <div className="text-[11px] font-bold text-[#F0F3F8] group-hover:text-[#EAB308]">
+                              YouTube Lower-3rd
+                            </div>
+                            <div className="text-[9px] text-[#64748B]">Bold yellow/dark stroke</div>
+                          </button>
 
-                    <button
-                      onClick={() => applyTextPreset(selectedClip.id, 'karaoke')}
-                      className="px-2.5 py-1.5 rounded bg-[#14161B] hover:bg-[#1A1E27] border border-[#222630] hover:border-[#10B981]/50 text-left cursor-pointer transition-colors group"
-                    >
-                      <div className="text-[11px] font-bold text-[#F0F3F8] group-hover:text-[#10B981]">
-                        Karaoke Punch
-                      </div>
-                      <div className="text-[9px] text-[#64748B]">Vibrant neon outline</div>
-                    </button>
+                          <button
+                            onClick={() => applyTextPreset(selectedClip.id, 'cinematic')}
+                            className="px-2.5 py-1.5 rounded bg-[#14161B] hover:bg-[#1A1E27] border border-[#222630] hover:border-[#00F0FF]/50 text-left cursor-pointer transition-colors group"
+                          >
+                            <div className="text-[11px] font-bold text-[#F0F3F8] group-hover:text-[#00F0FF]">
+                              Cinematic Subtitle
+                            </div>
+                            <div className="text-[9px] text-[#64748B]">Clean letterbox caption</div>
+                          </button>
 
-                    <button
-                      onClick={() => applyTextPreset(selectedClip.id, 'default')}
-                      className="px-2.5 py-1.5 rounded bg-[#14161B] hover:bg-[#1A1E27] border border-[#222630] hover:border-[#A855F7]/50 text-left cursor-pointer transition-colors group"
-                    >
-                      <div className="text-[11px] font-bold text-[#F0F3F8] group-hover:text-[#A855F7]">
-                        Clean Modern
+                          <button
+                            onClick={() => applyTextPreset(selectedClip.id, 'karaoke')}
+                            className="px-2.5 py-1.5 rounded bg-[#14161B] hover:bg-[#1A1E27] border border-[#222630] hover:border-[#10B981]/50 text-left cursor-pointer transition-colors group"
+                          >
+                            <div className="text-[11px] font-bold text-[#F0F3F8] group-hover:text-[#10B981]">
+                              Karaoke Punch
+                            </div>
+                            <div className="text-[9px] text-[#64748B]">Vibrant neon outline</div>
+                          </button>
+
+                          <button
+                            onClick={() => applyTextPreset(selectedClip.id, 'default')}
+                            className="px-2.5 py-1.5 rounded bg-[#14161B] hover:bg-[#1A1E27] border border-[#222630] hover:border-[#A855F7]/50 text-left cursor-pointer transition-colors group"
+                          >
+                            <div className="text-[11px] font-bold text-[#F0F3F8] group-hover:text-[#A855F7]">
+                              Clean Modern
+                            </div>
+                            <div className="text-[9px] text-[#64748B]">Minimalist center/lower</div>
+                          </button>
+                        </div>
                       </div>
-                      <div className="text-[9px] text-[#64748B]">Minimalist center/lower</div>
-                    </button>
-                  </div>
+                    </div>
+                  )}
                 </div>
 
-                {/* Typography & Font Settings */}
-                <div className="p-3 rounded-lg bg-[#0D0E11] border border-[#222630] space-y-3">
-                  <div className="flex items-center justify-between text-xs font-bold text-[#F0F3F8]">
-                    <div className="flex items-center gap-1.5">
+                {/* 2. Typography & Font Settings - Collapsed by default */}
+                <div className="rounded-lg bg-[#0D0E11] border border-[#222630] overflow-hidden">
+                  <div
+                    onClick={() => toggleTextSection('font')}
+                    className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#14161F]/60 transition-colors select-none"
+                  >
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-[#F0F3F8]">
                       <SlidersHorizontal size={13} className="text-[#C084FC]" />
                       <span>Typography & Font</span>
                     </div>
-                  </div>
-
-                  {/* Font Family */}
-                  <div className="space-y-1">
-                    <span className="text-[10px] text-[#64748B] block">Font Family</span>
-                    <select
-                      value={textStyle.fontFamily || 'Inter'}
-                      onChange={(e) => updateTextClipStyle(selectedClip.id, { fontFamily: e.target.value })}
-                      className="w-full bg-[#14161B] border border-[#222630] rounded px-2.5 py-1 text-xs text-[#F0F3F8] focus:outline-none focus:border-[#C084FC] cursor-pointer"
-                    >
-                      {['Inter', 'Roboto', 'Arial', 'Montserrat', 'Helvetica', 'Times New Roman', 'Impact', 'Courier New', 'JetBrains Mono'].map((font) => (
-                        <option key={font} value={font} style={{ fontFamily: font }}>
-                          {font}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Font Size & Weight */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-[10px]">
-                        <span className="text-[#64748B]">Size</span>
-                        <span className="font-mono text-[#F0F3F8]">{textStyle.fontSize || 36}px</span>
-                      </div>
-                      <input
-                        type="range"
-                        min="12"
-                        max="120"
-                        step="1"
-                        value={textStyle.fontSize || 36}
-                        onChange={(e) => updateTextClipStyle(selectedClip.id, { fontSize: Number(e.target.value) })}
-                        className="w-full accent-[#C084FC] h-1.5 bg-[#222630] rounded cursor-pointer"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <span className="text-[10px] text-[#64748B] block">Weight</span>
-                      <select
-                        value={textStyle.fontWeight || 'bold'}
-                        onChange={(e) => updateTextClipStyle(selectedClip.id, { fontWeight: e.target.value })}
-                        className="w-full bg-[#14161B] border border-[#222630] rounded px-2 py-1 text-xs text-[#F0F3F8] focus:outline-none focus:border-[#C084FC] cursor-pointer"
-                      >
-                        <option value="300">Light (300)</option>
-                        <option value="normal">Regular (400)</option>
-                        <option value="500">Medium (500)</option>
-                        <option value="600">Semi-Bold (600)</option>
-                        <option value="bold">Bold (700)</option>
-                        <option value="900">Black (900)</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Line Height */}
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between text-[10px]">
-                      <span className="text-[#64748B]">Line Height</span>
-                      <span className="font-mono text-[#F0F3F8]">{(textStyle.lineHeight || 1.2).toFixed(1)}x</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0.8"
-                      max="2.5"
-                      step="0.05"
-                      value={textStyle.lineHeight || 1.2}
-                      onChange={(e) => updateTextClipStyle(selectedClip.id, { lineHeight: Number(e.target.value) })}
-                      className="w-full accent-[#C084FC] h-1.5 bg-[#222630] rounded cursor-pointer"
-                    />
-                  </div>
-                </div>
-
-                {/* Colors, Stroke & Box Background */}
-                <div className="p-3 rounded-lg bg-[#0D0E11] border border-[#222630] space-y-3">
-                  <div className="flex items-center justify-between text-xs font-bold text-[#F0F3F8]">
-                    <div className="flex items-center gap-1.5">
-                      <Palette size={13} className="text-[#00F0FF]" />
-                      <span>Colors & Appearance</span>
-                    </div>
-                  </div>
-
-                  {/* Text Color Fill */}
-                  <div className="space-y-1">
-                    <span className="text-[10px] text-[#64748B] block">Fill Color</span>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        value={textStyle.fontColor?.startsWith('#') ? textStyle.fontColor : '#FFFFFF'}
-                        onChange={(e) => updateTextClipStyle(selectedClip.id, { fontColor: e.target.value })}
-                        className="w-7 h-7 rounded border border-[#222630] bg-transparent cursor-pointer"
-                      />
-                      <input
-                        type="text"
-                        value={textStyle.fontColor || '#FFFFFF'}
-                        onChange={(e) => updateTextClipStyle(selectedClip.id, { fontColor: e.target.value })}
-                        className="flex-1 bg-[#14161B] border border-[#222630] rounded px-2 py-1 text-xs font-mono text-[#F0F3F8] focus:outline-none focus:border-[#C084FC]"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Text Stroke / Border */}
-                  <div className="space-y-2 pt-2 border-t border-[#1C202B]">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-semibold text-[#F0F3F8]">Text Outline / Stroke</span>
-                      <span className="font-mono text-[10px] text-[#64748B]">{textStyle.strokeWidth || 0}px</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        value={textStyle.strokeColor?.startsWith('#') ? textStyle.strokeColor : '#000000'}
-                        onChange={(e) => updateTextClipStyle(selectedClip.id, { strokeColor: e.target.value })}
-                        className="w-7 h-7 rounded border border-[#222630] bg-transparent cursor-pointer"
-                      />
-                      <input
-                        type="range"
-                        min="0"
-                        max="10"
-                        step="0.5"
-                        value={textStyle.strokeWidth || 0}
-                        onChange={(e) => updateTextClipStyle(selectedClip.id, { strokeWidth: Number(e.target.value) })}
-                        className="flex-1 accent-[#C084FC] h-1.5 bg-[#222630] rounded cursor-pointer"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Background Box */}
-                  <div className="space-y-2 pt-2 border-t border-[#1C202B]">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-semibold text-[#F0F3F8]">Background Banner Box</span>
-                      <label className="flex items-center gap-1.5 text-[10px] text-[#64748B] cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={Boolean(textStyle.backgroundColor && textStyle.backgroundColor !== 'transparent')}
-                          onChange={(e) =>
-                            updateTextClipStyle(selectedClip.id, {
-                              backgroundColor: e.target.checked ? 'rgba(0,0,0,0.75)' : 'transparent',
-                              backgroundPadding: e.target.checked ? 10 : 0,
-                            })
-                          }
-                          className="rounded border-[#222630] accent-[#C084FC]"
-                        />
-                        <span>Enable Box</span>
-                      </label>
-                    </div>
-
-                    {Boolean(textStyle.backgroundColor && textStyle.backgroundColor !== 'transparent') && (
-                      <div className="space-y-2 p-2 rounded bg-[#14161B] border border-[#222630]">
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="color"
-                            value={textStyle.backgroundColor?.startsWith('#') ? textStyle.backgroundColor : '#000000'}
-                            onChange={(e) => updateTextClipStyle(selectedClip.id, { backgroundColor: e.target.value })}
-                            className="w-6 h-6 rounded border border-[#222630] bg-transparent cursor-pointer"
-                          />
-                          <input
-                            type="text"
-                            value={textStyle.backgroundColor}
-                            onChange={(e) => updateTextClipStyle(selectedClip.id, { backgroundColor: e.target.value })}
-                            className="flex-1 bg-[#0D0E11] border border-[#222630] rounded px-2 py-0.5 text-[10px] font-mono text-[#F0F3F8]"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between text-[10px]">
-                            <span className="text-[#64748B]">Box Padding</span>
-                            <span className="font-mono text-[#F0F3F8]">{textStyle.backgroundPadding || 8}px</span>
-                          </div>
-                          <input
-                            type="range"
-                            min="0"
-                            max="30"
-                            step="1"
-                            value={textStyle.backgroundPadding || 8}
-                            onChange={(e) => updateTextClipStyle(selectedClip.id, { backgroundPadding: Number(e.target.value) })}
-                            className="w-full accent-[#C084FC] h-1.5 bg-[#222630] rounded cursor-pointer"
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Positioning & Alignment */}
-                <div className="p-3 rounded-lg bg-[#0D0E11] border border-[#222630] space-y-3">
-                  <div className="flex items-center justify-between text-xs font-bold text-[#F0F3F8]">
-                    <div className="flex items-center gap-1.5">
-                      <Move size={13} className="text-[#00F0FF]" />
-                      <span>Canvas Position & Alignment</span>
-                    </div>
-                  </div>
-
-                  {/* Text Alignment */}
-                  <div className="space-y-1">
-                    <span className="text-[10px] text-[#64748B] block">Text Alignment</span>
-                    <div className="grid grid-cols-3 gap-1 bg-[#14161B] p-1 rounded border border-[#222630]">
-                      {(['left', 'center', 'right'] as const).map((align) => (
-                        <button
-                          key={align}
-                          onClick={() => updateTextClipStyle(selectedClip.id, { alignment: align })}
-                          className={`flex items-center justify-center py-1 rounded text-xs transition-colors cursor-pointer ${
-                            (textStyle.alignment || 'center') === align
-                              ? 'bg-[#C084FC] text-black font-bold'
-                              : 'text-[#8A92A6] hover:text-[#F0F3F8] hover:bg-[#222630]'
-                          }`}
-                        >
-                          {align === 'left' && <AlignLeft size={13} />}
-                          {align === 'center' && <AlignCenter size={13} />}
-                          {align === 'right' && <AlignRight size={13} />}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Alignment Presets */}
-                  <div className="space-y-1">
-                    <span className="text-[10px] text-[#64748B] block">Position Presets</span>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      <button
-                        onClick={() =>
-                          updateTextClipStyle(selectedClip.id, {
-                            positionX: 0.1,
-                            positionY: 0.15,
-                            alignment: 'left',
-                          })
-                        }
-                        className="px-2 py-1 text-[11px] rounded bg-[#14161B] border border-[#222630] hover:border-[#C084FC] text-[#8A92A6] hover:text-[#F0F3F8] cursor-pointer transition-colors"
-                      >
-                        Top-Left
-                      </button>
-                      <button
-                        onClick={() =>
-                          updateTextClipStyle(selectedClip.id, {
-                            positionX: 0.5,
-                            positionY: 0.5,
-                            alignment: 'center',
-                          })
-                        }
-                        className="px-2 py-1 text-[11px] rounded bg-[#14161B] border border-[#222630] hover:border-[#C084FC] text-[#8A92A6] hover:text-[#F0F3F8] cursor-pointer transition-colors"
-                      >
-                        Center Screen
-                      </button>
-                      <button
-                        onClick={() =>
-                          updateTextClipStyle(selectedClip.id, {
-                            positionX: 0.1,
-                            positionY: 0.82,
-                            alignment: 'left',
-                          })
-                        }
-                        className="px-2 py-1 text-[11px] rounded bg-[#14161B] border border-[#222630] hover:border-[#C084FC] text-[#8A92A6] hover:text-[#F0F3F8] cursor-pointer transition-colors"
-                      >
-                        Lower-Third
-                      </button>
-                      <button
-                        onClick={() =>
-                          updateTextClipStyle(selectedClip.id, {
-                            positionX: 0.5,
-                            positionY: 0.88,
-                            alignment: 'center',
-                          })
-                        }
-                        className="px-2 py-1 text-[11px] rounded bg-[#14161B] border border-[#222630] hover:border-[#C084FC] text-[#8A92A6] hover:text-[#F0F3F8] cursor-pointer transition-colors"
-                      >
-                        Bottom-Center
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Position X Slider */}
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between text-[10px]">
-                      <span className="text-[#64748B]">Horizontal X</span>
-                      <span className="font-mono text-[#F0F3F8]">{Math.round((textStyle.positionX ?? 0.5) * 100)}%</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.01"
-                      value={textStyle.positionX ?? 0.5}
-                      onChange={(e) => updateTextClipStyle(selectedClip.id, { positionX: Number(e.target.value) })}
-                      className="w-full accent-[#C084FC] h-1.5 bg-[#222630] rounded cursor-pointer"
-                    />
-                  </div>
-
-                  {/* Position Y Slider */}
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between text-[10px]">
-                      <span className="text-[#64748B]">Vertical Y</span>
-                      <span className="font-mono text-[#F0F3F8]">{Math.round((textStyle.positionY ?? 0.85) * 100)}%</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.01"
-                      value={textStyle.positionY ?? 0.85}
-                      onChange={(e) => updateTextClipStyle(selectedClip.id, { positionY: Number(e.target.value) })}
-                      className="w-full accent-[#C084FC] h-1.5 bg-[#222630] rounded cursor-pointer"
-                    />
-                  </div>
-                </div>
-
-                {/* Captions Transcript Side-List */}
-                <div className="p-3 rounded-lg bg-[#0D0E11] border border-[#222630] space-y-2.5">
-                  <div className="flex items-center justify-between text-xs font-bold text-[#F0F3F8]">
-                    <div className="flex items-center gap-1.5">
-                      <Subtitles size={13} className="text-[#C084FC]" />
-                      <span>Captions Transcript</span>
-                    </div>
-                    <span className="text-[10px] text-[#64748B] font-mono">
-                      {parentTrack ? `${parentTrack.clips.length} segments` : ''}
+                    <span className="text-[#8A92A6]">
+                      {textSections.font ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                     </span>
                   </div>
 
-                  {parentTrack && parentTrack.clips.length > 0 ? (
-                    <div className="max-h-56 overflow-y-auto space-y-1.5 pr-1">
-                      {parentTrack.clips
-                        .slice()
-                        .sort((a, b) => (a.startPositionSeconds ?? a.startTimeMs / 1000) - (b.startPositionSeconds ?? b.startTimeMs / 1000))
-                        .map((clip) => {
-                          const isCurrent = clip.id === selectedClip.id;
-                          const startSec = clip.startPositionSeconds ?? clip.startTimeMs / 1000;
-                          const endSec = startSec + (clip.durationSeconds ?? clip.durationMs / 1000);
-                          return (
-                            <div
-                              key={clip.id}
-                              onClick={() => {
-                                selectClip(clip.id);
-                                setPlayhead(startSec);
-                              }}
-                              className={`p-2 rounded border text-left cursor-pointer transition-colors ${
-                                isCurrent
-                                  ? 'bg-[#A855F7]/15 border-[#C084FC] text-[#F0F3F8]'
-                                  : 'bg-[#14161B] border-[#222630] hover:border-[#384152] text-[#8A92A6]'
+                  {textSections.font && (
+                    <div className="p-3 pt-0 border-t border-[#1C202B] space-y-3 mt-1">
+                      {/* Font Family */}
+                      <div className="space-y-1">
+                        <span className="text-[10px] text-[#64748B] block">Font Family</span>
+                        <select
+                          value={textStyle.fontFamily || 'Inter'}
+                          onChange={(e) => updateTextClipStyle(selectedClip.id, { fontFamily: e.target.value })}
+                          className="w-full bg-[#14161B] border border-[#222630] rounded px-2.5 py-1 text-xs text-[#F0F3F8] focus:outline-none focus:border-[#C084FC] cursor-pointer"
+                        >
+                          {['Inter', 'Roboto', 'Arial', 'Montserrat', 'Helvetica', 'Times New Roman', 'Impact', 'Courier New', 'JetBrains Mono'].map((font) => (
+                            <option key={font} value={font} style={{ fontFamily: font }}>
+                              {font}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Font Size & Weight */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-[10px]">
+                            <span className="text-[#64748B]">Size</span>
+                            <span className="font-mono text-[#F0F3F8]">{textStyle.fontSize || 36}px</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="12"
+                            max="120"
+                            step="1"
+                            value={textStyle.fontSize || 36}
+                            onChange={(e) => updateTextClipStyle(selectedClip.id, { fontSize: Number(e.target.value) })}
+                            className="w-full accent-[#C084FC] h-1.5 bg-[#222630] rounded cursor-pointer"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <span className="text-[10px] text-[#64748B] block">Weight</span>
+                          <select
+                            value={textStyle.fontWeight || 'bold'}
+                            onChange={(e) => updateTextClipStyle(selectedClip.id, { fontWeight: e.target.value })}
+                            className="w-full bg-[#14161B] border border-[#222630] rounded px-2 py-1 text-xs text-[#F0F3F8] focus:outline-none focus:border-[#C084FC] cursor-pointer"
+                          >
+                            <option value="300">Light (300)</option>
+                            <option value="normal">Regular (400)</option>
+                            <option value="500">Medium (500)</option>
+                            <option value="600">Semi-Bold (600)</option>
+                            <option value="bold">Bold (700)</option>
+                            <option value="900">Black (900)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Line Height */}
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-[10px]">
+                          <span className="text-[#64748B]">Line Height</span>
+                          <span className="font-mono text-[#F0F3F8]">{(textStyle.lineHeight || 1.2).toFixed(1)}x</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0.8"
+                          max="2.5"
+                          step="0.05"
+                          value={textStyle.lineHeight || 1.2}
+                          onChange={(e) => updateTextClipStyle(selectedClip.id, { lineHeight: Number(e.target.value) })}
+                          className="w-full accent-[#C084FC] h-1.5 bg-[#222630] rounded cursor-pointer"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. Colors, Stroke & Box Background - Collapsed by default */}
+                <div className="rounded-lg bg-[#0D0E11] border border-[#222630] overflow-hidden">
+                  <div
+                    onClick={() => toggleTextSection('colors')}
+                    className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#14161F]/60 transition-colors select-none"
+                  >
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-[#F0F3F8]">
+                      <Palette size={13} className="text-[#00F0FF]" />
+                      <span>Colors & Appearance</span>
+                    </div>
+                    <span className="text-[#8A92A6]">
+                      {textSections.colors ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    </span>
+                  </div>
+
+                  {textSections.colors && (
+                    <div className="p-3 pt-0 border-t border-[#1C202B] space-y-3 mt-1">
+                      {/* Text Color Fill */}
+                      <div className="space-y-1">
+                        <span className="text-[10px] text-[#64748B] block">Fill Color</span>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={textStyle.fontColor?.startsWith('#') ? textStyle.fontColor : '#FFFFFF'}
+                            onChange={(e) => updateTextClipStyle(selectedClip.id, { fontColor: e.target.value })}
+                            className="w-7 h-7 rounded border border-[#222630] bg-transparent cursor-pointer"
+                          />
+                          <input
+                            type="text"
+                            value={textStyle.fontColor || '#FFFFFF'}
+                            onChange={(e) => updateTextClipStyle(selectedClip.id, { fontColor: e.target.value })}
+                            className="flex-1 bg-[#14161B] border border-[#222630] rounded px-2 py-1 text-xs font-mono text-[#F0F3F8] focus:outline-none focus:border-[#C084FC]"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Text Stroke / Border */}
+                      <div className="space-y-2 pt-2 border-t border-[#1C202B]">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-semibold text-[#F0F3F8]">Text Outline / Stroke</span>
+                          <span className="font-mono text-[10px] text-[#64748B]">{textStyle.strokeWidth || 0}px</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={textStyle.strokeColor?.startsWith('#') ? textStyle.strokeColor : '#000000'}
+                            onChange={(e) => updateTextClipStyle(selectedClip.id, { strokeColor: e.target.value })}
+                            className="w-7 h-7 rounded border border-[#222630] bg-transparent cursor-pointer"
+                          />
+                          <input
+                            type="range"
+                            min="0"
+                            max="10"
+                            step="0.5"
+                            value={textStyle.strokeWidth || 0}
+                            onChange={(e) => updateTextClipStyle(selectedClip.id, { strokeWidth: Number(e.target.value) })}
+                            className="flex-1 accent-[#C084FC] h-1.5 bg-[#222630] rounded cursor-pointer"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Background Box */}
+                      <div className="space-y-2 pt-2 border-t border-[#1C202B]">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-semibold text-[#F0F3F8]">Background Banner Box</span>
+                          <label className="flex items-center gap-1.5 text-[10px] text-[#64748B] cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(textStyle.backgroundColor && textStyle.backgroundColor !== 'transparent')}
+                              onChange={(e) =>
+                                updateTextClipStyle(selectedClip.id, {
+                                  backgroundColor: e.target.checked ? 'rgba(0,0,0,0.75)' : 'transparent',
+                                  backgroundPadding: e.target.checked ? 10 : 0,
+                                })
+                              }
+                              className="rounded border-[#222630] accent-[#C084FC]"
+                            />
+                            <span>Enable Box</span>
+                          </label>
+                        </div>
+
+                        {Boolean(textStyle.backgroundColor && textStyle.backgroundColor !== 'transparent') && (
+                          <div className="space-y-2 p-2 rounded bg-[#14161B] border border-[#222630]">
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="color"
+                                value={textStyle.backgroundColor?.startsWith('#') ? textStyle.backgroundColor : '#000000'}
+                                onChange={(e) => updateTextClipStyle(selectedClip.id, { backgroundColor: e.target.value })}
+                                className="w-6 h-6 rounded border border-[#222630] bg-transparent cursor-pointer"
+                              />
+                              <input
+                                type="text"
+                                value={textStyle.backgroundColor}
+                                onChange={(e) => updateTextClipStyle(selectedClip.id, { backgroundColor: e.target.value })}
+                                className="flex-1 bg-[#0D0E11] border border-[#222630] rounded px-2 py-0.5 text-[10px] font-mono text-[#F0F3F8]"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between text-[10px]">
+                                <span className="text-[#64748B]">Box Padding</span>
+                                <span className="font-mono text-[#F0F3F8]">{textStyle.backgroundPadding || 8}px</span>
+                              </div>
+                              <input
+                                type="range"
+                                min="0"
+                                max="30"
+                                step="1"
+                                value={textStyle.backgroundPadding || 8}
+                                onChange={(e) => updateTextClipStyle(selectedClip.id, { backgroundPadding: Number(e.target.value) })}
+                                className="w-full accent-[#C084FC] h-1.5 bg-[#222630] rounded cursor-pointer"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 4. Positioning & Alignment - Collapsed by default */}
+                <div className="rounded-lg bg-[#0D0E11] border border-[#222630] overflow-hidden">
+                  <div
+                    onClick={() => toggleTextSection('alignment')}
+                    className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#14161F]/60 transition-colors select-none"
+                  >
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-[#F0F3F8]">
+                      <Move size={13} className="text-[#00F0FF]" />
+                      <span>Canvas Position & Alignment</span>
+                    </div>
+                    <span className="text-[#8A92A6]">
+                      {textSections.alignment ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    </span>
+                  </div>
+
+                  {textSections.alignment && (
+                    <div className="p-3 pt-0 border-t border-[#1C202B] space-y-3 mt-1">
+                      {/* Text Alignment */}
+                      <div className="space-y-1">
+                        <span className="text-[10px] text-[#64748B] block">Text Alignment</span>
+                        <div className="grid grid-cols-3 gap-1 bg-[#14161B] p-1 rounded border border-[#222630]">
+                          {(['left', 'center', 'right'] as const).map((align) => (
+                            <button
+                              key={align}
+                              onClick={() => updateTextClipStyle(selectedClip.id, { alignment: align })}
+                              className={`flex items-center justify-center py-1 rounded text-xs transition-colors cursor-pointer ${
+                                (textStyle.alignment || 'center') === align
+                                  ? 'bg-[#C084FC] text-black font-bold'
+                                  : 'text-[#8A92A6] hover:text-[#F0F3F8] hover:bg-[#222630]'
                               }`}
                             >
-                              <div className="flex items-center justify-between text-[10px] font-mono mb-1">
-                                <span className={isCurrent ? 'text-[#C084FC] font-bold' : 'text-[#64748B]'}>
-                                  {startSec.toFixed(2)}s – {endSec.toFixed(2)}s
-                                </span>
-                                {isCurrent && (
-                                  <span className="text-[9px] bg-[#C084FC] text-black px-1 py-0.2 rounded font-bold">
-                                    ACTIVE
-                                  </span>
-                                )}
-                              </div>
-                              <div className="text-[11px] truncate font-medium">
-                                {clip.textContent || clip.name || 'Empty text block'}
-                              </div>
-                            </div>
-                          );
-                        })}
+                              {align === 'left' && <AlignLeft size={13} />}
+                              {align === 'center' && <AlignCenter size={13} />}
+                              {align === 'right' && <AlignRight size={13} />}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Alignment Presets */}
+                      <div className="space-y-1">
+                        <span className="text-[10px] text-[#64748B] block">Position Presets</span>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <button
+                            onClick={() =>
+                              updateTextClipStyle(selectedClip.id, {
+                                positionX: 0.1,
+                                positionY: 0.15,
+                                alignment: 'left',
+                              })
+                            }
+                            className="px-2 py-1 text-[11px] rounded bg-[#14161B] border border-[#222630] hover:border-[#C084FC] text-[#8A92A6] hover:text-[#F0F3F8] cursor-pointer transition-colors"
+                          >
+                            Top-Left
+                          </button>
+                          <button
+                            onClick={() =>
+                              updateTextClipStyle(selectedClip.id, {
+                                positionX: 0.5,
+                                positionY: 0.5,
+                                alignment: 'center',
+                              })
+                            }
+                            className="px-2 py-1 text-[11px] rounded bg-[#14161B] border border-[#222630] hover:border-[#C084FC] text-[#8A92A6] hover:text-[#F0F3F8] cursor-pointer transition-colors"
+                          >
+                            Center Screen
+                          </button>
+                          <button
+                            onClick={() =>
+                              updateTextClipStyle(selectedClip.id, {
+                                positionX: 0.1,
+                                positionY: 0.82,
+                                alignment: 'left',
+                              })
+                            }
+                            className="px-2 py-1 text-[11px] rounded bg-[#14161B] border border-[#222630] hover:border-[#C084FC] text-[#8A92A6] hover:text-[#F0F3F8] cursor-pointer transition-colors"
+                          >
+                            Lower-Third
+                          </button>
+                          <button
+                            onClick={() =>
+                              updateTextClipStyle(selectedClip.id, {
+                                positionX: 0.5,
+                                positionY: 0.88,
+                                alignment: 'center',
+                              })
+                            }
+                            className="px-2 py-1 text-[11px] rounded bg-[#14161B] border border-[#222630] hover:border-[#C084FC] text-[#8A92A6] hover:text-[#F0F3F8] cursor-pointer transition-colors"
+                          >
+                            Bottom-Center
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Position X Slider */}
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-[10px]">
+                          <span className="text-[#64748B]">Horizontal X</span>
+                          <span className="font-mono text-[#F0F3F8]">{Math.round((textStyle.positionX ?? 0.5) * 100)}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.01"
+                          value={textStyle.positionX ?? 0.5}
+                          onChange={(e) => updateTextClipStyle(selectedClip.id, { positionX: Number(e.target.value) })}
+                          className="w-full accent-[#C084FC] h-1.5 bg-[#222630] rounded cursor-pointer"
+                        />
+                      </div>
+
+                      {/* Position Y Slider */}
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-[10px]">
+                          <span className="text-[#64748B]">Vertical Y</span>
+                          <span className="font-mono text-[#F0F3F8]">{Math.round((textStyle.positionY ?? 0.85) * 100)}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.01"
+                          value={textStyle.positionY ?? 0.85}
+                          onChange={(e) => updateTextClipStyle(selectedClip.id, { positionY: Number(e.target.value) })}
+                          className="w-full accent-[#C084FC] h-1.5 bg-[#222630] rounded cursor-pointer"
+                        />
+                      </div>
                     </div>
-                  ) : (
-                    <div className="text-[11px] text-[#64748B] text-center py-2">
-                      No caption segments found on this track.
+                  )}
+                </div>
+
+                {/* 5. Captions Transcript Side-List - Collapsed by default */}
+                <div className="rounded-lg bg-[#0D0E11] border border-[#222630] overflow-hidden">
+                  <div
+                    onClick={() => toggleTextSection('transcript')}
+                    className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#14161F]/60 transition-colors select-none"
+                  >
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-[#F0F3F8]">
+                      <Subtitles size={13} className="text-[#C084FC]" />
+                      <span>Captions Transcript</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-[#64748B] font-mono">
+                        {parentTrack ? `${parentTrack.clips.length} segments` : ''}
+                      </span>
+                      <span className="text-[#8A92A6]">
+                        {textSections.transcript ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                      </span>
+                    </div>
+                  </div>
+
+                  {textSections.transcript && (
+                    <div className="p-3 pt-0 border-t border-[#1C202B] space-y-2 mt-1">
+                      {parentTrack && parentTrack.clips.length > 0 ? (
+                        <div className="max-h-56 overflow-y-auto space-y-1.5 pr-1">
+                          {parentTrack.clips
+                            .slice()
+                            .sort((a, b) => (a.startPositionSeconds ?? a.startTimeMs / 1000) - (b.startPositionSeconds ?? b.startTimeMs / 1000))
+                            .map((clip) => {
+                              const isCurrent = clip.id === selectedClip.id;
+                              const startSec = clip.startPositionSeconds ?? clip.startTimeMs / 1000;
+                              const endSec = startSec + (clip.durationSeconds ?? clip.durationMs / 1000);
+                              return (
+                                <div
+                                  key={clip.id}
+                                  onClick={() => {
+                                    selectClip(clip.id);
+                                    setPlayhead(startSec);
+                                  }}
+                                  className={`p-2 rounded border text-left cursor-pointer transition-colors ${
+                                    isCurrent
+                                      ? 'bg-[#A855F7]/15 border-[#C084FC] text-[#F0F3F8]'
+                                      : 'bg-[#14161B] border-[#222630] hover:border-[#384152] text-[#8A92A6]'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between text-[10px] font-mono mb-1">
+                                    <span className={isCurrent ? 'text-[#C084FC] font-bold' : 'text-[#64748B]'}>
+                                      {startSec.toFixed(2)}s – {endSec.toFixed(2)}s
+                                    </span>
+                                    {isCurrent && (
+                                      <span className="text-[9px] bg-[#C084FC] text-black px-1 py-0.2 rounded font-bold">
+                                        ACTIVE
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-[11px] truncate font-medium">
+                                    {clip.textContent || clip.name || 'Empty text block'}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      ) : (
+                        <div className="text-[11px] text-[#64748B] text-center py-2">
+                          No caption segments found on this track.
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1245,89 +1328,114 @@ export const Inspector: React.FC = () => {
             {/* TAB: VIDEO (Clip Properties, In/Out Points, Proxy Status) */}
             {inspectorTab === 'video' && (
               <div className="space-y-3">
-                <div className="p-3 rounded-lg bg-[#0D0E11] border border-[#222630] space-y-2.5">
-                  <div className="flex items-center justify-between text-xs font-bold text-[#F0F3F8]">
-                    <div className="flex items-center gap-1.5">
+                {/* 1. Video Properties - Open by default */}
+                <div className="rounded-lg bg-[#0D0E11] border border-[#222630] overflow-hidden">
+                  <div
+                    onClick={() => toggleVideoSection('properties')}
+                    className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#14161F]/60 transition-colors select-none"
+                  >
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-[#F0F3F8]">
                       <Film size={13} className="text-[#00F0FF]" />
                       <span>Video Properties</span>
                     </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 text-[11px] font-mono">
-                    <div className="p-2 rounded bg-[#14161B] border border-[#222630]">
-                      <span className="text-[#64748B] block text-[10px]">Duration</span>
-                      <span className="text-[#F0F3F8] font-bold">
-                        {(selectedClip.durationSeconds || selectedClip.durationMs / 1000).toFixed(2)}s
-                      </span>
-                    </div>
-
-                    <div className="p-2 rounded bg-[#14161B] border border-[#222630]">
-                      <span className="text-[#64748B] block text-[10px]">Resolution</span>
-                      <span className="text-[#F0F3F8] font-bold">
-                        {selectedClip.metadata?.width && selectedClip.metadata?.height
-                          ? `${selectedClip.metadata.width}x${selectedClip.metadata.height}`
-                          : '1920x1080'}
-                      </span>
-                    </div>
-
-                    <div className="p-2 rounded bg-[#14161B] border border-[#222630]">
-                      <span className="text-[#64748B] block text-[10px]">In Point</span>
-                      <span className="text-[#F0F3F8] font-bold">
-                        {(selectedClip.inPointSeconds || 0).toFixed(2)}s
-                      </span>
-                    </div>
-
-                    <div className="p-2 rounded bg-[#14161B] border border-[#222630]">
-                      <span className="text-[#64748B] block text-[10px]">Out Point</span>
-                      <span className="text-[#F0F3F8] font-bold">
-                        {(
-                          selectedClip.outPointSeconds ||
-                          selectedClip.durationSeconds ||
-                          selectedClip.durationMs / 1000
-                        ).toFixed(2)}s
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="pt-2 border-t border-[#1C202B] space-y-1">
-                    <span className="text-[#64748B] text-[10px] block font-mono">File Path</span>
-                    <span className="text-[#8A92A6] text-[10px] font-mono break-all leading-tight block">
-                      {selectedClip.filePath}
+                    <span className="text-[#8A92A6]">
+                      {videoSections.properties ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                     </span>
                   </div>
 
-                  {/* Proxy workflow badge & status */}
-                  <div className="pt-2 border-t border-[#1C202B] flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <Zap size={12} className={selectedClip.hasProxy ? 'text-[#10B981]' : 'text-[#64748B]'} />
-                      <span className="text-xs text-[#8A92A6]">Editing Proxy:</span>
+                  {videoSections.properties && (
+                    <div className="p-3 pt-0 border-t border-[#1C202B] space-y-2.5 mt-1">
+                      <div className="grid grid-cols-2 gap-2 text-[11px] font-mono">
+                        <div className="p-2 rounded bg-[#14161B] border border-[#222630]">
+                          <span className="text-[#64748B] block text-[10px]">Duration</span>
+                          <span className="text-[#F0F3F8] font-bold">
+                            {(selectedClip.durationSeconds || selectedClip.durationMs / 1000).toFixed(2)}s
+                          </span>
+                        </div>
+
+                        <div className="p-2 rounded bg-[#14161B] border border-[#222630]">
+                          <span className="text-[#64748B] block text-[10px]">Resolution</span>
+                          <span className="text-[#F0F3F8] font-bold">
+                            {selectedClip.metadata?.width && selectedClip.metadata?.height
+                              ? `${selectedClip.metadata.width}x${selectedClip.metadata.height}`
+                              : '1920x1080'}
+                          </span>
+                        </div>
+
+                        <div className="p-2 rounded bg-[#14161B] border border-[#222630]">
+                          <span className="text-[#64748B] block text-[10px]">In Point</span>
+                          <span className="text-[#F0F3F8] font-bold">
+                            {(selectedClip.inPointSeconds || 0).toFixed(2)}s
+                          </span>
+                        </div>
+
+                        <div className="p-2 rounded bg-[#14161B] border border-[#222630]">
+                          <span className="text-[#64748B] block text-[10px]">Out Point</span>
+                          <span className="text-[#F0F3F8] font-bold">
+                            {(
+                              selectedClip.outPointSeconds ||
+                              selectedClip.durationSeconds ||
+                              selectedClip.durationMs / 1000
+                            ).toFixed(2)}s
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="pt-2 border-t border-[#1C202B] space-y-1">
+                        <span className="text-[#64748B] text-[10px] block font-mono">File Path</span>
+                        <span className="text-[#8A92A6] text-[10px] font-mono break-all leading-tight block">
+                          {selectedClip.filePath}
+                        </span>
+                      </div>
+
+                      {/* Proxy workflow badge & status */}
+                      <div className="pt-2 border-t border-[#1C202B] flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <Zap size={12} className={selectedClip.hasProxy ? 'text-[#10B981]' : 'text-[#64748B]'} />
+                          <span className="text-xs text-[#8A92A6]">Editing Proxy:</span>
+                        </div>
+                        {selectedClip.hasProxy ? (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-[#10B981]/15 text-[#10B981] border border-[#10B981]/30">
+                            Active (PROX)
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-mono text-[#64748B]">Original Full-Res</span>
+                        )}
+                      </div>
                     </div>
-                    {selectedClip.hasProxy ? (
-                      <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-[#10B981]/15 text-[#10B981] border border-[#10B981]/30">
-                        Active (PROX)
-                      </span>
-                    ) : (
-                      <span className="text-[10px] font-mono text-[#64748B]">Original Full-Res</span>
-                    )}
-                  </div>
+                  )}
                 </div>
 
-                {/* Motion Transform Controls & Global Keyframe Engine */}
-                <div className="p-3 rounded-lg bg-[#0D0E11] border border-[#222630] space-y-3">
-                  <div className="flex items-center justify-between">
+                {/* 2. Motion Transform Controls - Collapsed by default */}
+                <div className="rounded-lg bg-[#0D0E11] border border-[#222630] overflow-hidden">
+                  <div
+                    onClick={() => toggleVideoSection('transform')}
+                    className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#14161F]/60 transition-colors select-none"
+                  >
                     <span className="text-xs font-bold text-[#F0F3F8] flex items-center gap-1.5">
                       <Move size={13} className="text-[#00F0FF]" />
                       <span>Motion & Transform</span>
                     </span>
-                    <button
-                      onClick={handleResetTransform}
-                      title="Reset all transforms to default"
-                      className="px-2 py-0.5 rounded bg-[#181B24] hover:bg-[#202532] text-[#8A92A6] hover:text-[#00F0FF] text-[10px] font-mono flex items-center gap-1 transition-colors cursor-pointer border border-[#222630]"
-                    >
-                      <RotateCcw size={10} />
-                      <span>Reset</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleResetTransform();
+                        }}
+                        title="Reset all transforms to default"
+                        className="px-2 py-0.5 rounded bg-[#181B24] hover:bg-[#202532] text-[#8A92A6] hover:text-[#00F0FF] text-[10px] font-mono flex items-center gap-1 transition-colors cursor-pointer border border-[#222630]"
+                      >
+                        <RotateCcw size={10} />
+                        <span>Reset</span>
+                      </button>
+                      <span className="text-[#8A92A6]">
+                        {videoSections.transform ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                      </span>
+                    </div>
                   </div>
+
+                  {videoSections.transform && (
+                    <div className="p-3 pt-0 border-t border-[#1C202B] space-y-3 mt-1">
 
                   {/* MASTER GLOBAL KEYFRAME CONTROLLER BAR */}
                   <div className="p-2.5 rounded-lg bg-[#14161B] border border-[#222630] space-y-2">
@@ -1642,105 +1750,122 @@ export const Inspector: React.FC = () => {
                     />
                   </div>
                 </div>
+              )}
+            </div>
 
-                {/* Lens / Optical Effects Section */}
-                <div className="p-3 rounded-lg bg-[#0D0E11] border border-[#222630] space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-[#F0F3F8] flex items-center gap-1.5">
-                      <Camera size={13} className="text-[#A855F7]" />
-                      <span>Lens & Optical Effects</span>
-                    </span>
-                    <button
-                      onClick={handleResetLens}
-                      title="Reset lens effects"
-                      className="px-2 py-0.5 rounded bg-[#181B24] hover:bg-[#202532] text-[#8A92A6] hover:text-[#A855F7] text-[10px] font-mono flex items-center gap-1 transition-colors cursor-pointer border border-[#222630]"
-                    >
-                      <RotateCcw size={10} />
-                      <span>Reset</span>
-                    </button>
-                  </div>
+          {/* 3. Lens / Optical Effects Section - Collapsed by default */}
+          <div className="rounded-lg bg-[#0D0E11] border border-[#222630] overflow-hidden">
+            <div
+              onClick={() => toggleVideoSection('lens')}
+              className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#14161F]/60 transition-colors select-none"
+            >
+              <span className="text-xs font-bold text-[#F0F3F8] flex items-center gap-1.5">
+                <Camera size={13} className="text-[#A855F7]" />
+                <span>Lens & Optical Effects</span>
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleResetLens();
+                  }}
+                  title="Reset lens effects"
+                  className="px-2 py-0.5 rounded bg-[#181B24] hover:bg-[#202532] text-[#8A92A6] hover:text-[#A855F7] text-[10px] font-mono flex items-center gap-1 transition-colors cursor-pointer border border-[#222630]"
+                >
+                  <RotateCcw size={10} />
+                  <span>Reset</span>
+                </button>
+                <span className="text-[#8A92A6]">
+                  {videoSections.lens ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                </span>
+              </div>
+            </div>
 
-                  {/* Action-Cam Defish */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between text-[11px]">
-                      <label className="flex items-center gap-2 cursor-pointer text-[#F0F3F8]">
-                        <input
-                          type="checkbox"
-                          checked={currentDefish}
-                          onChange={(e) => updateClipLensEffects(selectedClip.id, { defishEnabled: e.target.checked })}
-                          className="rounded border-[#222630] accent-[#A855F7]"
-                        />
-                        <span>Action-Cam Defish</span>
-                      </label>
-                      <span className="font-mono text-[#A855F7] text-[10px]">{currentDefishStrength}</span>
-                    </div>
-                    <input
-                      type="range"
-                      min={-100}
-                      max={100}
-                      step={1}
-                      disabled={!currentDefish}
-                      value={currentDefishStrength}
-                      onChange={(e) =>
-                        updateClipLensEffects(selectedClip.id, { defishStrength: Number(e.target.value) / 100 })
-                      }
-                      className="w-full h-1 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#A855F7] disabled:opacity-40"
-                    />
+            {videoSections.lens && (
+              <div className="p-3 pt-0 border-t border-[#1C202B] space-y-3 mt-1">
+                {/* Action-Cam Defish */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <label className="flex items-center gap-2 cursor-pointer text-[#F0F3F8]">
+                      <input
+                        type="checkbox"
+                        checked={currentDefish}
+                        onChange={(e) => updateClipLensEffects(selectedClip.id, { defishEnabled: e.target.checked })}
+                        className="rounded border-[#222630] accent-[#A855F7]"
+                      />
+                      <span>Action-Cam Defish</span>
+                    </label>
+                    <span className="font-mono text-[#A855F7] text-[10px]">{currentDefishStrength}</span>
                   </div>
-
-                  {/* Gaussian Blur */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-[#8A92A6]">Background Blur</span>
-                      <span className="font-mono text-[#F0F3F8] text-[10px]">{currentBlur.toFixed(1)} px</span>
-                    </div>
-                    <input
-                      type="range"
-                      min={0}
-                      max={50}
-                      step={0.5}
-                      value={currentBlur}
-                      onChange={(e) => updateClipLensEffects(selectedClip.id, { gaussianBlur: Number(e.target.value) })}
-                      className="w-full h-1 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#A855F7]"
-                    />
-                  </div>
+                  <input
+                    type="range"
+                    min={-100}
+                    max={100}
+                    step={1}
+                    disabled={!currentDefish}
+                    value={currentDefishStrength}
+                    onChange={(e) =>
+                      updateClipLensEffects(selectedClip.id, { defishStrength: Number(e.target.value) / 100 })
+                    }
+                    className="w-full h-1 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#A855F7] disabled:opacity-40"
+                  />
                 </div>
 
-                {/* Phase 16: Video Stabilization Inspector Module */}
-                <div className="rounded-lg bg-[#0D0E11] border border-[#222630] overflow-hidden">
-                  {/* Collapsible Header */}
-                  <div
-                    onClick={() => setIsStabilizationCollapsed((prev) => !prev)}
-                    className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#14161F]/60 transition-colors select-none"
-                  >
-                    <span className="text-xs font-bold text-[#F0F3F8] flex items-center gap-1.5">
-                      <Shield size={13} className="text-[#00F0FF]" />
-                      <span>Video Stabilization</span>
-                      {currentStabEnabled && (
-                        <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-[#00F0FF]/15 text-[#00F0FF] border border-[#00F0FF]/30 ml-1">
-                          {isStabilized ? 'STABILIZED' : isClipAnalyzing ? 'ANALYZING' : 'ENABLED'}
-                        </span>
-                      )}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleResetStabilization();
-                        }}
-                        title="Reset video stabilization"
-                        className="px-2 py-0.5 rounded bg-[#181B24] hover:bg-[#202532] text-[#8A92A6] hover:text-[#00F0FF] text-[10px] font-mono flex items-center gap-1 transition-colors cursor-pointer border border-[#222630]"
-                      >
-                        <RotateCcw size={10} />
-                        <span>Reset</span>
-                      </button>
-                      <span className="text-[#8A92A6]">
-                        {isStabilizationCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-                      </span>
-                    </div>
+                {/* Gaussian Blur */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-[#8A92A6]">Background Blur</span>
+                    <span className="font-mono text-[#F0F3F8] text-[10px]">{currentBlur.toFixed(1)} px</span>
                   </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={50}
+                    step={0.5}
+                    value={currentBlur}
+                    onChange={(e) => updateClipLensEffects(selectedClip.id, { gaussianBlur: Number(e.target.value) })}
+                    className="w-full h-1 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#A855F7]"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
 
-                  {!isStabilizationCollapsed && (
+          {/* 4. Video Stabilization Module - Collapsed by default */}
+          <div className="rounded-lg bg-[#0D0E11] border border-[#222630] overflow-hidden">
+            {/* Collapsible Header */}
+            <div
+              onClick={() => toggleVideoSection('stabilization')}
+              className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#14161F]/60 transition-colors select-none"
+            >
+              <span className="text-xs font-bold text-[#F0F3F8] flex items-center gap-1.5">
+                <Shield size={13} className="text-[#00F0FF]" />
+                <span>Video Stabilization</span>
+                {currentStabEnabled && (
+                  <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-[#00F0FF]/15 text-[#00F0FF] border border-[#00F0FF]/30 ml-1">
+                    {isStabilized ? 'STABILIZED' : isClipAnalyzing ? 'ANALYZING' : 'ENABLED'}
+                  </span>
+                )}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleResetStabilization();
+                  }}
+                  title="Reset video stabilization"
+                  className="px-2 py-0.5 rounded bg-[#181B24] hover:bg-[#202532] text-[#8A92A6] hover:text-[#00F0FF] text-[10px] font-mono flex items-center gap-1 transition-colors cursor-pointer border border-[#222630]"
+                >
+                  <RotateCcw size={10} />
+                  <span>Reset</span>
+                </button>
+                <span className="text-[#8A92A6]">
+                  {videoSections.stabilization ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                </span>
+              </div>
+            </div>
+
+            {videoSections.stabilization && (
                     <div className="p-3 pt-0 border-t border-[#1C202B] space-y-3 mt-1">
                       {/* Telemetry Sensor Header Pill Badge */}
                       <div className="pt-2">
@@ -2277,75 +2402,85 @@ export const Inspector: React.FC = () => {
                   )}
                 </div>
 
-                {/* Speed Ramping Section */}
-                <div className="p-3 rounded-lg bg-[#0D0E11] border border-[#222630] space-y-4">
-                  <div className="flex items-center justify-between">
+                {/* 5. Speed Ramping Section - Collapsed by default */}
+                <div className="rounded-lg bg-[#0D0E11] border border-[#222630] overflow-hidden">
+                  <div
+                    onClick={() => toggleVideoSection('speed')}
+                    className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#14161F]/60 transition-colors select-none"
+                  >
                     <span className="text-xs font-bold text-[#F0F3F8] flex items-center gap-1.5">
                       <Gauge size={13} className="text-[#00F0FF]" />
                       <span>Speed Ramping</span>
-                    </span>
-                    <span className="px-2 py-0.5 rounded bg-[#00F0FF]/15 text-[#00F0FF] border border-[#00F0FF]/30 font-mono text-xs font-bold">
-                      {currentSpeed.toFixed(2)}x
-                    </span>
-                  </div>
-
-                  {/* Speed Slider */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between text-[11px] text-[#8A92A6]">
-                      <span>Speed Multiplier</span>
-                      <span className="font-mono text-[#F0F3F8] text-[10px]">
-                        {currentSpeed < 1.0 ? 'Slow Motion' : currentSpeed > 1.0 ? 'Fast Forward' : 'Normal (1.0x)'}
+                      <span className="px-1.5 py-0.2 rounded bg-[#00F0FF]/15 text-[#00F0FF] border border-[#00F0FF]/30 font-mono text-[10px] font-bold ml-1">
+                        {currentSpeed.toFixed(2)}x
                       </span>
-                    </div>
-                    <input
-                      type="range"
-                      min={0.1}
-                      max={16.0}
-                      step={0.05}
-                      value={currentSpeed}
-                      onChange={(e) => updateClipSpeed(selectedClip.id, Number(e.target.value), currentPitchCorrection)}
-                      className="w-full h-1.5 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#00F0FF]"
-                    />
-                    <div className="flex justify-between text-[9px] font-mono text-[#525D73]">
-                      <span>0.1x</span>
-                      <span>1.0x</span>
-                      <span>4.0x</span>
-                      <span>16.0x</span>
-                    </div>
+                    </span>
+                    <span className="text-[#8A92A6]">
+                      {videoSections.speed ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    </span>
                   </div>
 
-                  {/* Quick Speed Buttons */}
-                  <div className="space-y-1.5">
-                    <span className="text-[10px] font-mono text-[#64748B] block">Quick Presets</span>
-                    <div className="grid grid-cols-6 gap-1">
-                      {[0.25, 0.5, 1.0, 2.0, 4.0, 8.0].map((rate) => (
-                        <button
-                          key={rate}
-                          onClick={() => updateClipSpeed(selectedClip.id, rate, currentPitchCorrection)}
-                          className={`py-1 rounded text-[11px] font-mono font-medium transition-colors cursor-pointer border ${
-                            Math.abs(currentSpeed - rate) < 0.01
-                              ? 'bg-[#00F0FF] text-[#0D0E11] border-[#00F0FF] font-bold shadow-[0_0_8px_rgba(0,240,255,0.4)]'
-                              : 'bg-[#14161B] text-[#8A92A6] border-[#222630] hover:text-[#F0F3F8]'
-                          }`}
-                        >
-                          {rate}x
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                  {videoSections.speed && (
+                    <div className="p-3 pt-0 border-t border-[#1C202B] space-y-4 mt-1">
+                      {/* Speed Slider */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between text-[11px] text-[#8A92A6]">
+                          <span>Speed Multiplier</span>
+                          <span className="font-mono text-[#F0F3F8] text-[10px]">
+                            {currentSpeed < 1.0 ? 'Slow Motion' : currentSpeed > 1.0 ? 'Fast Forward' : 'Normal (1.0x)'}
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min={0.1}
+                          max={16.0}
+                          step={0.05}
+                          value={currentSpeed}
+                          onChange={(e) => updateClipSpeed(selectedClip.id, Number(e.target.value), currentPitchCorrection)}
+                          className="w-full h-1.5 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#00F0FF]"
+                        />
+                        <div className="flex justify-between text-[9px] font-mono text-[#525D73]">
+                          <span>0.1x</span>
+                          <span>1.0x</span>
+                          <span>4.0x</span>
+                          <span>16.0x</span>
+                        </div>
+                      </div>
 
-                  {/* Pitch Correction Checkbox */}
-                  <div className="pt-2 border-t border-[#1C202B]">
-                    <label className="flex items-center gap-2 cursor-pointer text-xs text-[#F0F3F8]">
-                      <input
-                        type="checkbox"
-                        checked={currentPitchCorrection}
-                        onChange={(e) => updateClipSpeed(selectedClip.id, currentSpeed, e.target.checked)}
-                        className="rounded border-[#222630] accent-[#00F0FF]"
-                      />
-                      <span>Maintain Audio Pitch (atempo)</span>
-                    </label>
-                  </div>
+                      {/* Quick Speed Buttons */}
+                      <div className="space-y-1.5">
+                        <span className="text-[10px] font-mono text-[#64748B] block">Quick Presets</span>
+                        <div className="grid grid-cols-6 gap-1">
+                          {[0.25, 0.5, 1.0, 2.0, 4.0, 8.0].map((rate) => (
+                            <button
+                              key={rate}
+                              onClick={() => updateClipSpeed(selectedClip.id, rate, currentPitchCorrection)}
+                              className={`py-1 rounded text-[11px] font-mono font-medium transition-colors cursor-pointer border ${
+                                Math.abs(currentSpeed - rate) < 0.01
+                                  ? 'bg-[#00F0FF] text-[#0D0E11] border-[#00F0FF] font-bold shadow-[0_0_8px_rgba(0,240,255,0.4)]'
+                                  : 'bg-[#14161B] text-[#8A92A6] border-[#222630] hover:text-[#F0F3F8]'
+                              }`}
+                            >
+                              {rate}x
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Pitch Correction Checkbox */}
+                      <div className="pt-2 border-t border-[#1C202B]">
+                        <label className="flex items-center gap-2 cursor-pointer text-xs text-[#F0F3F8]">
+                          <input
+                            type="checkbox"
+                            checked={currentPitchCorrection}
+                            onChange={(e) => updateClipSpeed(selectedClip.id, currentSpeed, e.target.checked)}
+                            className="rounded border-[#222630] accent-[#00F0FF]"
+                          />
+                          <span>Maintain Audio Pitch (atempo)</span>
+                        </label>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -2372,354 +2507,426 @@ export const Inspector: React.FC = () => {
             {/* TAB: AUDIO (Audio Mastering Suite, EQ, Dynamic Ducking, Volume Envelopes) */}
             {inspectorTab === 'audio' && (
               <div className="space-y-3">
-                {/* 1. Track & Clip Audio Gain / Fader & Stereo Pan */}
-                <div className="p-3 rounded-lg bg-[#0D0E11] border border-[#222630] space-y-3">
-                  <div className="flex items-center justify-between">
+                {/* 1. Track & Clip Audio Gain / Fader & Stereo Pan - Open by default */}
+                <div className="rounded-lg bg-[#0D0E11] border border-[#222630] overflow-hidden">
+                  <div
+                    onClick={() => toggleAudioSection('volume')}
+                    className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#14161F]/60 transition-colors select-none"
+                  >
                     <span className="text-xs font-bold text-[#F0F3F8] flex items-center gap-1.5">
                       <Volume2 size={13} className="text-[#10B981]" />
                       <span>Volume & Stereo Pan</span>
-                    </span>
-                    <button
-                      onClick={() => {
-                        handleVolumeChange(0);
-                        handlePanChange(0);
-                      }}
-                      title="Reset Gain to 0dB & Center Pan"
-                      className="text-[#64748B] hover:text-[#10B981] transition-colors cursor-pointer"
-                    >
-                      <RotateCcw size={12} />
-                    </button>
-                  </div>
-
-                  {/* Volume Fader Slider (-60dB to +12dB) */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-[#8A92A6]">Gain Level</span>
                       <span
-                        className={`font-mono text-xs font-bold ${
+                        className={`font-mono text-[10px] font-bold ml-1 ${
                           volumeDb > 0 ? 'text-amber-400' : volumeDb === 0 ? 'text-[#10B981]' : 'text-[#8A92A6]'
                         }`}
                       >
                         {volumeDb > 0 ? `+${volumeDb.toFixed(1)}` : volumeDb <= -60 ? '-∞' : volumeDb.toFixed(1)} dB
                       </span>
-                    </div>
-
-                    <input
-                      type="range"
-                      min={-60}
-                      max={12}
-                      step={0.5}
-                      value={volumeDb}
-                      onChange={(e) => handleVolumeChange(Number(e.target.value))}
-                      className="w-full h-1.5 bg-[#222630] rounded appearance-none cursor-pointer accent-[#10B981]"
-                    />
-
-                    {/* Fader Reference Scale */}
-                    <div className="flex items-center justify-between text-[9px] font-mono text-[#525D73] px-0.5">
-                      <span>-60</span>
-                      <span>-36</span>
-                      <span>-18</span>
-                      <span className="text-[#10B981] font-bold">0 dB</span>
-                      <span>+6</span>
-                      <span>+12</span>
-                    </div>
-                  </div>
-
-                  {/* Stereo Pan Slider (-1.0 Left to +1.0 Right) */}
-                  <div className="space-y-1.5 pt-1">
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-[#8A92A6]">Stereo Pan</span>
-                      <span className="font-mono text-xs font-bold text-[#00F0FF]">
-                        {pan === 0 ? 'Center' : pan < 0 ? `${Math.round(Math.abs(pan) * 100)}% L` : `${Math.round(pan * 100)}% R`}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleVolumeChange(0);
+                          handlePanChange(0);
+                        }}
+                        title="Reset Gain to 0dB & Center Pan"
+                        className="text-[#64748B] hover:text-[#10B981] transition-colors cursor-pointer"
+                      >
+                        <RotateCcw size={12} />
+                      </button>
+                      <span className="text-[#8A92A6]">
+                        {audioSections.volume ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                       </span>
                     </div>
-
-                    <input
-                      type="range"
-                      min={-1.0}
-                      max={1.0}
-                      step={0.05}
-                      value={pan}
-                      onChange={(e) => handlePanChange(Number(e.target.value))}
-                      className="w-full h-1.5 bg-[#222630] rounded appearance-none cursor-pointer accent-[#00F0FF]"
-                    />
-
-                    <div className="flex items-center justify-between text-[9px] font-mono text-[#525D73] px-0.5">
-                      <span>Left</span>
-                      <button
-                        onClick={() => handlePanChange(0)}
-                        className="hover:text-[#00F0FF] transition-colors cursor-pointer"
-                        title="Center Pan"
-                      >
-                        Center
-                      </button>
-                      <span>Right</span>
-                    </div>
                   </div>
 
-                  {/* Mute & Solo Track Quick Toggles */}
-                  {parentTrack && (
-                    <div className="flex items-center gap-2 pt-2 border-t border-[#1C202B]">
-                      <button
-                        onClick={() => toggleMute(parentTrack.id)}
-                        className={`flex-1 py-1.5 rounded text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
-                          parentTrack.muted
-                            ? 'bg-red-500/20 text-red-400 border border-red-500/40'
-                            : 'bg-[#181B22] text-[#8A92A6] hover:text-[#F0F3F8] border border-[#222630]'
-                        }`}
-                      >
-                        {parentTrack.muted ? <VolumeX size={12} /> : <Volume2 size={12} />}
-                        <span>{parentTrack.muted ? 'MUTED' : 'MUTE'}</span>
-                      </button>
+                  {audioSections.volume && (
+                    <div className="p-3 pt-0 border-t border-[#1C202B] space-y-3 mt-1">
+                      {/* Volume Fader Slider (-60dB to +12dB) */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-[#8A92A6]">Gain Level</span>
+                          <span
+                            className={`font-mono text-xs font-bold ${
+                              volumeDb > 0 ? 'text-amber-400' : volumeDb === 0 ? 'text-[#10B981]' : 'text-[#8A92A6]'
+                            }`}
+                          >
+                            {volumeDb > 0 ? `+${volumeDb.toFixed(1)}` : volumeDb <= -60 ? '-∞' : volumeDb.toFixed(1)} dB
+                          </span>
+                        </div>
 
-                      <button
-                        onClick={() => toggleSolo(parentTrack.id)}
-                        className={`flex-1 py-1.5 rounded text-xs font-bold flex items-center justify-center gap-1 transition-colors cursor-pointer ${
-                          parentTrack.solo
-                            ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
-                            : 'bg-[#181B22] text-[#8A92A6] hover:text-[#F0F3F8] border border-[#222630]'
-                        }`}
-                      >
-                        <span>SOLO</span>
-                      </button>
+                        <input
+                          type="range"
+                          min={-60}
+                          max={12}
+                          step={0.5}
+                          value={volumeDb}
+                          onChange={(e) => handleVolumeChange(Number(e.target.value))}
+                          className="w-full h-1.5 bg-[#222630] rounded appearance-none cursor-pointer accent-[#10B981]"
+                        />
+
+                        {/* Fader Reference Scale */}
+                        <div className="flex items-center justify-between text-[9px] font-mono text-[#525D73] px-0.5">
+                          <span>-60</span>
+                          <span>-36</span>
+                          <span>-18</span>
+                          <span className="text-[#10B981] font-bold">0 dB</span>
+                          <span>+6</span>
+                          <span>+12</span>
+                        </div>
+                      </div>
+
+                      {/* Stereo Pan Slider (-1.0 Left to +1.0 Right) */}
+                      <div className="space-y-1.5 pt-1">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-[#8A92A6]">Stereo Pan</span>
+                          <span className="font-mono text-xs font-bold text-[#00F0FF]">
+                            {pan === 0 ? 'Center' : pan < 0 ? `${Math.round(Math.abs(pan) * 100)}% L` : `${Math.round(pan * 100)}% R`}
+                          </span>
+                        </div>
+
+                        <input
+                          type="range"
+                          min={-1.0}
+                          max={1.0}
+                          step={0.05}
+                          value={pan}
+                          onChange={(e) => handlePanChange(Number(e.target.value))}
+                          className="w-full h-1.5 bg-[#222630] rounded appearance-none cursor-pointer accent-[#00F0FF]"
+                        />
+
+                        <div className="flex items-center justify-between text-[9px] font-mono text-[#525D73] px-0.5">
+                          <span>Left</span>
+                          <button
+                            onClick={() => handlePanChange(0)}
+                            className="hover:text-[#00F0FF] transition-colors cursor-pointer"
+                            title="Center Pan"
+                          >
+                            Center
+                          </button>
+                          <span>Right</span>
+                        </div>
+                      </div>
+
+                      {/* Mute & Solo Track Quick Toggles */}
+                      {parentTrack && (
+                        <div className="flex items-center gap-2 pt-2 border-t border-[#1C202B]">
+                          <button
+                            onClick={() => toggleMute(parentTrack.id)}
+                            className={`flex-1 py-1.5 rounded text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+                              parentTrack.muted
+                                ? 'bg-red-500/20 text-red-400 border border-red-500/40'
+                                : 'bg-[#181B22] text-[#8A92A6] hover:text-[#F0F3F8] border border-[#222630]'
+                            }`}
+                          >
+                            {parentTrack.muted ? <VolumeX size={12} /> : <Volume2 size={12} />}
+                            <span>{parentTrack.muted ? 'MUTED' : 'MUTE'}</span>
+                          </button>
+
+                          <button
+                            onClick={() => toggleSolo(parentTrack.id)}
+                            className={`flex-1 py-1.5 rounded text-xs font-bold flex items-center justify-center gap-1 transition-colors cursor-pointer ${
+                              parentTrack.solo
+                                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
+                                : 'bg-[#181B22] text-[#8A92A6] hover:text-[#F0F3F8] border border-[#222630]'
+                            }`}
+                          >
+                            <span>SOLO</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
 
-                {/* 2. Spectral Noise Profiling & Intelligent Ambient Noise Fill */}
-                {selectedClip ? (
-                  <SpectralDenoiseInspector selectedClip={selectedClip} />
-                ) : (
-                  <div className="p-3 rounded-lg bg-[#0D0E11] border border-[#222630] text-center text-xs text-[#64748B]">
-                    Select a clip to adjust Spectral Denoise & Auto-Cut Silence.
+                {/* 2. Spectral Noise Profiling & Intelligent Ambient Noise Fill - Collapsed by default */}
+                <div className="rounded-lg bg-[#0D0E11] border border-[#222630] overflow-hidden">
+                  <div
+                    onClick={() => toggleAudioSection('spectral')}
+                    className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#14161F]/60 transition-colors select-none"
+                  >
+                    <span className="text-xs font-bold text-[#F0F3F8] flex items-center gap-1.5">
+                      <Sparkles size={13} className="text-[#38BDF8]" />
+                      <span>Spectral Noise & Ambient Fill</span>
+                    </span>
+                    <span className="text-[#8A92A6]">
+                      {audioSections.spectral ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    </span>
                   </div>
-                )}
 
-                {/* 3. 3-Band Parametric EQ Mastering */}
-                <div className="p-3 rounded-lg bg-[#0D0E11] border border-[#222630] space-y-3">
-                  <div className="flex items-center justify-between">
+                  {audioSections.spectral && (
+                    <div className="p-3 pt-0 border-t border-[#1C202B] mt-1">
+                      {selectedClip ? (
+                        <SpectralDenoiseInspector selectedClip={selectedClip} />
+                      ) : (
+                        <div className="text-center text-xs text-[#64748B] py-2">
+                          Select a clip to adjust Spectral Denoise & Auto-Cut Silence.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. 3-Band Parametric EQ Mastering - Collapsed by default */}
+                <div className="rounded-lg bg-[#0D0E11] border border-[#222630] overflow-hidden">
+                  <div
+                    onClick={() => toggleAudioSection('eq')}
+                    className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#14161F]/60 transition-colors select-none"
+                  >
                     <span className="text-xs font-bold text-[#F0F3F8] flex items-center gap-1.5">
                       <SlidersHorizontal size={13} className="text-[#00F0FF]" />
                       <span>3-Band Parametric EQ</span>
                     </span>
-                    <button
-                      onClick={() => handleApplyEqPreset(0, 0, 0)}
-                      title="Reset EQ to Flat (0dB)"
-                      className="text-[#64748B] hover:text-[#00F0FF] transition-colors cursor-pointer"
-                    >
-                      <RotateCcw size={12} />
-                    </button>
-                  </div>
-
-                  {/* EQ Presets */}
-                  <div className="grid grid-cols-4 gap-1">
-                    <button
-                      onClick={() => handleApplyEqPreset(0, 0, 0)}
-                      className={`px-1.5 py-1 rounded text-[10px] font-semibold border transition-all cursor-pointer ${
-                        bassGain === 0 && midGain === 0 && trebleGain === 0
-                          ? 'bg-[#00F0FF]/15 border-[#00F0FF]/40 text-[#00F0FF]'
-                          : 'bg-[#181B22] border-[#222630] text-[#8A92A6] hover:text-white'
-                      }`}
-                    >
-                      Flat
-                    </button>
-                    <button
-                      onClick={() => handleApplyEqPreset(-2.0, 2.5, 3.5)}
-                      className="px-1.5 py-1 rounded text-[10px] font-semibold bg-[#181B22] hover:bg-[#222630] border border-[#222630] text-[#8A92A6] hover:text-[#00F0FF] transition-all cursor-pointer truncate"
-                      title="Vocal Clarity (+2.5dB Mid, +3.5dB Treble, -2dB Bass)"
-                    >
-                      Vocal
-                    </button>
-                    <button
-                      onClick={() => handleApplyEqPreset(4.5, 0, -1.0)}
-                      className="px-1.5 py-1 rounded text-[10px] font-semibold bg-[#181B22] hover:bg-[#222630] border border-[#222630] text-[#8A92A6] hover:text-[#00F0FF] transition-all cursor-pointer truncate"
-                      title="Bass Punch (+4.5dB Low, -1dB Treble)"
-                    >
-                      Bass+
-                    </button>
-                    <button
-                      onClick={() => handleApplyEqPreset(2.0, 3.0, -3.0)}
-                      className="px-1.5 py-1 rounded text-[10px] font-semibold bg-[#181B22] hover:bg-[#222630] border border-[#222630] text-[#8A92A6] hover:text-[#00F0FF] transition-all cursor-pointer truncate"
-                      title="Warm Radio (+2dB Bass, +3dB Mid, -3dB Treble)"
-                    >
-                      Radio
-                    </button>
-                  </div>
-
-                  {/* Bass Band (100 Hz) */}
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-[#8A92A6]">Bass (100 Hz)</span>
-                      <span className="font-mono text-[10px] font-bold text-[#F0F3F8]">
-                        {bassGain > 0 ? `+${bassGain.toFixed(1)}` : bassGain.toFixed(1)} dB
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleApplyEqPreset(0, 0, 0);
+                        }}
+                        title="Reset EQ to Flat (0dB)"
+                        className="text-[#64748B] hover:text-[#00F0FF] transition-colors cursor-pointer"
+                      >
+                        <RotateCcw size={12} />
+                      </button>
+                      <span className="text-[#8A92A6]">
+                        {audioSections.eq ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                       </span>
                     </div>
-                    <input
-                      type="range"
-                      min={-15}
-                      max={15}
-                      step={0.5}
-                      value={bassGain}
-                      onChange={(e) => handleBassChange(Number(e.target.value))}
-                      className="w-full h-1.5 bg-[#222630] rounded appearance-none cursor-pointer accent-[#00F0FF]"
-                    />
                   </div>
 
-                  {/* Mid Band (1 kHz) */}
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-[#8A92A6]">Mid (1.0 kHz)</span>
-                      <span className="font-mono text-[10px] font-bold text-[#F0F3F8]">
-                        {midGain > 0 ? `+${midGain.toFixed(1)}` : midGain.toFixed(1)} dB
-                      </span>
-                    </div>
-                    <input
-                      type="range"
-                      min={-15}
-                      max={15}
-                      step={0.5}
-                      value={midGain}
-                      onChange={(e) => handleMidChange(Number(e.target.value))}
-                      className="w-full h-1.5 bg-[#222630] rounded appearance-none cursor-pointer accent-[#00F0FF]"
-                    />
-                  </div>
+                  {audioSections.eq && (
+                    <div className="p-3 pt-0 border-t border-[#1C202B] space-y-3 mt-1">
+                      {/* EQ Presets */}
+                      <div className="grid grid-cols-4 gap-1">
+                        <button
+                          onClick={() => handleApplyEqPreset(0, 0, 0)}
+                          className={`px-1.5 py-1 rounded text-[10px] font-semibold border transition-all cursor-pointer ${
+                            bassGain === 0 && midGain === 0 && trebleGain === 0
+                              ? 'bg-[#00F0FF]/15 border-[#00F0FF]/40 text-[#00F0FF]'
+                              : 'bg-[#181B22] border-[#222630] text-[#8A92A6] hover:text-white'
+                          }`}
+                        >
+                          Flat
+                        </button>
+                        <button
+                          onClick={() => handleApplyEqPreset(-2.0, 2.5, 3.5)}
+                          className="px-1.5 py-1 rounded text-[10px] font-semibold bg-[#181B22] hover:bg-[#222630] border border-[#222630] text-[#8A92A6] hover:text-[#00F0FF] transition-all cursor-pointer truncate"
+                          title="Vocal Clarity (+2.5dB Mid, +3.5dB Treble, -2dB Bass)"
+                        >
+                          Vocal
+                        </button>
+                        <button
+                          onClick={() => handleApplyEqPreset(4.5, 0, -1.0)}
+                          className="px-1.5 py-1 rounded text-[10px] font-semibold bg-[#181B22] hover:bg-[#222630] border border-[#222630] text-[#8A92A6] hover:text-[#00F0FF] transition-all cursor-pointer truncate"
+                          title="Bass Punch (+4.5dB Low, -1dB Treble)"
+                        >
+                          Bass+
+                        </button>
+                        <button
+                          onClick={() => handleApplyEqPreset(2.0, 3.0, -3.0)}
+                          className="px-1.5 py-1 rounded text-[10px] font-semibold bg-[#181B22] hover:bg-[#222630] border border-[#222630] text-[#8A92A6] hover:text-[#00F0FF] transition-all cursor-pointer truncate"
+                          title="Warm Radio (+2dB Bass, +3dB Mid, -3dB Treble)"
+                        >
+                          Radio
+                        </button>
+                      </div>
 
-                  {/* Treble Band (8 kHz) */}
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-[#8A92A6]">Treble (8.0 kHz)</span>
-                      <span className="font-mono text-[10px] font-bold text-[#F0F3F8]">
-                        {trebleGain > 0 ? `+${trebleGain.toFixed(1)}` : trebleGain.toFixed(1)} dB
-                      </span>
+                      {/* Bass Band (100 Hz) */}
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-[#8A92A6]">Bass (100 Hz)</span>
+                          <span className="font-mono text-[10px] font-bold text-[#F0F3F8]">
+                            {bassGain > 0 ? `+${bassGain.toFixed(1)}` : bassGain.toFixed(1)} dB
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min={-15}
+                          max={15}
+                          step={0.5}
+                          value={bassGain}
+                          onChange={(e) => handleBassChange(Number(e.target.value))}
+                          className="w-full h-1.5 bg-[#222630] rounded appearance-none cursor-pointer accent-[#00F0FF]"
+                        />
+                      </div>
+
+                      {/* Mid Band (1 kHz) */}
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-[#8A92A6]">Mid (1.0 kHz)</span>
+                          <span className="font-mono text-[10px] font-bold text-[#F0F3F8]">
+                            {midGain > 0 ? `+${midGain.toFixed(1)}` : midGain.toFixed(1)} dB
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min={-15}
+                          max={15}
+                          step={0.5}
+                          value={midGain}
+                          onChange={(e) => handleMidChange(Number(e.target.value))}
+                          className="w-full h-1.5 bg-[#222630] rounded appearance-none cursor-pointer accent-[#00F0FF]"
+                        />
+                      </div>
+
+                      {/* Treble Band (8 kHz) */}
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-[#8A92A6]">Treble (8.0 kHz)</span>
+                          <span className="font-mono text-[10px] font-bold text-[#F0F3F8]">
+                            {trebleGain > 0 ? `+${trebleGain.toFixed(1)}` : trebleGain.toFixed(1)} dB
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min={-15}
+                          max={15}
+                          step={0.5}
+                          value={trebleGain}
+                          onChange={(e) => handleTrebleChange(Number(e.target.value))}
+                          className="w-full h-1.5 bg-[#222630] rounded appearance-none cursor-pointer accent-[#00F0FF]"
+                        />
+                      </div>
                     </div>
-                    <input
-                      type="range"
-                      min={-15}
-                      max={15}
-                      step={0.5}
-                      value={trebleGain}
-                      onChange={(e) => handleTrebleChange(Number(e.target.value))}
-                      className="w-full h-1.5 bg-[#222630] rounded appearance-none cursor-pointer accent-[#00F0FF]"
-                    />
-                  </div>
+                  )}
                 </div>
 
-                {/* 3. Multi-Track Dynamic Auto-Ducking */}
+                {/* 4. Multi-Track Dynamic Auto-Ducking - Collapsed by default */}
                 {parentTrack && (
-                  <div className="p-3 rounded-lg bg-[#0D0E11] border border-[#222630] space-y-3">
-                    <div className="flex items-center justify-between">
+                  <div className="rounded-lg bg-[#0D0E11] border border-[#222630] overflow-hidden">
+                    <div
+                      onClick={() => toggleAudioSection('ducking')}
+                      className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#14161F]/60 transition-colors select-none"
+                    >
                       <span className="text-xs font-bold text-[#F0F3F8] flex items-center gap-1.5">
                         <Sparkles size={13} className="text-[#F59E0B]" />
                         <span>Dynamic Auto-Ducking</span>
+                        {Boolean(parentTrack.ducking?.duckingEnabled) && (
+                          <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-[#F59E0B]/15 text-[#F59E0B] border border-[#F59E0B]/30 ml-1">
+                            ON
+                          </span>
+                        )}
                       </span>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={parentTrack.ducking?.duckingEnabled ?? false}
-                          onChange={(e) =>
-                            updateTrackDucking(parentTrack.id, {
-                              duckingEnabled: e.target.checked,
-                              attenuationDb: parentTrack.ducking?.attenuationDb ?? -14.0,
-                              attackMs: parentTrack.ducking?.attackMs ?? 20,
-                              releaseMs: parentTrack.ducking?.releaseMs ?? 250,
-                            })
-                          }
-                          className="sr-only peer"
-                        />
-                        <div className="w-8 h-4 bg-[#222630] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3.5 after:transition-all peer-checked:bg-[#F59E0B]"></div>
-                      </label>
-                    </div>
-
-                    <p className="text-[10px] text-[#64748B] leading-tight">
-                      Automatically attenuates (lowers) this track's audio whenever speech is detected on the target dialogue track.
-                    </p>
-
-                    {(parentTrack.ducking?.duckingEnabled ?? false) && (
-                      <div className="space-y-2 pt-1 border-t border-[#1C202B]">
-                        {/* Target Dialogue Track Picker */}
-                        <div className="space-y-1">
-                          <label className="text-[10px] text-[#8A92A6]">Target Dialogue Track</label>
-                          <select
-                            value={parentTrack.ducking?.targetTrackId || ''}
-                            onChange={(e) =>
-                              updateTrackDucking(parentTrack.id, { targetTrackId: e.target.value })
-                            }
-                            className="w-full bg-[#181B22] border border-[#222630] rounded px-2 py-1 text-xs text-[#F0F3F8] focus:border-[#F59E0B] outline-none"
-                          >
-                            <option value="">Auto-Detect Dialogue Track</option>
-                            {tracks
-                              .filter((t) => t.id !== parentTrack?.id)
-                              .map((t) => (
-                                <option key={t.id} value={t.id}>
-                                  {t.name} ({t.trackType || t.type})
-                                </option>
-                              ))}
-                          </select>
-                        </div>
-
-                        {/* Attenuation dB */}
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between text-[10px]">
-                            <span className="text-[#8A92A6]">Ducking Attenuation</span>
-                            <span className="font-mono text-[#F59E0B]">
-                              {(parentTrack.ducking?.attenuationDb ?? -14.0).toFixed(1)} dB
-                            </span>
-                          </div>
+                      <div className="flex items-center gap-2">
+                        <label
+                          className="relative inline-flex items-center cursor-pointer"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <input
-                            type="range"
-                            min={-30}
-                            max={-6}
-                            step={0.5}
-                            value={parentTrack.ducking?.attenuationDb ?? -14.0}
+                            type="checkbox"
+                            checked={parentTrack.ducking?.duckingEnabled ?? false}
                             onChange={(e) =>
                               updateTrackDucking(parentTrack.id, {
-                                attenuationDb: Number(e.target.value),
+                                duckingEnabled: e.target.checked,
+                                attenuationDb: parentTrack.ducking?.attenuationDb ?? -14.0,
+                                attackMs: parentTrack.ducking?.attackMs ?? 20,
+                                releaseMs: parentTrack.ducking?.releaseMs ?? 250,
                               })
                             }
-                            className="w-full h-1.5 bg-[#222630] rounded appearance-none cursor-pointer accent-[#F59E0B]"
+                            className="sr-only peer"
                           />
-                        </div>
+                          <div className="w-8 h-4 bg-[#222630] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3.5 after:transition-all peer-checked:bg-[#F59E0B]"></div>
+                        </label>
+                        <span className="text-[#8A92A6]">
+                          {audioSections.ducking ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                        </span>
+                      </div>
+                    </div>
 
-                        {/* Attack & Release Speeds */}
-                        <div className="grid grid-cols-2 gap-2">
+                    {audioSections.ducking && (
+                      <div className="p-3 pt-0 border-t border-[#1C202B] space-y-3 mt-1">
+                        <p className="text-[10px] text-[#64748B] leading-tight pt-1">
+                          Automatically attenuates (lowers) this track's audio whenever speech is detected on the target dialogue track.
+                        </p>
+
+                        <div className="space-y-2 pt-1">
+                          {/* Target Dialogue Track Picker */}
                           <div className="space-y-1">
-                            <div className="flex items-center justify-between text-[9px] text-[#8A92A6]">
-                              <span>Attack</span>
-                              <span className="font-mono">{parentTrack.ducking?.attackMs ?? 20}ms</span>
+                            <label className="text-[10px] text-[#8A92A6]">Target Dialogue Track</label>
+                            <select
+                              value={parentTrack.ducking?.targetTrackId || ''}
+                              onChange={(e) =>
+                                updateTrackDucking(parentTrack.id, { targetTrackId: e.target.value })
+                              }
+                              className="w-full bg-[#181B22] border border-[#222630] rounded px-2 py-1 text-xs text-[#F0F3F8] focus:border-[#F59E0B] outline-none"
+                            >
+                              <option value="">Auto-Detect Dialogue Track</option>
+                              {tracks
+                                .filter((t) => t.id !== parentTrack?.id)
+                                .map((t) => (
+                                  <option key={t.id} value={t.id}>
+                                    {t.name} ({t.trackType || t.type})
+                                  </option>
+                                ))}
+                            </select>
+                          </div>
+
+                          {/* Attenuation dB */}
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between text-[10px]">
+                              <span className="text-[#8A92A6]">Ducking Attenuation</span>
+                              <span className="font-mono text-[#F59E0B]">
+                                {(parentTrack.ducking?.attenuationDb ?? -14.0).toFixed(1)} dB
+                              </span>
                             </div>
                             <input
                               type="range"
-                              min={10}
-                              max={200}
-                              step={5}
-                              value={parentTrack.ducking?.attackMs ?? 20}
+                              min={-30}
+                              max={-6}
+                              step={0.5}
+                              value={parentTrack.ducking?.attenuationDb ?? -14.0}
                               onChange={(e) =>
                                 updateTrackDucking(parentTrack.id, {
-                                  attackMs: Number(e.target.value),
+                                  attenuationDb: Number(e.target.value),
                                 })
                               }
-                              className="w-full h-1 bg-[#222630] rounded appearance-none cursor-pointer accent-[#F59E0B]"
+                              className="w-full h-1.5 bg-[#222630] rounded appearance-none cursor-pointer accent-[#F59E0B]"
                             />
                           </div>
 
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between text-[9px] text-[#8A92A6]">
-                              <span>Release</span>
-                              <span className="font-mono">{parentTrack.ducking?.releaseMs ?? 250}ms</span>
+                          {/* Attack & Release Speeds */}
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between text-[9px] text-[#8A92A6]">
+                                <span>Attack</span>
+                                <span className="font-mono">{parentTrack.ducking?.attackMs ?? 20}ms</span>
+                              </div>
+                              <input
+                                type="range"
+                                min={10}
+                                max={200}
+                                step={5}
+                                value={parentTrack.ducking?.attackMs ?? 20}
+                                onChange={(e) =>
+                                  updateTrackDucking(parentTrack.id, {
+                                    attackMs: Number(e.target.value),
+                                  })
+                                }
+                                className="w-full h-1 bg-[#222630] rounded appearance-none cursor-pointer accent-[#F59E0B]"
+                              />
                             </div>
-                            <input
-                              type="range"
-                              min={50}
-                              max={1000}
-                              step={25}
-                              value={parentTrack.ducking?.releaseMs ?? 250}
-                              onChange={(e) =>
-                                updateTrackDucking(parentTrack.id, {
-                                  releaseMs: Number(e.target.value),
-                                })
-                              }
-                              className="w-full h-1 bg-[#222630] rounded appearance-none cursor-pointer accent-[#F59E0B]"
-                            />
+
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between text-[9px] text-[#8A92A6]">
+                                <span>Release</span>
+                                <span className="font-mono">{parentTrack.ducking?.releaseMs ?? 250}ms</span>
+                              </div>
+                              <input
+                                type="range"
+                                min={50}
+                                max={1000}
+                                step={25}
+                                value={parentTrack.ducking?.releaseMs ?? 250}
+                                onChange={(e) =>
+                                  updateTrackDucking(parentTrack.id, {
+                                    releaseMs: Number(e.target.value),
+                                  })
+                                }
+                                className="w-full h-1 bg-[#222630] rounded appearance-none cursor-pointer accent-[#F59E0B]"
+                              />
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -2727,112 +2934,147 @@ export const Inspector: React.FC = () => {
                   </div>
                 )}
 
-                {/* 4. Interactive Timeline Volume Envelopes / Keyframes */}
+                {/* 5. Interactive Timeline Volume Envelopes / Keyframes - Collapsed by default */}
                 {selectedClip && (
-                  <div className="p-3 rounded-lg bg-[#0D0E11] border border-[#222630] space-y-2.5">
-                    <div className="flex items-center justify-between">
+                  <div className="rounded-lg bg-[#0D0E11] border border-[#222630] overflow-hidden">
+                    <div
+                      onClick={() => toggleAudioSection('envelopes')}
+                      className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#14161F]/60 transition-colors select-none"
+                    >
                       <span className="text-xs font-bold text-[#F0F3F8] flex items-center gap-1.5">
                         <Diamond size={13} className="text-[#10B981]" />
                         <span>Volume Envelopes</span>
+                        {Boolean(selectedClip.volumeKeyframes?.length) && (
+                          <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-[#10B981]/15 text-[#10B981] border border-[#10B981]/30 ml-1">
+                            {selectedClip.volumeKeyframes!.length} pts
+                          </span>
+                        )}
                       </span>
-                      <button
-                        onClick={handleAddKeyframeAtPlayhead}
-                        className="px-2 py-0.5 rounded bg-[#10B981]/15 hover:bg-[#10B981]/25 border border-[#10B981]/40 text-[#10B981] text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer"
-                        title="Add volume envelope keyframe at current playhead"
-                      >
-                        <span>+ Add at Playhead</span>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAddKeyframeAtPlayhead();
+                          }}
+                          className="px-2 py-0.5 rounded bg-[#10B981]/15 hover:bg-[#10B981]/25 border border-[#10B981]/40 text-[#10B981] text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer"
+                          title="Add volume envelope keyframe at current playhead"
+                        >
+                          <span>+ Add</span>
+                        </button>
+                        <span className="text-[#8A92A6]">
+                          {audioSections.envelopes ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                        </span>
+                      </div>
                     </div>
 
-                    {/* Keyframe List */}
-                    {selectedClip.volumeKeyframes && selectedClip.volumeKeyframes.length > 0 ? (
-                      <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
-                        {selectedClip.volumeKeyframes.map((kf, idx) => {
-                          const absTime = (selectedClip?.startPositionSeconds || 0) + kf.time;
-                          return (
-                            <div
-                              key={`${kf.time}-${idx}`}
-                              className="flex items-center justify-between px-2 py-1 rounded bg-[#181B22] border border-[#222630] text-[10px]"
-                            >
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono text-[#10B981] font-bold">
-                                  +{kf.time.toFixed(2)}s
-                                </span>
-                                <span className="font-mono text-[#F0F3F8]">
-                                  {kf.value > 0 ? `+${kf.value.toFixed(1)}` : kf.value.toFixed(1)} dB
-                                </span>
-                              </div>
+                    {audioSections.envelopes && (
+                      <div className="p-3 pt-0 border-t border-[#1C202B] space-y-2.5 mt-1">
+                        {/* Keyframe List */}
+                        {selectedClip.volumeKeyframes && selectedClip.volumeKeyframes.length > 0 ? (
+                          <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
+                            {selectedClip.volumeKeyframes.map((kf, idx) => {
+                              const absTime = (selectedClip?.startPositionSeconds || 0) + kf.time;
+                              return (
+                                <div
+                                  key={`${kf.time}-${idx}`}
+                                  className="flex items-center justify-between px-2 py-1 rounded bg-[#181B22] border border-[#222630] text-[10px]"
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono text-[#10B981] font-bold">
+                                      +{kf.time.toFixed(2)}s
+                                    </span>
+                                    <span className="font-mono text-[#F0F3F8]">
+                                      {kf.value > 0 ? `+${kf.value.toFixed(1)}` : kf.value.toFixed(1)} dB
+                                    </span>
+                                  </div>
 
-                              <div className="flex items-center gap-1.5">
-                                <button
-                                  onClick={() => setPlayhead(absTime)}
-                                  className="text-[#64748B] hover:text-[#00F0FF] p-0.5 transition-colors cursor-pointer"
-                                  title={`Seek playhead to ${absTime.toFixed(2)}s`}
-                                >
-                                  <Play size={10} />
-                                </button>
-                                <button
-                                  onClick={() => removeVolumeKeyframe(selectedClip!.id, kf.time)}
-                                  className="text-[#64748B] hover:text-red-400 p-0.5 transition-colors cursor-pointer"
-                                  title="Delete volume keyframe"
-                                >
-                                  <Trash2 size={10} />
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="p-2.5 rounded bg-[#14161B] border border-dashed border-[#222630] text-center">
-                        <p className="text-[10px] text-[#64748B]">
-                          No volume envelope keyframes yet. Double-click on the clip waveform line or click "+ Add at Playhead".
-                        </p>
+                                  <div className="flex items-center gap-1.5">
+                                    <button
+                                      onClick={() => setPlayhead(absTime)}
+                                      className="text-[#64748B] hover:text-[#00F0FF] p-0.5 transition-colors cursor-pointer"
+                                      title={`Seek playhead to ${absTime.toFixed(2)}s`}
+                                    >
+                                      <Play size={10} />
+                                    </button>
+                                    <button
+                                      onClick={() => removeVolumeKeyframe(selectedClip!.id, kf.time)}
+                                      className="text-[#64748B] hover:text-red-400 p-0.5 transition-colors cursor-pointer"
+                                      title="Delete volume keyframe"
+                                    >
+                                      <Trash2 size={10} />
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="p-2.5 rounded bg-[#14161B] border border-dashed border-[#222630] text-center">
+                            <p className="text-[10px] text-[#64748B]">
+                              No volume envelope keyframes yet. Double-click on the clip waveform line or click "+ Add at Playhead".
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
                 )}
 
-                {/* 5. Live Stereo dB Meter */}
-                <div className="p-3 rounded-lg bg-[#0D0E11] border border-[#222630] space-y-2">
-                  <div className="flex items-center justify-between text-xs font-bold text-[#F0F3F8]">
-                    <span>Live Stereo dB Meter</span>
-                    <span className="text-[10px] font-mono text-[#64748B]">
-                      {isPlaying ? 'ACTIVE' : 'IDLE'}
+                {/* 6. Live Stereo dB Meter - Collapsed by default */}
+                <div className="rounded-lg bg-[#0D0E11] border border-[#222630] overflow-hidden">
+                  <div
+                    onClick={() => toggleAudioSection('meter')}
+                    className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#14161F]/60 transition-colors select-none"
+                  >
+                    <span className="text-xs font-bold text-[#F0F3F8] flex items-center gap-1.5">
+                      <Sliders size={13} className="text-[#10B981]" />
+                      <span>Live Stereo dB Meter</span>
                     </span>
-                  </div>
-
-                  {/* Left Channel Bar */}
-                  <div className="space-y-0.5">
-                    <div className="flex items-center justify-between text-[10px] font-mono text-[#8A92A6]">
-                      <span>CH L</span>
-                      <span>{meterL <= -60 ? '-∞' : `${meterL.toFixed(1)} dB`}</span>
-                    </div>
-                    <div className="w-full h-2 bg-[#1A1D24] rounded overflow-hidden">
-                      <div
-                        style={{ width: `${Math.min(100, Math.max(0, ((meterL + 60) / 60) * 100))}%` }}
-                        className={`h-full transition-all duration-75 ${
-                          meterL > -3 ? 'bg-red-500' : meterL > -12 ? 'bg-amber-400' : 'bg-[#10B981]'
-                        }`}
-                      />
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono text-[#64748B]">
+                        {isPlaying ? 'ACTIVE' : 'IDLE'}
+                      </span>
+                      <span className="text-[#8A92A6]">
+                        {audioSections.meter ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                      </span>
                     </div>
                   </div>
 
-                  {/* Right Channel Bar */}
-                  <div className="space-y-0.5">
-                    <div className="flex items-center justify-between text-[10px] font-mono text-[#8A92A6]">
-                      <span>CH R</span>
-                      <span>{meterR <= -60 ? '-∞' : `${meterR.toFixed(1)} dB`}</span>
+                  {audioSections.meter && (
+                    <div className="p-3 pt-0 border-t border-[#1C202B] space-y-2 mt-1">
+                      {/* Left Channel Bar */}
+                      <div className="space-y-0.5">
+                        <div className="flex items-center justify-between text-[10px] font-mono text-[#8A92A6]">
+                          <span>CH L</span>
+                          <span>{meterL <= -60 ? '-∞' : `${meterL.toFixed(1)} dB`}</span>
+                        </div>
+                        <div className="w-full h-2 bg-[#1A1D24] rounded overflow-hidden">
+                          <div
+                            style={{ width: `${Math.min(100, Math.max(0, ((meterL + 60) / 60) * 100))}%` }}
+                            className={`h-full transition-all duration-75 ${
+                              meterL > -3 ? 'bg-red-500' : meterL > -12 ? 'bg-amber-400' : 'bg-[#10B981]'
+                            }`}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Right Channel Bar */}
+                      <div className="space-y-0.5">
+                        <div className="flex items-center justify-between text-[10px] font-mono text-[#8A92A6]">
+                          <span>CH R</span>
+                          <span>{meterR <= -60 ? '-∞' : `${meterR.toFixed(1)} dB`}</span>
+                        </div>
+                        <div className="w-full h-2 bg-[#1A1D24] rounded overflow-hidden">
+                          <div
+                            style={{ width: `${Math.min(100, Math.max(0, ((meterR + 60) / 60) * 100))}%` }}
+                            className={`h-full transition-all duration-75 ${
+                              meterR > -3 ? 'bg-red-500' : meterR > -12 ? 'bg-amber-400' : 'bg-[#10B981]'
+                            }`}
+                          />
+                        </div>
+                      </div>
                     </div>
-                    <div className="w-full h-2 bg-[#1A1D24] rounded overflow-hidden">
-                      <div
-                        style={{ width: `${Math.min(100, Math.max(0, ((meterR + 60) / 60) * 100))}%` }}
-                        className={`h-full transition-all duration-75 ${
-                          meterR > -3 ? 'bg-red-500' : meterR > -12 ? 'bg-amber-400' : 'bg-[#10B981]'
-                        }`}
-                      />
-                    </div>
-                  </div>
+                  )}
                 </div>
               </div>
             )}

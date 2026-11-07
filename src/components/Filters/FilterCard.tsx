@@ -8,6 +8,7 @@ interface FilterCardProps {
   isActive: boolean;
   sampleMode: 'default' | 'video_frame';
   videoFrameSnapshot: string | null;
+  cardScale?: 'normal' | 'large';
   onApply: (preset: FilterPreset) => void;
   onDragStart?: (e: React.DragEvent, preset: FilterPreset) => void;
 }
@@ -17,6 +18,7 @@ export const FilterCard: React.FC<FilterCardProps> = ({
   isActive,
   sampleMode,
   videoFrameSnapshot,
+  cardScale = 'normal',
   onApply,
   onDragStart,
 }) => {
@@ -105,7 +107,9 @@ export const FilterCard: React.FC<FilterCardProps> = ({
 
       {/* Preset Name Underneath - Centered CapCut Style */}
       <span
-        className={`text-[12px] font-medium mt-1.5 text-center truncate w-full px-0.5 leading-tight tracking-tight transition-colors ${
+        className={`font-medium mt-1.5 text-center truncate w-full px-0.5 leading-tight tracking-tight transition-colors ${
+          cardScale === 'large' ? 'text-[12px]' : 'text-[11px]'
+        } ${
           isActive
             ? 'text-[#00F0FF] font-semibold'
             : 'text-[#9DA8B6] group-hover:text-white'

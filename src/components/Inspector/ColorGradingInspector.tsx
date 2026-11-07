@@ -16,6 +16,7 @@ import {
   Save,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
 } from 'lucide-react';
 import { Diamond, Pipette } from '@/components/Icons';
 import {
@@ -173,9 +174,9 @@ const AdjustmentSliderRow: React.FC<{
   onReset?: () => void;
 }> = ({ label, value, min = -100, max = 100, step = 1, trackGradient, leftHint, rightHint, onChange, onReset }) => {
   return (
-    <div className="py-1">
-      <div className="flex items-center gap-3">
-        <span className="text-[12px] text-[#D1D5DB] font-medium w-20 shrink-0 truncate">{label}</span>
+    <div className="py-0.5">
+      <div className="flex items-center gap-2">
+        <span className="text-[11px] text-[#CBD5E1] font-medium w-16 shrink-0 truncate">{label}</span>
 
         {/* Slider Track */}
         <div className="flex-1 relative flex items-center">
@@ -195,7 +196,7 @@ const AdjustmentSliderRow: React.FC<{
 
         {/* Number Box with Steppers and Keyframe Diamond */}
         <div className="flex items-center gap-1 shrink-0">
-          <div className="w-14 h-6 bg-[#16181E] border border-[#262A34] rounded flex items-center justify-between px-1">
+          <div className="w-12 h-5 bg-[#14161F] border border-[#262A34] rounded flex items-center justify-between px-1">
             <input
               type="number"
               min={min}
@@ -205,20 +206,20 @@ const AdjustmentSliderRow: React.FC<{
                 const parsed = parseInt(e.target.value, 10);
                 onChange(isNaN(parsed) ? 0 : Math.max(min, Math.min(max, parsed)));
               }}
-              className="w-7 text-[11px] font-mono text-center text-[#F3F4F6] bg-transparent outline-none p-0"
+              className="w-6 text-[10px] font-mono text-center text-[#F3F4F6] bg-transparent outline-none p-0"
             />
             <div className="flex flex-col text-[#6B7280] leading-none select-none">
               <button
                 type="button"
                 onClick={() => onChange(Math.min(max, value + 1))}
-                className="hover:text-white text-[7px] p-0 cursor-pointer"
+                className="hover:text-white text-[6px] p-0 cursor-pointer"
               >
                 ▲
               </button>
               <button
                 type="button"
                 onClick={() => onChange(Math.max(min, value - 1))}
-                className="hover:text-white text-[7px] p-0 cursor-pointer"
+                className="hover:text-white text-[6px] p-0 cursor-pointer"
               >
                 ▼
               </button>
@@ -229,26 +230,26 @@ const AdjustmentSliderRow: React.FC<{
             type="button"
             onClick={onReset || (() => onChange(0))}
             title="Reset to 0"
-            className="p-1 text-[#6B7280] hover:text-[#00F0FF] transition-colors cursor-pointer"
+            className="p-0.5 text-[#6B7280] hover:text-[#00F0FF] transition-colors cursor-pointer"
           >
-            <Diamond size={11} fill={value !== 0 ? 'currentColor' : 'none'} />
+            <Diamond size={10} fill={value !== 0 ? 'currentColor' : 'none'} />
           </button>
         </div>
       </div>
 
       {/* Optional reference hint underneath slider (e.g. for Hue) */}
       {(leftHint || rightHint) && (
-        <div className="flex items-center justify-between pl-20 pr-16 text-[9px] font-mono pt-1 leading-none select-none">
+        <div className="flex items-center justify-between pl-18 pr-14 text-[9px] font-mono pt-0.5 leading-none select-none">
           {leftHint ? (
-            <span className="flex items-center gap-1.5 opacity-90 hover:opacity-100 transition-opacity" style={{ color: leftHint.color }}>
-              <span className="w-1.5 h-1.5 rounded-full inline-block shrink-0 shadow-xs" style={{ backgroundColor: leftHint.color }} />
+            <span className="flex items-center gap-1 opacity-80" style={{ color: leftHint.color }}>
+              <span className="w-1.5 h-1.5 rounded-full inline-block shrink-0" style={{ backgroundColor: leftHint.color }} />
               <span>{leftHint.name}</span>
             </span>
           ) : <span />}
           {rightHint ? (
-            <span className="flex items-center gap-1.5 opacity-90 hover:opacity-100 transition-opacity" style={{ color: rightHint.color }}>
+            <span className="flex items-center gap-1 opacity-80" style={{ color: rightHint.color }}>
               <span>{rightHint.name}</span>
-              <span className="w-1.5 h-1.5 rounded-full inline-block shrink-0 shadow-xs" style={{ backgroundColor: rightHint.color }} />
+              <span className="w-1.5 h-1.5 rounded-full inline-block shrink-0" style={{ backgroundColor: rightHint.color }} />
             </span>
           ) : <span />}
         </div>
@@ -286,9 +287,20 @@ export const ColorGradingInspector: React.FC<ColorGradingInspectorProps> = ({
   const [hslEnabled, setHslEnabled] = useState(true);
   const [selectedColorKey, setSelectedColorKey] = useState<SelectiveColorId>('red');
 
-  // Accordion Section Visibility
-  const [showAdvancedCurves, setShowAdvancedCurves] = useState(true);
-  const [showColorWheels, setShowColorWheels] = useState(false);
+  // Accordion Section Visibility: 1st section (Lightness) open by default, others collapsed
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    lightness: true,
+    effects: false,
+    hsl: false,
+    presets: false,
+    curves: false,
+    wheels: false,
+  });
+
+  const toggleSection = (key: string) => {
+    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
   const [showScopesTarget, setShowScopesTarget] = useState(false);
 
   // Determine active profile based on scope
@@ -442,401 +454,465 @@ export const ColorGradingInspector: React.FC<ColorGradingInspectorProps> = ({
       </div>
 
       {/* ========================================================================= */}
-      {/* 1. LIGHTNESS CARD (Image 2: Exposure, Contrast, Highlight, Shadow, etc.)   */}
+      {/* 1. LIGHTNESS CARD (Exposure, Contrast, Highlight, Shadow, etc.) - Default OPEN */}
       {/* ========================================================================= */}
-      <div className="p-3 rounded-lg bg-[#0E1015] border border-[#222630] space-y-2">
-        <div className="flex items-center justify-between pb-1">
-          <span className="text-xs font-bold text-[#F0F3F8]">Lightness</span>
-          <button
-            onClick={() =>
-              handleUpdate({
-                exposure: 0,
-                contrast: 1,
-                highlights: 0,
-                shadows: 0,
-                whites: 0,
-                blacks: 0,
-                brilliance: 0,
-              })
-            }
-            title="Reset Lightness"
-            className="text-[#64748B] hover:text-[#00F0FF] transition-colors cursor-pointer"
-          >
-            <RotateCcw size={11} />
-          </button>
-        </div>
-
-        {/* Exposure (-100 to 100, maps to -4.0 to +4.0 EV) */}
-        <AdjustmentSliderRow
-          label="Exposure"
-          value={Math.round((activeProfile.exposure ?? 0) * 25)}
-          min={-100}
-          max={100}
-          onChange={(val) => handleUpdate({ exposure: val / 25 })}
-        />
-
-        {/* Contrast (-100 to 100, maps to 0.0 to 2.0) */}
-        <AdjustmentSliderRow
-          label="Contrast"
-          value={Math.round(((activeProfile.contrast ?? 1) - 1) * 100)}
-          min={-100}
-          max={100}
-          onChange={(val) => handleUpdate({ contrast: 1 + val / 100 })}
-        />
-
-        {/* Highlight (-100 to 100) */}
-        <AdjustmentSliderRow
-          label="Highlight"
-          value={Math.round((activeProfile.highlights ?? 0) * 100)}
-          min={-100}
-          max={100}
-          onChange={(val) => handleUpdate({ highlights: val / 100 })}
-        />
-
-        {/* Shadow (-100 to 100) */}
-        <AdjustmentSliderRow
-          label="Shadow"
-          value={Math.round((activeProfile.shadows ?? 0) * 100)}
-          min={-100}
-          max={100}
-          onChange={(val) => handleUpdate({ shadows: val / 100 })}
-        />
-
-        {/* Whites (-100 to 100) */}
-        <AdjustmentSliderRow
-          label="Whites"
-          value={Math.round((activeProfile.whites ?? 0) * 100)}
-          min={-100}
-          max={100}
-          onChange={(val) => handleUpdate({ whites: val / 100 })}
-        />
-
-        {/* Blacks (-100 to 100) */}
-        <AdjustmentSliderRow
-          label="Blacks"
-          value={Math.round((activeProfile.blacks ?? 0) * 100)}
-          min={-100}
-          max={100}
-          onChange={(val) => handleUpdate({ blacks: val / 100 })}
-        />
-
-        {/* Brilliance (-100 to 100) */}
-        <AdjustmentSliderRow
-          label="Brilliance"
-          value={Math.round((activeProfile.brilliance ?? 0) * 100)}
-          min={-100}
-          max={100}
-          onChange={(val) => handleUpdate({ brilliance: val / 100 })}
-        />
-      </div>
-
-      {/* ========================================================================= */}
-      {/* 3. EFFECTS CARD (Image 3: Sharpen, Clarity, Particles, Fade, Vignette)    */}
-      {/* ========================================================================= */}
-      <div className="p-3 rounded-lg bg-[#0E1015] border border-[#222630] space-y-2">
-        <div className="flex items-center justify-between pb-1">
-          <span className="text-xs font-bold text-[#F0F3F8]">Effects</span>
-          <button
-            onClick={() =>
-              handleUpdate({
-                sharpen: 0,
-                clarity: 0,
-                particles: 0,
-                fade: 0,
-                vignette: 0,
-              })
-            }
-            title="Reset Effects"
-            className="text-[#64748B] hover:text-[#00F0FF] transition-colors cursor-pointer"
-          >
-            <RotateCcw size={11} />
-          </button>
-        </div>
-
-        {/* Sharpen (0 to 100) */}
-        <AdjustmentSliderRow
-          label="Sharpen"
-          value={Math.round(activeProfile.sharpen ?? 0)}
-          min={0}
-          max={100}
-          onChange={(val) => handleUpdate({ sharpen: val })}
-        />
-
-        {/* Clarity (-100 to 100) */}
-        <AdjustmentSliderRow
-          label="Clarity"
-          value={Math.round(activeProfile.clarity ?? 0)}
-          min={-100}
-          max={100}
-          onChange={(val) => handleUpdate({ clarity: val })}
-        />
-
-        {/* Particles / Film Grain (0 to 100) */}
-        <AdjustmentSliderRow
-          label="Particles"
-          value={Math.round(activeProfile.particles ?? 0)}
-          min={0}
-          max={100}
-          onChange={(val) => handleUpdate({ particles: val })}
-        />
-
-        {/* Fade (0 to 100) */}
-        <AdjustmentSliderRow
-          label="Fade"
-          value={Math.round(activeProfile.fade ?? 0)}
-          min={0}
-          max={100}
-          onChange={(val) => handleUpdate({ fade: val })}
-        />
-
-        {/* Vignette (0 to 100) */}
-        <AdjustmentSliderRow
-          label="Vignette"
-          value={Math.round(activeProfile.vignette ?? 0)}
-          min={0}
-          max={100}
-          onChange={(val) => handleUpdate({ vignette: val })}
-        />
-
-        {/* Save as preset button directly inside Effects card, matching Image 3 */}
-        <div className="pt-2">
-          {isSavingPreset ? (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (newPresetName.trim()) {
-                  const newId = saveColorGradingPreset(newPresetName.trim(), activeProfile);
-                  setSelectedPresetId(newId);
-                  setNewPresetName('');
-                  setIsSavingPreset(false);
-                }
-              }}
-              className="flex items-center gap-1.5 animate-in fade-in"
-            >
-              <input
-                type="text"
-                autoFocus
-                placeholder="Preset Name (e.g. My Cinematic Look)..."
-                value={newPresetName}
-                onChange={(e) => setNewPresetName(e.target.value)}
-                className="flex-1 bg-[#14161B] border border-[#00F0FF]/60 rounded px-2.5 py-1 text-xs text-[#F0F3F8] outline-none"
-              />
-              <button
-                type="submit"
-                className="px-3 py-1 bg-[#00F0FF] hover:bg-[#34f3ff] text-[#0D0E11] rounded text-xs font-bold transition-all cursor-pointer"
-              >
-                Save
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsSavingPreset(false)}
-                className="px-2 py-1 text-xs text-[#8A92A6] hover:text-white"
-              >
-                Cancel
-              </button>
-            </form>
-          ) : (
+      <div className="rounded-lg bg-[#0E1015] border border-[#222630] overflow-hidden">
+        <div
+          onClick={() => toggleSection('lightness')}
+          className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#14161F]/60 transition-colors select-none"
+        >
+          <span className="text-xs font-bold text-[#F0F3F8] flex items-center gap-1.5">
+            <Sun size={13} className="text-[#00F0FF]" />
+            <span>Lightness</span>
+          </span>
+          <div className="flex items-center gap-2">
             <button
-              onClick={() => setIsSavingPreset(true)}
-              className="w-full py-2 px-4 rounded bg-[#06B6D4] hover:bg-[#22D3EE] text-[#0A0C10] font-bold text-xs flex items-center justify-center gap-1.5 shadow-[0_0_12px_rgba(6,182,212,0.3)] transition-all cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleUpdate({
+                  exposure: 0,
+                  contrast: 1,
+                  highlights: 0,
+                  shadows: 0,
+                  whites: 0,
+                  blacks: 0,
+                  brilliance: 0,
+                });
+              }}
+              title="Reset Lightness"
+              className="text-[#64748B] hover:text-[#00F0FF] transition-colors cursor-pointer"
             >
-              <Save size={13} />
-              <span>Save as preset</span>
+              <RotateCcw size={11} />
             </button>
-          )}
+            <span className="text-[#8A92A6]">
+              {openSections.lightness ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+            </span>
+          </div>
         </div>
+
+        {openSections.lightness && (
+          <div className="p-3 pt-0 border-t border-[#1C202B] space-y-2 mt-1">
+            {/* Exposure (-100 to 100, maps to -4.0 to +4.0 EV) */}
+            <AdjustmentSliderRow
+              label="Exposure"
+              value={Math.round((activeProfile.exposure ?? 0) * 25)}
+              min={-100}
+              max={100}
+              onChange={(val) => handleUpdate({ exposure: val / 25 })}
+            />
+
+            {/* Contrast (-100 to 100, maps to 0.0 to 2.0) */}
+            <AdjustmentSliderRow
+              label="Contrast"
+              value={Math.round(((activeProfile.contrast ?? 1) - 1) * 100)}
+              min={-100}
+              max={100}
+              onChange={(val) => handleUpdate({ contrast: 1 + val / 100 })}
+            />
+
+            {/* Highlight (-100 to 100) */}
+            <AdjustmentSliderRow
+              label="Highlight"
+              value={Math.round((activeProfile.highlights ?? 0) * 100)}
+              min={-100}
+              max={100}
+              onChange={(val) => handleUpdate({ highlights: val / 100 })}
+            />
+
+            {/* Shadow (-100 to 100) */}
+            <AdjustmentSliderRow
+              label="Shadow"
+              value={Math.round((activeProfile.shadows ?? 0) * 100)}
+              min={-100}
+              max={100}
+              onChange={(val) => handleUpdate({ shadows: val / 100 })}
+            />
+
+            {/* Whites (-100 to 100) */}
+            <AdjustmentSliderRow
+              label="Whites"
+              value={Math.round((activeProfile.whites ?? 0) * 100)}
+              min={-100}
+              max={100}
+              onChange={(val) => handleUpdate({ whites: val / 100 })}
+            />
+
+            {/* Blacks (-100 to 100) */}
+            <AdjustmentSliderRow
+              label="Blacks"
+              value={Math.round((activeProfile.blacks ?? 0) * 100)}
+              min={-100}
+              max={100}
+              onChange={(val) => handleUpdate({ blacks: val / 100 })}
+            />
+
+            {/* Brilliance (-100 to 100) */}
+            <AdjustmentSliderRow
+              label="Brilliance"
+              value={Math.round((activeProfile.brilliance ?? 0) * 100)}
+              min={-100}
+              max={100}
+              onChange={(val) => handleUpdate({ brilliance: val / 100 })}
+            />
+          </div>
+        )}
       </div>
 
       {/* ========================================================================= */}
-      {/* 3. HSL CARD (8-Color Selective Palette - Renamed from Basic to HSL)       */}
+      {/* 2. EFFECTS CARD (Sharpen, Clarity, Particles, Fade, Vignette) - Collapsed */}
       {/* ========================================================================= */}
-      <div className="p-3 rounded-lg bg-[#0E1015] border border-[#222630] space-y-3">
-        {/* Card Header: Checkbox + "HSL" + Reset + Keyframe */}
-        <div className="flex items-center justify-between">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={hslEnabled}
-              onChange={(e) => setHslEnabled(e.target.checked)}
-              className="w-4 h-4 rounded border-[#2E3340] accent-[#00F0FF] cursor-pointer"
+      <div className="rounded-lg bg-[#0E1015] border border-[#222630] overflow-hidden">
+        <div
+          onClick={() => toggleSection('effects')}
+          className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#14161F]/60 transition-colors select-none"
+        >
+          <span className="text-xs font-bold text-[#F0F3F8] flex items-center gap-1.5">
+            <Sparkles size={13} className="text-[#00F0FF]" />
+            <span>Effects</span>
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleUpdate({
+                  sharpen: 0,
+                  clarity: 0,
+                  particles: 0,
+                  fade: 0,
+                  vignette: 0,
+                });
+              }}
+              title="Reset Effects"
+              className="text-[#64748B] hover:text-[#00F0FF] transition-colors cursor-pointer"
+            >
+              <RotateCcw size={11} />
+            </button>
+            <span className="text-[#8A92A6]">
+              {openSections.effects ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+            </span>
+          </div>
+        </div>
+
+        {openSections.effects && (
+          <div className="p-3 pt-0 border-t border-[#1C202B] space-y-2 mt-1">
+            {/* Sharpen (0 to 100) */}
+            <AdjustmentSliderRow
+              label="Sharpen"
+              value={Math.round(activeProfile.sharpen ?? 0)}
+              min={0}
+              max={100}
+              onChange={(val) => handleUpdate({ sharpen: val })}
             />
-            <span className="text-xs font-bold text-[#F0F3F8]">HSL</span>
-          </label>
+
+            {/* Clarity (-100 to 100) */}
+            <AdjustmentSliderRow
+              label="Clarity"
+              value={Math.round(activeProfile.clarity ?? 0)}
+              min={-100}
+              max={100}
+              onChange={(val) => handleUpdate({ clarity: val })}
+            />
+
+            {/* Particles / Film Grain (0 to 100) */}
+            <AdjustmentSliderRow
+              label="Particles"
+              value={Math.round(activeProfile.particles ?? 0)}
+              min={0}
+              max={100}
+              onChange={(val) => handleUpdate({ particles: val })}
+            />
+
+            {/* Fade (0 to 100) */}
+            <AdjustmentSliderRow
+              label="Fade"
+              value={Math.round(activeProfile.fade ?? 0)}
+              min={0}
+              max={100}
+              onChange={(val) => handleUpdate({ fade: val })}
+            />
+
+            {/* Vignette (0 to 100) */}
+            <AdjustmentSliderRow
+              label="Vignette"
+              value={Math.round(activeProfile.vignette ?? 0)}
+              min={0}
+              max={100}
+              onChange={(val) => handleUpdate({ vignette: val })}
+            />
+
+            {/* Save as preset button */}
+            <div className="pt-2">
+              {isSavingPreset ? (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (newPresetName.trim()) {
+                      const newId = saveColorGradingPreset(newPresetName.trim(), activeProfile);
+                      setSelectedPresetId(newId);
+                      setNewPresetName('');
+                      setIsSavingPreset(false);
+                    }
+                  }}
+                  className="flex items-center gap-1.5 animate-in fade-in"
+                >
+                  <input
+                    type="text"
+                    autoFocus
+                    placeholder="Preset Name (e.g. My Cinematic Look)..."
+                    value={newPresetName}
+                    onChange={(e) => setNewPresetName(e.target.value)}
+                    className="flex-1 bg-[#14161B] border border-[#00F0FF]/60 rounded px-2.5 py-1 text-xs text-[#F0F3F8] outline-none"
+                  />
+                  <button
+                    type="submit"
+                    className="px-3 py-1 bg-[#00F0FF] hover:bg-[#34f3ff] text-[#0D0E11] rounded text-xs font-bold transition-all cursor-pointer"
+                  >
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsSavingPreset(false)}
+                    className="px-2 py-1 text-xs text-[#8A92A6] hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                </form>
+              ) : (
+                <button
+                  onClick={() => setIsSavingPreset(true)}
+                  className="w-full py-2 px-4 rounded bg-[#06B6D4] hover:bg-[#22D3EE] text-[#0A0C10] font-bold text-xs flex items-center justify-center gap-1.5 shadow-[0_0_12px_rgba(6,182,212,0.3)] transition-all cursor-pointer"
+                >
+                  <Save size={13} />
+                  <span>Save as preset</span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 3. HSL CARD (8-Color Selective Palette) - Collapsed by default             */}
+      {/* ========================================================================= */}
+      <div className="rounded-lg bg-[#0E1015] border border-[#222630] overflow-hidden">
+        <div
+          onClick={() => toggleSection('hsl')}
+          className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#14161F]/60 transition-colors select-none"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-[#F0F3F8] flex items-center gap-1.5">
+              <Palette size={13} className="text-[#00F0FF]" />
+              <span>HSL (Color Band Tuning)</span>
+            </span>
+          </div>
 
           <div className="flex items-center gap-2">
             <button
-              onClick={handleResetAllSelective}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleResetAllSelective();
+              }}
               title="Reset All HSL Colors"
               className="text-[#64748B] hover:text-white transition-colors cursor-pointer"
             >
               <RotateCcw size={12} />
             </button>
-            <button
-              title="Keyframe HSL"
-              className="text-[#64748B] hover:text-[#00F0FF] transition-colors cursor-pointer"
-            >
-              <Diamond size={13} fill="none" />
-            </button>
+            <span className="text-[#8A92A6]">
+              {openSections.hsl ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+            </span>
           </div>
         </div>
 
-        {/* Eyedropper + 8 Selective Color Circles */}
-        <div className="flex items-center justify-between pt-1 pb-1">
-          {/* Eyedropper Button */}
-          <button
-            onClick={handleEyedropper}
-            title="Sample Color from Screen"
-            className="w-7 h-7 rounded-full bg-[#1F232D] hover:bg-[#2B313F] text-[#8A92A6] hover:text-white flex items-center justify-center transition-colors cursor-pointer shrink-0"
-          >
-            <Pipette size={13} />
-          </button>
+        {openSections.hsl && (
+          <div className="p-3 pt-0 border-t border-[#1C202B] space-y-2 mt-1">
+            {/* Enable switch */}
+            <div className="flex items-center justify-between pt-1">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={hslEnabled}
+                  onChange={(e) => setHslEnabled(e.target.checked)}
+                  className="w-3.5 h-3.5 rounded border-[#2E3340] accent-[#00F0FF] cursor-pointer"
+                />
+                <span className="text-xs font-medium text-[#D1D5DB]">Enable HSL Adjustments</span>
+              </label>
+            </div>
 
-          {/* 8 Color Circles */}
-          {SELECTIVE_COLOR_PRESETS.map((preset) => {
-            const isSelected = selectedColorKey === preset.id;
-            return (
+            {/* Eyedropper + 8 Selective Color Circles in ONE compact line */}
+            <div className="flex items-center justify-between gap-1 py-1">
+              {/* Eyedropper Button */}
               <button
-                key={preset.id}
-                onClick={() => setSelectedColorKey(preset.id)}
-                title={preset.name}
-                className={`relative w-6 h-6 rounded-full transition-all cursor-pointer flex items-center justify-center ${
-                  isSelected
-                    ? 'ring-2 ring-white ring-offset-2 ring-offset-[#0E1015] scale-110 shadow-sm'
-                    : 'hover:scale-105 opacity-85 hover:opacity-100'
-                }`}
-                style={{ backgroundColor: preset.color }}
+                onClick={handleEyedropper}
+                title="Sample Color from Screen"
+                className="w-6 h-6 rounded-full bg-[#181B22] hover:bg-[#252A36] text-[#8A92A6] hover:text-white flex items-center justify-center transition-colors cursor-pointer shrink-0 border border-[#222630]"
+              >
+                <Pipette size={11} />
+              </button>
+
+              {/* 8 Color Circles */}
+              {SELECTIVE_COLOR_PRESETS.map((preset) => {
+                const isSelected = selectedColorKey === preset.id;
+                return (
+                  <button
+                    key={preset.id}
+                    onClick={() => setSelectedColorKey(preset.id)}
+                    title={preset.name}
+                    className={`w-5 h-5 rounded-full transition-all cursor-pointer shrink-0 ${
+                      isSelected
+                        ? 'ring-2 ring-white ring-offset-1 ring-offset-[#0E1015]'
+                        : 'opacity-85 hover:opacity-100 hover:scale-105'
+                    }`}
+                    style={{ backgroundColor: preset.color }}
+                  />
+                );
+              })}
+            </div>
+
+            {/* Sliders for the selected color band - compact single-line */}
+            <div className={`space-y-1.5 pt-0.5 transition-opacity ${hslEnabled ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+              <AdjustmentSliderRow
+                label="Hue"
+                value={currentSelective.hue}
+                min={-100}
+                max={100}
+                trackGradient={activeColorObj.hueGradient}
+                leftHint={{ name: activeColorObj.leftName, color: activeColorObj.leftColor }}
+                rightHint={{ name: activeColorObj.rightName, color: activeColorObj.rightColor }}
+                onChange={(val) => handleUpdateSelectiveColor({ hue: val })}
+                onReset={handleResetSelectiveColor}
               />
-            );
-          })}
-        </div>
 
-        {/* Sliders for the selected color band */}
-        <div className={`space-y-2 pt-1 transition-opacity ${hslEnabled ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
-          <AdjustmentSliderRow
-            label="Hue"
-            value={currentSelective.hue}
-            min={-100}
-            max={100}
-            trackGradient={activeColorObj.hueGradient}
-            leftHint={{ name: activeColorObj.leftName, color: activeColorObj.leftColor }}
-            rightHint={{ name: activeColorObj.rightName, color: activeColorObj.rightColor }}
-            onChange={(val) => handleUpdateSelectiveColor({ hue: val })}
-            onReset={handleResetSelectiveColor}
-          />
+              <AdjustmentSliderRow
+                label="Saturation"
+                value={currentSelective.saturation}
+                min={-100}
+                max={100}
+                trackGradient={`linear-gradient(to right, #4B5563, ${activeColorObj.color})`}
+                onChange={(val) => handleUpdateSelectiveColor({ saturation: val })}
+                onReset={handleResetSelectiveColor}
+              />
 
-          <AdjustmentSliderRow
-            label="Saturation"
-            value={currentSelective.saturation}
-            min={-100}
-            max={100}
-            trackGradient={`linear-gradient(to right, #4B5563, ${activeColorObj.color})`}
-            onChange={(val) => handleUpdateSelectiveColor({ saturation: val })}
-            onReset={handleResetSelectiveColor}
-          />
-
-          <AdjustmentSliderRow
-            label="Brightness"
-            value={currentSelective.brightness}
-            min={-100}
-            max={100}
-            trackGradient={`linear-gradient(to right, #111827, ${activeColorObj.color}, #FFFFFF)`}
-            onChange={(val) => handleUpdateSelectiveColor({ brightness: val })}
-            onReset={handleResetSelectiveColor}
-          />
-        </div>
+              <AdjustmentSliderRow
+                label="Brightness"
+                value={currentSelective.brightness}
+                min={-100}
+                max={100}
+                trackGradient={`linear-gradient(to right, #111827, ${activeColorObj.color}, #FFFFFF)`}
+                onChange={(val) => handleUpdateSelectiveColor({ brightness: val })}
+                onReset={handleResetSelectiveColor}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ========================================================================= */}
-      {/* 4. PRESETS & CUSTOM LUT MANAGER                                           */}
+      {/* 4. PRESETS & CUSTOM LUT MANAGER - Collapsed by default                     */}
       {/* ========================================================================= */}
-      <div className="p-3 rounded-lg bg-[#0E1015] border border-[#222630] space-y-2.5">
-        <div className="flex items-center justify-between">
+      <div className="rounded-lg bg-[#0E1015] border border-[#222630] overflow-hidden">
+        <div
+          onClick={() => toggleSection('presets')}
+          className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#14161F]/60 transition-colors select-none"
+        >
           <span className="text-xs font-bold text-[#F0F3F8] flex items-center gap-1.5">
             <Sparkles size={13} className="text-[#00F0FF]" />
             <span>Preset Looks & .CUBE LUTs</span>
           </span>
-          <button
-            onClick={() => {
-              const currentPreset = colorGradingPresets.find((p) => p.id === selectedPresetId);
-              exportProfileAsCubeLut(
-                activeProfile,
-                `${(currentPreset?.name || 'Custom_Adjustment').replace(/\s+/g, '_')}.cube`
-              );
-            }}
-            title="Export Current Adjustment as standard .cube 3D LUT"
-            className="flex items-center gap-1 px-2 py-0.5 rounded bg-[#1A1D24] hover:bg-[#222630] border border-[#222630] text-[#00F0FF] text-[10px] font-mono transition-colors cursor-pointer"
-          >
-            <Download size={11} />
-            <span>Export .CUBE</span>
-          </button>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <select
-            value={selectedPresetId}
-            onChange={(e) => {
-              const pid = e.target.value;
-              setSelectedPresetId(pid);
-              if (pid) {
-                applyColorGradingPreset(pid, scope);
-              }
-            }}
-            className="flex-1 bg-[#14161B] border border-[#222630] focus:border-[#00F0FF] rounded px-2.5 py-1.5 text-xs font-mono text-[#F0F3F8] outline-none cursor-pointer"
-          >
-            <option value="">-- Apply a Saved Preset --</option>
-            <optgroup label="Built-in Looks">
-              {colorGradingPresets
-                .filter((p) => p.isBuiltIn)
-                .map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-            </optgroup>
-            {colorGradingPresets.some((p) => !p.isBuiltIn) && (
-              <optgroup label="My Custom Presets">
-                {colorGradingPresets
-                  .filter((p) => !p.isBuiltIn)
-                  .map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-              </optgroup>
-            )}
-          </select>
-
-          {selectedPresetId && !colorGradingPresets.find((p) => p.id === selectedPresetId)?.isBuiltIn && (
+          <div className="flex items-center gap-2">
             <button
-              onClick={() => {
-                deleteColorGradingPreset(selectedPresetId);
-                setSelectedPresetId('');
+              onClick={(e) => {
+                e.stopPropagation();
+                const currentPreset = colorGradingPresets.find((p) => p.id === selectedPresetId);
+                exportProfileAsCubeLut(
+                  activeProfile,
+                  `${(currentPreset?.name || 'Custom_Adjustment').replace(/\s+/g, '_')}.cube`
+                );
               }}
-              title="Delete this saved preset"
-              className="p-1.5 rounded bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 transition-colors cursor-pointer shrink-0"
+              title="Export Current Adjustment as standard .cube 3D LUT"
+              className="flex items-center gap-1 px-2 py-0.5 rounded bg-[#1A1D24] hover:bg-[#222630] border border-[#222630] text-[#00F0FF] text-[10px] font-mono transition-colors cursor-pointer"
             >
-              <Trash2 size={13} />
+              <Download size={11} />
+              <span>Export .CUBE</span>
             </button>
-          )}
+            <span className="text-[#8A92A6]">
+              {openSections.presets ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+            </span>
+          </div>
         </div>
+
+        {openSections.presets && (
+          <div className="p-3 pt-0 border-t border-[#1C202B] space-y-2.5 mt-1">
+            <div className="flex items-center gap-2 pt-1">
+              <select
+                value={selectedPresetId}
+                onChange={(e) => {
+                  const pid = e.target.value;
+                  setSelectedPresetId(pid);
+                  if (pid) {
+                    applyColorGradingPreset(pid, scope);
+                  }
+                }}
+                className="flex-1 bg-[#14161B] border border-[#222630] focus:border-[#00F0FF] rounded px-2.5 py-1.5 text-xs font-mono text-[#F0F3F8] outline-none cursor-pointer"
+              >
+                <option value="">-- Apply a Saved Preset --</option>
+                <optgroup label="Built-in Looks">
+                  {colorGradingPresets
+                    .filter((p) => p.isBuiltIn)
+                    .map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                </optgroup>
+                {colorGradingPresets.some((p) => !p.isBuiltIn) && (
+                  <optgroup label="My Custom Presets">
+                    {colorGradingPresets
+                      .filter((p) => !p.isBuiltIn)
+                      .map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                  </optgroup>
+                )}
+              </select>
+
+              {selectedPresetId && !colorGradingPresets.find((p) => p.id === selectedPresetId)?.isBuiltIn && (
+                <button
+                  onClick={() => {
+                    deleteColorGradingPreset(selectedPresetId);
+                    setSelectedPresetId('');
+                  }}
+                  title="Delete this saved preset"
+                  className="p-1.5 rounded bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 transition-colors cursor-pointer shrink-0"
+                >
+                  <Trash2 size={13} />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ========================================================================= */}
-      {/* 5. SPLINE CURVES (Collapsible Accordion)                                   */}
+      {/* 5. SPLINE CURVES (Collapsible Accordion) - Collapsed by default             */}
       {/* ========================================================================= */}
       <div className="rounded-lg bg-[#0E1015] border border-[#222630] overflow-hidden">
         <button
-          onClick={() => setShowAdvancedCurves(!showAdvancedCurves)}
-          className="w-full p-3 flex items-center justify-between text-xs font-bold text-[#F0F3F8] hover:bg-[#14161F] transition-colors cursor-pointer"
+          type="button"
+          onClick={() => toggleSection('curves')}
+          className="w-full p-3 flex items-center justify-between text-xs font-bold text-[#F0F3F8] hover:bg-[#14161F]/60 transition-colors cursor-pointer select-none"
         >
           <span className="flex items-center gap-1.5">
             <SlidersHorizontal size={13} className="text-[#00F0FF]" />
             <span>Spline Curves</span>
           </span>
-          {showAdvancedCurves ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+          <span className="text-[#8A92A6]">
+            {openSections.curves ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+          </span>
         </button>
-        {showAdvancedCurves && (
-          <div className="p-3 pt-0">
+        {openSections.curves && (
+          <div className="p-3 pt-0 border-t border-[#1C202B] mt-1">
             <SplineCurvesPanel
               curves={activeProfile.curves}
               onChange={(curves) => handleUpdate({ curves })}
@@ -846,21 +922,24 @@ export const ColorGradingInspector: React.FC<ColorGradingInspectorProps> = ({
       </div>
 
       {/* ========================================================================= */}
-      {/* 6. 3-WAY COLOR WHEELS (Collapsible Accordion)                             */}
+      {/* 6. 3-WAY COLOR WHEELS (Collapsible Accordion) - Collapsed by default       */}
       {/* ========================================================================= */}
       <div className="rounded-lg bg-[#0E1015] border border-[#222630] overflow-hidden">
         <button
-          onClick={() => setShowColorWheels(!showColorWheels)}
-          className="w-full p-3 flex items-center justify-between text-xs font-bold text-[#F0F3F8] hover:bg-[#14161F] transition-colors cursor-pointer"
+          type="button"
+          onClick={() => toggleSection('wheels')}
+          className="w-full p-3 flex items-center justify-between text-xs font-bold text-[#F0F3F8] hover:bg-[#14161F]/60 transition-colors cursor-pointer select-none"
         >
           <span className="flex items-center gap-1.5">
             <Palette size={13} className="text-[#00F0FF]" />
             <span>3-Way Color Wheels & Tone Balance</span>
           </span>
-          {showColorWheels ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+          <span className="text-[#8A92A6]">
+            {openSections.wheels ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+          </span>
         </button>
-        {showColorWheels && (
-          <div className="p-3 pt-0 space-y-3">
+        {openSections.wheels && (
+          <div className="p-3 pt-0 border-t border-[#1C202B] space-y-3 mt-1">
             <ColorWheelsPanel
               lift={activeProfile.lift || { r: 0, g: 0, b: 0, luma: 0 }}
               gamma={activeProfile.gamma || { r: 0, g: 0, b: 0, luma: 0 }}
