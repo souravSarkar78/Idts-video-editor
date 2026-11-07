@@ -73,11 +73,11 @@ const TimelinePlayhead: React.FC<TimelinePlayheadProps> = React.memo(({ zoom, is
       <div
         onMouseDown={onScrubStart}
         style={{ transform: 'translateX(-50%)' }}
-        className="w-3.5 h-5 bg-[#38BDF8] shadow-xs -top-6 absolute flex flex-col items-center justify-center cursor-ew-resize pointer-events-auto z-50 hover:brightness-110 active:scale-95 transition-all rounded-xs select-none"
+        className="w-3.5 h-5 bg-[#0EA5E9] shadow-xs -top-6 absolute flex flex-col items-center justify-center cursor-ew-resize pointer-events-auto z-50 hover:brightness-110 active:scale-95 transition-all rounded-xs select-none"
         title="Drag to Scrub Playhead"
       >
         <div className="w-0.5 h-2 bg-[#0D0E11]/80 rounded-xs" />
-        <div className="w-0 h-0 border-l-[3px] border-l-transparent border-r-[3px] border-r-transparent border-t-[4px] border-t-[#38BDF8] absolute -bottom-1" />
+        <div className="w-0 h-0 border-l-[3px] border-l-transparent border-r-[3px] border-r-transparent border-t-[4px] border-t-[#0EA5E9] absolute -bottom-1" />
       </div>
 
       {/* Laser Needle Line with Wide Hit Target for Easy Scrubbing */}
@@ -86,7 +86,7 @@ const TimelinePlayhead: React.FC<TimelinePlayheadProps> = React.memo(({ zoom, is
         className="w-4 -ml-2 h-full cursor-ew-resize pointer-events-auto flex justify-center group"
         title="Drag Playhead Line"
       >
-        <div className="w-[1.5px] h-full bg-[#38BDF8] group-hover:w-[2px] transition-all" />
+        <div className="w-[1.5px] h-full bg-[#0EA5E9] group-hover:w-[2px] transition-all" />
       </div>
     </div>
   );
@@ -1234,23 +1234,23 @@ export const Timeline: React.FC = () => {
               onClick={() => setEdgeDragMode('trim')}
               className={`w-6 h-6 flex items-center justify-center rounded transition-all cursor-pointer ${
                 edgeDragMode === 'trim'
-                  ? 'bg-[#38BDF8] text-[#0D0E11] font-bold shadow-[0_0_8px_rgba(56, 189, 248,0.4)]'
-                  : 'text-[#8A92A6] hover:text-[#F0F3F8]'
+                  ? 'bg-sky-600 text-white font-medium shadow-xs'
+                  : 'text-[#8A92A6] hover:text-[#CBD5E1]'
               }`}
               title="Trim / Recover Mode (T): Drag clip edges to trim or recover hidden video (Hold Alt for Slow-Mo)"
             >
-              <Scissors size={12} className={edgeDragMode === 'trim' ? 'text-[#0D0E11]' : 'text-[#38BDF8]'} />
+              <Scissors size={12} className={edgeDragMode === 'trim' ? 'text-white' : 'text-[#8A92A6]'} />
             </button>
             <button
               onClick={() => setEdgeDragMode('stretch')}
               className={`w-6 h-6 flex items-center justify-center rounded transition-all cursor-pointer ${
                 edgeDragMode === 'stretch'
-                  ? 'bg-[#F59E0B] text-[#0D0E11] font-bold shadow-[0_0_8px_rgba(245,158,11,0.4)]'
-                  : 'text-[#8A92A6] hover:text-[#F0F3F8]'
+                  ? 'bg-amber-600 text-white font-medium shadow-xs'
+                  : 'text-[#8A92A6] hover:text-[#CBD5E1]'
               }`}
               title="Slow-Mo Stretch Mode (R): Drag clip edges outward to slow down, or inward to speed up"
             >
-              <Gauge size={12} className={edgeDragMode === 'stretch' ? 'text-[#0D0E11]' : 'text-[#F59E0B]'} />
+              <Gauge size={12} className={edgeDragMode === 'stretch' ? 'text-white' : 'text-[#8A92A6]'} />
             </button>
           </div>
 
@@ -1380,11 +1380,11 @@ export const Timeline: React.FC = () => {
           {/* Sync Buttons */}
           <button
             onClick={handleSyncAll}
-            className="h-7 px-2.5 flex items-center gap-1.5 rounded-md bg-gradient-to-r from-[#38BDF8] to-[#10B981] hover:brightness-110 text-[#0D0E11] text-xs font-bold transition-all shadow-[0_0_8px_rgba(56, 189, 248,0.3)] cursor-pointer"
+            className="h-7 px-2.5 flex items-center gap-1.5 rounded-md bg-[#1C202B] hover:bg-[#252B3A] border border-[#222630] hover:border-emerald-500/40 text-slate-300 text-xs font-medium transition-all shadow-xs cursor-pointer"
             title={`Sync All Tracks (${syncedCount}/${allClips.length}) - Analyze clip filenames and synchronize tracks`}
           >
-            <Zap size={13} fill="currentColor" />
-            <span className="font-mono text-[11px] leading-none">
+            <Zap size={13} className="text-emerald-400" />
+            <span className="font-mono text-[11px] leading-none text-slate-300">
               {syncedCount}/{allClips.length}
             </span>
           </button>

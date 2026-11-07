@@ -3273,27 +3273,27 @@ export const ProgramMonitor: React.FC = () => {
                     pointerEvents: 'none',
                     zIndex: 20,
                   }}
-                  className="border border-[#38BDF8] shadow-[0_0_8px_rgba(56,189,248,0.25)] select-none"
+                  className="border border-[#0284C7] select-none"
                 >
                   {/* Center Anchor Point Handle */}
                   <div
                     onMouseDown={(e) => handleStartTransformDrag('center', e)}
                     style={{ pointerEvents: 'auto' }}
                     title="Anchor Point: Drag to translate Position X/Y"
-                    className="absolute left-1/2 top-1/2 -ml-2.5 -mt-2.5 w-5 h-5 rounded-full border border-[#38BDF8] bg-black/80 flex items-center justify-center cursor-move z-30 shadow-xs hover:scale-125 transition-transform"
+                    className="absolute left-1/2 top-1/2 -ml-2 -mt-2 w-4 h-4 rounded-full border border-[#0284C7] bg-[#0A0B0E]/90 flex items-center justify-center cursor-move z-30 shadow-xs hover:scale-125 transition-transform"
                   >
-                    <div className="w-1.5 h-1.5 bg-[#38BDF8] rounded-full" />
+                    <div className="w-1 h-1 bg-sky-400 rounded-full" />
                   </div>
 
                   {/* Outer Rotation Handle (stem + round grip) */}
-                  <div className="absolute left-1/2 -top-5 -ml-px w-px h-5 bg-[#38BDF8]/60 pointer-events-none" />
+                  <div className="absolute left-1/2 -top-5 -ml-px w-px h-5 bg-[#0284C7]/60 pointer-events-none" />
                   <div
                     onMouseDown={(e) => handleStartTransformDrag('rotate', e)}
                     style={{ pointerEvents: 'auto' }}
                     title="Rotation Handle: Drag to rotate clip"
-                    className="absolute left-1/2 -top-8 -ml-2.5 w-5 h-5 rounded-full border border-[#38BDF8] bg-[#14161B] flex items-center justify-center cursor-grab active:cursor-grabbing hover:scale-125 transition-transform z-30 shadow-xs"
+                    className="absolute left-1/2 -top-8 -ml-2.5 w-5 h-5 rounded-full border border-[#0284C7] bg-[#101216] flex items-center justify-center cursor-grab active:cursor-grabbing hover:scale-125 transition-transform z-30 shadow-xs"
                   >
-                    <RotateCw size={10} className="text-[#38BDF8]" />
+                    <RotateCw size={10} className="text-sky-400" />
                   </div>
 
                   {/* 8 Resize Handles - sleek studio white squares with subtle sky border */}

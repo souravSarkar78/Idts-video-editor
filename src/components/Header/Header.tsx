@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { PanelLeft, PanelRight, Minus, Square, Restore, Share2 } from '@/components/Icons';
 import { useShallow } from 'zustand/react/shallow';
+import idtsLogo from '@/assets/idts-logo.jpg';
 import { useTimelineStore, isTauri } from '../../store/timelineStore';
 import { useShortcutStore } from '../../store/shortcutStore';
 import { ProcessHealthStats } from '../../types/ipc';
@@ -278,12 +279,14 @@ export const Header: React.FC = () => {
         <div data-tauri-drag-region="false" className="flex items-center gap-2 shrink-0">
           {/* Logo & App Name */}
           <div className="flex items-center gap-1.5 font-bold tracking-tight mr-1 pointer-events-none">
-            <div className="w-4.5 h-4.5 rounded bg-[#38BDF8] flex items-center justify-center text-black font-black shadow-[0_0_8px_rgba(56, 189, 248,0.4)]">
-              <Film size={11} strokeWidth={2.5} />
-            </div>
+            <img
+              src={idtsLogo}
+              alt="IDTS"
+              className="w-5 h-5 rounded-xs object-cover border border-white/10 shadow-xs"
+            />
             <div className="flex items-center gap-1">
-              <span className="font-extrabold text-[12px] tracking-wide text-[#38BDF8]">IDTS</span>
-              <span className="font-bold text-[12px] text-white">video editor</span>
+              <span className="font-extrabold text-[12px] tracking-wide text-white">IDTS</span>
+              <span className="font-medium text-[11px] text-[#94A3B8]">video editor</span>
             </div>
           </div>
 
@@ -706,15 +709,15 @@ export const Header: React.FC = () => {
             <span>Share</span>
           </button>
 
-          {/* CapCut Prominent Cyan "Export" Button */}
+          {/* Studio Refined Export Button */}
           <button
             data-tauri-drag-region="false"
             type="button"
             onClick={() => setExportModalOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 py-1 bg-[#38BDF8] hover:bg-[#38BDF8] text-[#0D0E11] rounded-md text-xs font-extrabold transition-all shadow-[0_0_12px_rgba(56, 189, 248,0.4)] cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1 bg-sky-600 hover:bg-sky-500 text-white rounded-md text-xs font-medium transition-all shadow-xs cursor-pointer"
             title="Export Video Project"
           >
-            <Upload size={13} strokeWidth={2.8} />
+            <Upload size={12} strokeWidth={2.2} />
             <span>Export</span>
           </button>
 
@@ -915,12 +918,14 @@ export const Header: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4 animate-in fade-in duration-150 select-none">
           <div className="w-full max-w-md bg-[#14161B] border border-[#222630] rounded-xl shadow-2xl overflow-hidden flex flex-col text-[#F0F3F8]">
             <div className="p-6 flex flex-col items-center text-center space-y-3">
-              <div className="w-14 h-14 rounded-2xl bg-[#38BDF8] flex items-center justify-center text-black font-black shadow-[0_0_20px_rgba(56, 189, 248,0.4)]">
-                <Film size={28} strokeWidth={2.5} />
-              </div>
+              <img
+                src={idtsLogo}
+                alt="IDTS Video Editor"
+                className="w-20 h-20 rounded-2xl object-cover shadow-2xl border border-white/10"
+              />
               <div>
                 <h2 className="text-base font-extrabold text-[#F0F3F8]">
-                  <span className="text-[#38BDF8]">IDTS</span> video editor
+                  <span className="text-white">IDTS</span> video editor
                 </h2>
                 <p className="text-xs text-[#8A92A6] mt-0.5 font-mono">Version 0.1.0 (Production Hardened)</p>
               </div>

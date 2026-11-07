@@ -168,18 +168,18 @@ export const TimelineClip: React.FC<TimelineClipProps> = React.memo(
           left: `${leftPx}px`,
           width: `${Math.max(widthPx, 24)}px`,
         }}
-        className={`absolute top-1 bottom-1 rounded cursor-grab active:cursor-grabbing select-none border shadow-md group transition-[border-color,box-shadow,opacity] duration-150 ${
+        className={`absolute top-1 bottom-1 rounded cursor-grab active:cursor-grabbing select-none border shadow-sm group transition-[border-color,box-shadow,opacity] duration-150 ${
           isExternalDragging ? 'pointer-events-none' : ''
         } ${
           isDragging
-            ? 'ring-2 ring-[#38BDF8] border-white z-30 shadow-[0_0_16px_rgba(56, 189, 248,0.6)] opacity-95'
+            ? 'ring-2 ring-sky-500 border-white z-30 shadow-md opacity-95'
             : isSelected
             ? isAdjustment
-              ? 'border-white ring-2 ring-[#8B5CF6] z-20 shadow-[0_0_12px_rgba(139,92,246,0.5)]'
-              : 'border-white ring-2 ring-[#38BDF8] z-20 shadow-[0_0_12px_rgba(56, 189, 248,0.4)]'
+              ? 'border-white ring-1.5 ring-purple-500 z-20 shadow-xs'
+              : 'border-white ring-1.5 ring-sky-500 z-20 shadow-xs'
             : isAdjustment
-            ? 'border-[#8B5CF6]/50 hover:border-[#8B5CF6] z-10'
-            : 'border-[#222630] hover:border-[#38BDF8]/80 z-10'
+            ? 'border-purple-500/40 hover:border-purple-400 z-10'
+            : 'border-[#1E222A] hover:border-sky-500/60 z-10'
         }`}
       >
         {/* Inner Clip Graphic Container */}

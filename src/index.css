@@ -9,8 +9,8 @@
 body {
   margin: 0;
   padding: 0;
-  background-color: #0D0E11;
-  color: #F0F3F8;
+  background-color: #0A0B0E;
+  color: #CBD5E1;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -26,26 +26,26 @@ body {
 
 /* Custom Sleek Dark Studio Scrollbars */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #14161B;
+  background: #0F1116;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #242833;
+  background: #1E222A;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #2E3442;
+  background: #2A303C;
 }
 
 /* Studio custom slider styling */
 input[type="range"] {
-  accent-color: #38BDF8;
+  accent-color: #0284C7;
 }
 
 /* Timeline grid pattern */
