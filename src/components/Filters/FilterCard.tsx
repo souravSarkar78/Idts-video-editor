@@ -52,7 +52,7 @@ export const FilterCard: React.FC<FilterCardProps> = ({
       <div
         className={`relative aspect-square w-full rounded-2xl overflow-hidden bg-[#161820] transition-all duration-200 shadow-md ${
           isActive
-            ? 'ring-2 ring-[#00F0FF] shadow-[0_0_16px_rgba(0,240,255,0.45)]'
+            ? 'ring-2 ring-[#38BDF8] shadow-[0_0_16px_rgba(56, 189, 248,0.45)]'
             : 'border border-[#282C37]/60 group-hover:border-[#4B5568] group-hover:shadow-lg'
         }`}
       >
@@ -79,7 +79,7 @@ export const FilterCard: React.FC<FilterCardProps> = ({
 
         {/* Active Applied State Checkmark Pill (Top Right) */}
         {isActive && (
-          <div className="absolute top-2 right-2 z-10 flex items-center gap-1 bg-[#00F0FF] text-black px-1.5 py-0.5 rounded-md text-[9px] font-extrabold shadow-md">
+          <div className="absolute top-2 right-2 z-10 flex items-center gap-1 bg-[#38BDF8] text-black px-1.5 py-0.5 rounded-md text-[9px] font-extrabold shadow-md">
             <Check size={10} strokeWidth={3} />
             <span>ACTIVE</span>
           </div>
@@ -97,7 +97,7 @@ export const FilterCard: React.FC<FilterCardProps> = ({
               e.stopPropagation();
               onApply(preset);
             }}
-            className="flex items-center gap-1 px-3 py-1 rounded-full bg-[#00F0FF] hover:bg-[#38BDF8] text-black text-[11px] font-bold shadow-[0_0_12px_rgba(0,240,255,0.6)] transform transition-transform active:scale-95"
+            className="flex items-center gap-1 px-3 py-1 rounded-full bg-[#38BDF8] hover:bg-[#38BDF8] text-black text-[11px] font-bold shadow-[0_0_12px_rgba(56, 189, 248,0.6)] transform transition-transform active:scale-95"
           >
             <Sparkles size={11} />
             <span>{isActive ? 'Applied' : 'Apply'}</span>
@@ -111,7 +111,7 @@ export const FilterCard: React.FC<FilterCardProps> = ({
           cardScale === 'large' ? 'text-[12px]' : 'text-[11px]'
         } ${
           isActive
-            ? 'text-[#00F0FF] font-semibold'
+            ? 'text-[#38BDF8] font-semibold'
             : 'text-[#9DA8B6] group-hover:text-white'
         }`}
       >

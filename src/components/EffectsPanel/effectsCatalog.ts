@@ -100,7 +100,7 @@ export const EFFECTS_CATALOG: EffectPresetItem[] = [
     renderThumbnail: (ctx, w, h) => {
       drawSampleContent(ctx, w, h);
       const grad = ctx.createLinearGradient(0, 0, w, h);
-      grad.addColorStop(0, 'rgba(0, 240, 255, 0.15)');
+      grad.addColorStop(0, 'rgba(56, 189, 248, 0.15)');
       grad.addColorStop(1, 'rgba(249, 115, 22, 0.15)');
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, w, h);
@@ -200,7 +200,7 @@ export const EFFECTS_CATALOG: EffectPresetItem[] = [
       drawSampleContent(ctx, w, h);
       const grad = ctx.createLinearGradient(0, 0, w, h);
       grad.addColorStop(0, 'rgba(236, 72, 153, 0.25)');
-      grad.addColorStop(1, 'rgba(0, 240, 255, 0.25)');
+      grad.addColorStop(1, 'rgba(56, 189, 248, 0.25)');
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, w, h);
     },
@@ -324,7 +324,7 @@ export const EFFECTS_CATALOG: EffectPresetItem[] = [
       const barY = (p * h * 2) % h;
       ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
       ctx.fillRect(0, barY, w, 8);
-      ctx.fillStyle = 'rgba(0, 240, 255, 0.3)';
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.3)';
       ctx.fillRect(-4, barY + 4, w, 4);
     },
   },
@@ -381,7 +381,7 @@ export const EFFECTS_CATALOG: EffectPresetItem[] = [
     renderThumbnail: (ctx, w, h, p) => {
       drawSampleContent(ctx, w, h);
       if (Math.sin(p * Math.PI * 4) > 0.4) {
-        ctx.fillStyle = 'rgba(0, 240, 255, 0.4)';
+        ctx.fillStyle = 'rgba(56, 189, 248, 0.4)';
         ctx.fillRect(8, h * 0.3, w - 16, 12);
         ctx.fillStyle = 'rgba(255, 0, 60, 0.4)';
         ctx.fillRect(-8, h * 0.3 + 4, w - 16, 12);
@@ -474,7 +474,7 @@ export const EFFECTS_CATALOG: EffectPresetItem[] = [
       drawSampleContent(ctx, w, h);
       ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
       ctx.fillRect(0, 0, w, h);
-      ctx.fillStyle = '#00F0FF';
+      ctx.fillStyle = '#38BDF8';
       ctx.font = '8px monospace';
       ctx.fillText('REC ● 12:44:09', 6, 12);
     },
@@ -536,9 +536,9 @@ export const EFFECTS_CATALOG: EffectPresetItem[] = [
     renderThumbnail: (ctx, w, h) => {
       drawSampleContent(ctx, w, h);
       const flare = ctx.createLinearGradient(0, h * 0.45, w, h * 0.45);
-      flare.addColorStop(0, 'rgba(0, 240, 255, 0)');
+      flare.addColorStop(0, 'rgba(56, 189, 248, 0)');
       flare.addColorStop(0.5, 'rgba(255, 255, 255, 0.9)');
-      flare.addColorStop(1, 'rgba(0, 240, 255, 0)');
+      flare.addColorStop(1, 'rgba(56, 189, 248, 0)');
       ctx.fillStyle = flare;
       ctx.fillRect(0, h * 0.45 - 2, w, 4);
     },
@@ -577,7 +577,7 @@ export const EFFECTS_CATALOG: EffectPresetItem[] = [
       ctx.strokeStyle = 'rgba(255, 0, 80, 0.35)';
       ctx.lineWidth = 3;
       ctx.strokeRect(3, 3, w - 6, h - 6);
-      ctx.strokeStyle = 'rgba(0, 240, 255, 0.35)';
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
       ctx.strokeRect(6, 6, w - 12, h - 12);
     },
   },
@@ -792,11 +792,11 @@ export const EFFECTS_CATALOG: EffectPresetItem[] = [
     glslShader: 'wireframe',
     ffmpegFilter: 'edgedetect=low=0.1:high=0.3',
     tags: ['wireframe', 'neon', 'edges', 'cyber'],
-    color: '#00F0FF',
+    color: '#38BDF8',
     renderThumbnail: (ctx, w, h) => {
       ctx.fillStyle = '#05070D';
       ctx.fillRect(0, 0, w, h);
-      ctx.strokeStyle = '#00F0FF';
+      ctx.strokeStyle = '#38BDF8';
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(w * 0.5, h * 0.45, w * 0.25, 0, Math.PI * 2);
@@ -835,7 +835,7 @@ export const EFFECTS_CATALOG: EffectPresetItem[] = [
     color: '#0284C7',
     renderThumbnail: (ctx, w, h, p) => {
       drawSampleContent(ctx, w, h);
-      ctx.strokeStyle = `rgba(0, 240, 255, ${Math.sin(p * Math.PI) * 0.6})`;
+      ctx.strokeStyle = `rgba(56, 189, 248, ${Math.sin(p * Math.PI) * 0.6})`;
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(w / 2, h / 2, p * w * 0.45, 0, Math.PI * 2);
@@ -872,7 +872,7 @@ export const EFFECTS_CATALOG: EffectPresetItem[] = [
     color: '#8B5CF6',
     renderThumbnail: (ctx, w, h) => {
       drawSampleContent(ctx, w, h);
-      ctx.strokeStyle = 'rgba(0, 240, 255, 0.3)';
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.3)';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.arc(w / 2, h / 2, w * 0.4, 0, Math.PI * 2);
@@ -967,7 +967,7 @@ export const EFFECTS_CATALOG: EffectPresetItem[] = [
     color: '#EC4899',
     renderThumbnail: (ctx, w, h) => {
       drawSampleContent(ctx, w, h);
-      ctx.strokeStyle = 'rgba(0, 240, 255, 0.4)';
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.4)';
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(w / 2, h / 2, 20, 0, Math.PI * 1.5);

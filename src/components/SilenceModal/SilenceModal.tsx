@@ -538,7 +538,7 @@ export const SilenceModal: React.FC = () => {
           if (isSilent) {
             ctx.fillStyle = 'rgba(239, 68, 68, 0.75)';
           } else {
-            ctx.fillStyle = '#00F0FF';
+            ctx.fillStyle = '#38BDF8';
           }
 
           ctx.fillRect(barX, barTopY, barW, barH);
@@ -680,7 +680,7 @@ export const SilenceModal: React.FC = () => {
               <select
                 value={selectedTrackId}
                 onChange={(e) => setSelectedTrackId(e.target.value)}
-                className="w-full px-2.5 py-1.5 bg-[#0D0E11] border border-[#222630] rounded-md text-xs text-[#F0F3F8] focus:outline-none focus:border-[#00F0FF]/50 cursor-pointer"
+                className="w-full px-2.5 py-1.5 bg-[#0D0E11] border border-[#222630] rounded-md text-xs text-[#F0F3F8] focus:outline-none focus:border-[#38BDF8]/50 cursor-pointer"
               >
                 {tracks.map((t) => (
                   <option key={t.id} value={t.id}>
@@ -699,7 +699,7 @@ export const SilenceModal: React.FC = () => {
                 value={selectedClipId}
                 onChange={(e) => setSelectedClipId(e.target.value)}
                 disabled={!selectedTrack || selectedTrack.clips.length === 0}
-                className="w-full px-2.5 py-1.5 bg-[#0D0E11] border border-[#222630] rounded-md text-xs text-[#F0F3F8] focus:outline-none focus:border-[#00F0FF]/50 cursor-pointer disabled:opacity-50"
+                className="w-full px-2.5 py-1.5 bg-[#0D0E11] border border-[#222630] rounded-md text-xs text-[#F0F3F8] focus:outline-none focus:border-[#38BDF8]/50 cursor-pointer disabled:opacity-50"
               >
                 {selectedTrack && selectedTrack.clips.length > 0 ? (
                   <>
@@ -725,7 +725,7 @@ export const SilenceModal: React.FC = () => {
           <div className="space-y-1.5">
             <div className="flex items-center justify-between text-[11px]">
               <span className="text-[#8A92A6] font-medium flex items-center gap-1.5">
-                <Move size={13} className="text-[#00F0FF]" />
+                <Move size={13} className="text-[#38BDF8]" />
                 <span>Interactive Waveform dB Threshold</span>
                 <span className="text-[10px] text-[#64748B] hidden sm:inline">
                   (Drag glowing line up/down • Ctrl+Scroll to Zoom)
@@ -740,7 +740,7 @@ export const SilenceModal: React.FC = () => {
                     onClick={() => setZoom((z) => Math.max(1, Math.round((z / 1.5) * 10) / 10))}
                     disabled={zoom <= 1}
                     title="Zoom Out (Ctrl+Scroll Down)"
-                    className="p-0.5 text-[#8A92A6] hover:text-[#00F0FF] disabled:opacity-30 disabled:hover:text-[#8A92A6] transition-colors cursor-pointer"
+                    className="p-0.5 text-[#8A92A6] hover:text-[#38BDF8] disabled:opacity-30 disabled:hover:text-[#8A92A6] transition-colors cursor-pointer"
                   >
                     <ZoomOut size={12} />
                   </button>
@@ -752,7 +752,7 @@ export const SilenceModal: React.FC = () => {
                     onClick={() => setZoom((z) => Math.min(30, Math.round((z * 1.5) * 10) / 10))}
                     disabled={zoom >= 30}
                     title="Zoom In (Ctrl+Scroll Up)"
-                    className="p-0.5 text-[#8A92A6] hover:text-[#00F0FF] disabled:opacity-30 disabled:hover:text-[#8A92A6] transition-colors cursor-pointer"
+                    className="p-0.5 text-[#8A92A6] hover:text-[#38BDF8] disabled:opacity-30 disabled:hover:text-[#8A92A6] transition-colors cursor-pointer"
                   >
                     <ZoomIn size={12} />
                   </button>
@@ -772,7 +772,7 @@ export const SilenceModal: React.FC = () => {
                 </div>
 
                 <span className="text-[#8A92A6]">Silence Threshold:</span>
-                <span className="px-2 py-0.5 rounded bg-[#00F0FF]/15 text-[#00F0FF] border border-[#00F0FF]/30 font-bold">
+                <span className="px-2 py-0.5 rounded bg-[#38BDF8]/15 text-[#38BDF8] border border-[#38BDF8]/30 font-bold">
                   {thresholdDb} dB
                 </span>
               </div>
@@ -793,12 +793,12 @@ export const SilenceModal: React.FC = () => {
               <div
                 style={{ top: `${threshYPercent}%` }}
                 onPointerDown={handlePointerDownThreshold}
-                className="absolute left-0 right-0 h-0.5 -mt-px bg-[#00F0FF] shadow-[0_0_8px_#00F0FF] cursor-ns-resize z-20 flex items-center justify-center transition-[top] duration-75"
+                className="absolute left-0 right-0 h-0.5 -mt-px bg-[#38BDF8] shadow-xs cursor-ns-resize z-20 flex items-center justify-center transition-[top] duration-75"
               >
                 {/* Drag Pill Badge */}
                 <div
                   onPointerDown={handlePointerDownThreshold}
-                  className="px-2.5 py-0.5 rounded-full bg-[#00F0FF] text-[#0A0B0E] font-mono text-[10px] font-bold flex items-center gap-1 shadow-[0_0_12px_rgba(0,240,255,0.7)] select-none hover:scale-105 active:scale-95 transition-transform"
+                  className="px-2.5 py-0.5 rounded-full bg-[#38BDF8] text-[#0A0B0E] font-mono text-[10px] font-bold flex items-center gap-1 shadow-[0_0_12px_rgba(56, 189, 248,0.7)] select-none hover:scale-105 active:scale-95 transition-transform"
                 >
                   <Move size={10} />
                   <span>{thresholdDb} dB (Drag)</span>
@@ -831,7 +831,7 @@ export const SilenceModal: React.FC = () => {
                     left: `${(viewStartSec / clipDuration) * 100}%`,
                     width: `${Math.max(3, (visibleDuration / clipDuration) * 100)}%`,
                   }}
-                  className="absolute top-0 bottom-0 bg-[#00F0FF]/35 border border-[#00F0FF] rounded-xs pointer-events-none"
+                  className="absolute top-0 bottom-0 bg-[#38BDF8]/35 border border-[#38BDF8] rounded-xs pointer-events-none"
                 />
                 <input
                   type="range"
@@ -849,7 +849,7 @@ export const SilenceModal: React.FC = () => {
             <div className="flex items-center justify-between text-[10px] text-[#64748B] pt-0.5">
               <div className="flex items-center gap-3">
                 <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-xs bg-[#00F0FF]" />
+                  <span className="w-2 h-2 rounded-xs bg-[#38BDF8]" />
                   <span>Speech (Kept)</span>
                 </span>
                 <span className="flex items-center gap-1">
@@ -860,7 +860,7 @@ export const SilenceModal: React.FC = () => {
 
               <span>
                 {zoom > 1 && (
-                  <span className="text-[#00F0FF] mr-2">
+                  <span className="text-[#38BDF8] mr-2">
                     Viewing {viewStartSec.toFixed(1)}s – {viewEndSec.toFixed(1)}s •
                   </span>
                 )}
@@ -878,7 +878,7 @@ export const SilenceModal: React.FC = () => {
                 <button
                   onClick={togglePlayPause}
                   disabled={!audioSrc}
-                  className="w-8 h-8 rounded-full bg-[#00F0FF] hover:bg-[#34f3ff] text-black flex items-center justify-center shadow-[0_0_10px_rgba(0,240,255,0.3)] transition-all cursor-pointer disabled:opacity-40"
+                  className="w-8 h-8 rounded-full bg-[#38BDF8] hover:bg-[#34f3ff] text-black flex items-center justify-center shadow-[0_0_10px_rgba(56, 189, 248,0.3)] transition-all cursor-pointer disabled:opacity-40"
                   title={isPlaying ? 'Pause preview audio' : 'Play preview audio'}
                 >
                   {isPlaying ? <Pause size={14} /> : <Play size={14} className="ml-0.5" />}
@@ -944,7 +944,7 @@ export const SilenceModal: React.FC = () => {
                   onClick={() => setCutMode('split_keep')}
                   className={`py-1.5 px-2 rounded text-[11px] font-bold border transition-all cursor-pointer flex flex-col items-center text-center ${
                     cutMode === 'split_keep'
-                      ? 'bg-[#00F0FF]/15 border-[#00F0FF] text-[#00F0FF]'
+                      ? 'bg-[#38BDF8]/15 border-[#38BDF8] text-[#38BDF8]'
                       : 'bg-[#14161F] border-[#222630] text-[#8A92A6] hover:text-[#F0F3F8]'
                   }`}
                 >
@@ -1046,7 +1046,7 @@ export const SilenceModal: React.FC = () => {
               isProcessing || !selectedTrack || selectedTrack.clips.length === 0
                 ? 'bg-[#222630] text-[#525D73] cursor-not-allowed'
                 : cutMode === 'split_keep'
-                ? 'bg-gradient-to-r from-[#00F0FF] to-[#06B6D4] hover:brightness-110 text-black shadow-[#00F0FF]/20 cursor-pointer'
+                ? 'bg-gradient-to-r from-[#38BDF8] to-[#06B6D4] hover:brightness-110 text-black shadow-[#38BDF8]/20 cursor-pointer'
                 : 'bg-gradient-to-r from-amber-500 to-amber-600 hover:brightness-110 text-black shadow-amber-500/20 cursor-pointer'
             }`}
           >

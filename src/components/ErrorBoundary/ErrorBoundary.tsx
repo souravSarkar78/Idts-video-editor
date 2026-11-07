@@ -79,7 +79,7 @@ export class ErrorBoundary extends Component<Props, State> {
             <div className="flex items-center gap-2 mt-3">
               <button
                 onClick={this.handleDismiss}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-[#00F0FF] hover:bg-[#3bf1ff] text-[#0D0E11] text-[11px] font-bold transition-all shadow-[0_0_10px_rgba(0,240,255,0.3)] cursor-pointer"
+                className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-[#38BDF8] hover:bg-[#3bf1ff] text-[#0D0E11] text-[11px] font-bold transition-all shadow-[0_0_10px_rgba(56, 189, 248,0.3)] cursor-pointer"
               >
                 <RotateCcw size={12} />
                 <span>Restore {this.props.sectionTitle || 'View'}</span>
@@ -125,7 +125,7 @@ export class ErrorBoundary extends Component<Props, State> {
               </button>
               <button
                 onClick={this.handleReload}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#00F0FF] hover:bg-[#3bf1ff] text-[#0D0E11] text-xs font-bold transition-all shadow-[0_0_12px_rgba(0,240,255,0.3)] cursor-pointer"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#38BDF8] hover:bg-[#3bf1ff] text-[#0D0E11] text-xs font-bold transition-all shadow-[0_0_12px_rgba(56, 189, 248,0.3)] cursor-pointer"
               >
                 <RefreshCw size={14} />
                 <span>Reload Application</span>

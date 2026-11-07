@@ -355,12 +355,12 @@ export const NoiseProfileModal: React.FC = () => {
     // LAYER 1 (Base Layer): Original / Raw Audio Waveform
     // Rendered in translucent cyan so the user sees the original dynamic range and noise floor
     if (nrEnabled) {
-      ctx.fillStyle = 'rgba(0, 240, 255, 0.32)';
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.32)';
     } else {
       const rawGradient = ctx.createLinearGradient(0, 0, 0, height);
-      rawGradient.addColorStop(0, '#00F0FF');
+      rawGradient.addColorStop(0, '#38BDF8');
       rawGradient.addColorStop(0.5, '#2563EB');
-      rawGradient.addColorStop(1, '#00F0FF');
+      rawGradient.addColorStop(1, '#38BDF8');
       ctx.fillStyle = rawGradient;
     }
 
@@ -382,7 +382,7 @@ export const NoiseProfileModal: React.FC = () => {
         cleanGradient.addColorStop(1, '#F59E0B');
       } else {
         cleanGradient.addColorStop(0, '#10B981');
-        cleanGradient.addColorStop(0.5, '#00F0FF');
+        cleanGradient.addColorStop(0.5, '#38BDF8');
         cleanGradient.addColorStop(1, '#10B981');
       }
       ctx.fillStyle = cleanGradient;
@@ -1110,7 +1110,7 @@ export const NoiseProfileModal: React.FC = () => {
         {/* Header (Fixed) */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-[#222630] bg-[#0E1015] shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-lg bg-[#00F0FF]/15 text-[#00F0FF] border border-[#00F0FF]/30">
+            <div className="p-2 rounded-lg bg-[#38BDF8]/15 text-[#38BDF8] border border-[#38BDF8]/30">
               <Waves size={18} />
             </div>
             <div>
@@ -1120,14 +1120,14 @@ export const NoiseProfileModal: React.FC = () => {
                 </h2>
                 <span
                   className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded ${
-                    hasProfile ? 'bg-[#00F0FF]/15 text-[#00F0FF]' : 'bg-[#181B22] text-[#64748B]'
+                    hasProfile ? 'bg-[#38BDF8]/15 text-[#38BDF8]' : 'bg-[#181B22] text-[#64748B]'
                   }`}
                 >
                   {hasProfile ? `[ Profile: ${profileDuration} ]` : '[ No Profile ]'}
                 </span>
               </div>
               <p className="text-[11px] text-[#8A92A6] truncate max-w-lg">
-                Target Clip: <span className="text-[#00F0FF] font-medium">{targetClip.name}</span> ({clipDuration.toFixed(1)}s total)
+                Target Clip: <span className="text-[#38BDF8] font-medium">{targetClip.name}</span> ({clipDuration.toFixed(1)}s total)
               </p>
             </div>
           </div>
@@ -1177,7 +1177,7 @@ export const NoiseProfileModal: React.FC = () => {
                 disabled={isRenderingPreview}
                 className={`px-2.5 py-1 rounded-md border text-xs flex items-center gap-1.5 font-bold transition-all cursor-pointer ${
                   playbackMode === 'sample'
-                    ? 'bg-[#00F0FF]/20 border-[#00F0FF] text-[#00F0FF] shadow-[0_0_10px_rgba(0,240,255,0.25)]'
+                    ? 'bg-[#38BDF8]/20 border-[#38BDF8] text-[#38BDF8] shadow-[0_0_10px_rgba(56, 189, 248,0.25)]'
                     : 'bg-[#181B22] border-[#2B3040] text-[#CBD5E1] hover:text-white hover:bg-[#222630]'
                 }`}
                 title={
@@ -1200,8 +1200,8 @@ export const NoiseProfileModal: React.FC = () => {
               {/* Dual-Waveform Comparison Legend Pill */}
               {np.noiseReductionEnabled && (
                 <div className="flex items-center gap-2 text-[10px] font-mono px-2 py-0.5 rounded bg-[#12141A] border border-[#222630]">
-                  <span className="flex items-center gap-1 text-[#00F0FF]/80">
-                    <span className="w-2 h-2 rounded-xs bg-[#00F0FF]/40 border border-[#00F0FF]/70 inline-block" />
+                  <span className="flex items-center gap-1 text-[#38BDF8]/80">
+                    <span className="w-2 h-2 rounded-xs bg-[#38BDF8]/40 border border-[#38BDF8]/70 inline-block" />
                     <span>Original</span>
                   </span>
                   <span className="text-[#475569]">/</span>
@@ -1214,7 +1214,7 @@ export const NoiseProfileModal: React.FC = () => {
 
               {/* Mode Pill */}
               {playbackMode === 'sample' ? (
-                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#00F0FF]/20 border border-[#00F0FF]/40 text-[#00F0FF] flex items-center gap-1.5">
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#38BDF8]/20 border border-[#38BDF8]/40 text-[#38BDF8] flex items-center gap-1.5">
                   ● Selected Raw Noise Sample ({startSec.toFixed(2)}s → {endSec.toFixed(2)}s)
                 </span>
               ) : playbackMode === 'clean' ? (
@@ -1232,7 +1232,7 @@ export const NoiseProfileModal: React.FC = () => {
               )}
 
               {isLiveUpdating && (
-                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#00F0FF]/15 border border-[#00F0FF]/30 text-[#00F0FF] animate-pulse flex items-center gap-1">
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#38BDF8]/15 border border-[#38BDF8]/30 text-[#38BDF8] animate-pulse flex items-center gap-1">
                   <RotateCcw size={10} className="animate-spin" /> Live Tuning...
                 </span>
               )}
@@ -1243,7 +1243,7 @@ export const NoiseProfileModal: React.FC = () => {
               {/* Noise Sample Badge */}
               <div className="font-mono text-[10px] flex items-center gap-1.5 text-[#8A92A6]">
                 <span>Noise Sample:</span>
-                <span className="text-[#00F0FF] font-bold">{startSec.toFixed(2)}s → {endSec.toFixed(2)}s ({durationSec.toFixed(1)}s)</span>
+                <span className="text-[#38BDF8] font-bold">{startSec.toFixed(2)}s → {endSec.toFixed(2)}s ({durationSec.toFixed(1)}s)</span>
               </div>
 
               {/* Waveform Zoom Controls (Slider, Buttons & Ctrl+Wheel indicator) */}
@@ -1252,7 +1252,7 @@ export const NoiseProfileModal: React.FC = () => {
                   type="button"
                   onClick={() => handleZoomChange(waveformZoom - 0.5)}
                   disabled={waveformZoom <= 1.0}
-                  className="text-[#8A92A6] hover:text-[#00F0FF] disabled:opacity-30 disabled:pointer-events-none p-0.5 rounded cursor-pointer transition-colors"
+                  className="text-[#8A92A6] hover:text-[#38BDF8] disabled:opacity-30 disabled:pointer-events-none p-0.5 rounded cursor-pointer transition-colors"
                   title="Zoom Out (Ctrl + Scroll Down)"
                 >
                   <ZoomOut size={12} />
@@ -1264,26 +1264,26 @@ export const NoiseProfileModal: React.FC = () => {
                   step="0.1"
                   value={waveformZoom}
                   onChange={(e) => handleZoomChange(parseFloat(e.target.value))}
-                  className="w-16 h-1 bg-[#222630] rounded appearance-none cursor-pointer accent-[#00F0FF]"
+                  className="w-16 h-1 bg-[#222630] rounded appearance-none cursor-pointer accent-[#38BDF8]"
                   title="Waveform Zoom Slider (or Ctrl + Mouse Wheel)"
                 />
                 <button
                   type="button"
                   onClick={() => handleZoomChange(waveformZoom + 0.5)}
                   disabled={waveformZoom >= 10.0}
-                  className="text-[#8A92A6] hover:text-[#00F0FF] disabled:opacity-30 disabled:pointer-events-none p-0.5 rounded cursor-pointer transition-colors"
+                  className="text-[#8A92A6] hover:text-[#38BDF8] disabled:opacity-30 disabled:pointer-events-none p-0.5 rounded cursor-pointer transition-colors"
                   title="Zoom In (Ctrl + Scroll Up)"
                 >
                   <ZoomIn size={12} />
                 </button>
-                <span className="font-mono text-[10px] text-[#00F0FF] font-bold min-w-[28px] text-right">
+                <span className="font-mono text-[10px] text-[#38BDF8] font-bold min-w-[28px] text-right">
                   {waveformZoom.toFixed(1)}x
                 </span>
                 {waveformZoom > 1.0 && (
                   <button
                     type="button"
                     onClick={() => handleZoomChange(1.0)}
-                    className="text-[9px] font-mono text-[#64748B] hover:text-[#00F0FF] ml-0.5 transition-colors cursor-pointer"
+                    className="text-[9px] font-mono text-[#64748B] hover:text-[#38BDF8] ml-0.5 transition-colors cursor-pointer"
                     title="Reset Zoom to 1x"
                   >
                     Reset
@@ -1338,19 +1338,19 @@ export const NoiseProfileModal: React.FC = () => {
                   width: `${widthPercent}%`,
                 }}
                 onMouseDown={(e) => handleMouseDown(e, 'move')}
-                className="absolute top-0 bottom-0 border-2 border-dashed border-[#00F0FF] bg-[#00F0FF]/10 shadow-[0_0_15px_rgba(0,240,255,0.25)] cursor-grab active:cursor-grabbing group-hover:border-[#38f2ff] transition-[left,width] duration-75 flex items-center justify-between z-10"
+                className="absolute top-0 bottom-0 border-2 border-dashed border-[#38BDF8] bg-[#38BDF8]/10 shadow-[0_0_15px_rgba(56, 189, 248,0.25)] cursor-grab active:cursor-grabbing group-hover:border-[#38f2ff] transition-[left,width] duration-75 flex items-center justify-between z-10"
               >
                 {/* Left Trim Handle */}
                 <div
                   onMouseDown={(e) => handleMouseDown(e, 'left')}
-                  className="w-3.5 h-full -ml-1.5 bg-[#00F0FF] hover:bg-white cursor-ew-resize flex items-center justify-center opacity-90 transition-colors z-20 rounded-l-sm"
+                  className="w-3.5 h-full -ml-1.5 bg-[#38BDF8] hover:bg-white cursor-ew-resize flex items-center justify-center opacity-90 transition-colors z-20 rounded-l-sm"
                   title="Drag to adjust sample start"
                 >
                   <div className="w-0.5 h-4 bg-[#090B0E] rounded-full" />
                 </div>
 
                 {/* Center Label / Grip */}
-                <div className="px-2 py-0.5 rounded bg-[#090B0E]/85 border border-[#00F0FF]/40 text-[9px] font-mono text-[#00F0FF] font-bold pointer-events-none shadow flex items-center gap-1">
+                <div className="px-2 py-0.5 rounded bg-[#090B0E]/85 border border-[#38BDF8]/40 text-[9px] font-mono text-[#38BDF8] font-bold pointer-events-none shadow flex items-center gap-1">
                   <Waves size={10} />
                   <span>Noise Sample ({durationSec.toFixed(1)}s)</span>
                 </div>
@@ -1358,7 +1358,7 @@ export const NoiseProfileModal: React.FC = () => {
                 {/* Right Trim Handle */}
                 <div
                   onMouseDown={(e) => handleMouseDown(e, 'right')}
-                  className="w-3.5 h-full -mr-1.5 bg-[#00F0FF] hover:bg-white cursor-ew-resize flex items-center justify-center opacity-90 transition-colors z-20 rounded-r-sm"
+                  className="w-3.5 h-full -mr-1.5 bg-[#38BDF8] hover:bg-white cursor-ew-resize flex items-center justify-center opacity-90 transition-colors z-20 rounded-r-sm"
                   title="Drag to adjust sample duration"
                 >
                   <div className="w-0.5 h-4 bg-[#090B0E] rounded-full" />
@@ -1372,10 +1372,10 @@ export const NoiseProfileModal: React.FC = () => {
                   playbackMode === 'clean'
                     ? 'bg-[#10B981] shadow-[0_0_12px_#10B981]'
                     : playbackMode === 'sample'
-                    ? 'bg-[#00F0FF] shadow-[0_0_12px_#00F0FF]'
+                    ? 'bg-[#38BDF8] shadow-xs'
                     : playbackMode === 'raw'
                     ? 'bg-amber-400 shadow-[0_0_12px_#f59e0b]'
-                    : 'bg-[#00F0FF] shadow-[0_0_8px_#00f0ff]'
+                    : 'bg-[#38BDF8] shadow-xs'
                 }`}
               >
                 {/* Needle Floating Time Tag */}
@@ -1384,10 +1384,10 @@ export const NoiseProfileModal: React.FC = () => {
                     playbackMode === 'clean'
                       ? 'bg-[#10B981] text-black'
                       : playbackMode === 'sample'
-                      ? 'bg-[#00F0FF] text-black'
+                      ? 'bg-[#38BDF8] text-black'
                       : playbackMode === 'raw'
                       ? 'bg-amber-400 text-black'
-                      : 'bg-[#00F0FF] text-black'
+                      : 'bg-[#38BDF8] text-black'
                   }`}
                 >
                   {modalPlayhead.toFixed(1)}s
@@ -1426,7 +1426,7 @@ export const NoiseProfileModal: React.FC = () => {
               onClick={() => setActiveTab('denoise')}
               className={`px-3 py-1.5 rounded-t text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
                 activeTab === 'denoise'
-                  ? 'bg-[#181B22] text-[#00F0FF] border-b-2 border-[#00F0FF]'
+                  ? 'bg-[#181B22] text-[#38BDF8] border-b-2 border-[#38BDF8]'
                   : 'text-[#8A92A6] hover:text-[#F0F3F8]'
               }`}
             >
@@ -1456,7 +1456,7 @@ export const NoiseProfileModal: React.FC = () => {
                 <div className="space-y-2.5">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="px-1.5 py-0.5 rounded bg-[#00F0FF]/15 text-[#00F0FF] font-mono font-bold text-[10px]">
+                      <span className="px-1.5 py-0.5 rounded bg-[#38BDF8]/15 text-[#38BDF8] font-mono font-bold text-[10px]">
                         Step 1
                       </span>
                       <span className="text-xs font-bold text-[#F0F3F8]">
@@ -1490,7 +1490,7 @@ export const NoiseProfileModal: React.FC = () => {
                         }}
                         className={`px-2 py-0.5 rounded text-[10px] font-mono font-medium transition-colors cursor-pointer border ${
                           Math.abs(durationSec - dur) < 0.1
-                            ? 'bg-[#00F0FF]/20 border-[#00F0FF] text-[#00F0FF] font-bold'
+                            ? 'bg-[#38BDF8]/20 border-[#38BDF8] text-[#38BDF8] font-bold'
                             : 'bg-[#181B22] border-[#222630] text-[#8A92A6] hover:text-white'
                         }`}
                       >
@@ -1530,7 +1530,7 @@ export const NoiseProfileModal: React.FC = () => {
                           stopAudition();
                           setStartSec(Number(e.target.value));
                         }}
-                        className="w-full h-1.5 bg-[#222630] rounded appearance-none cursor-pointer accent-[#00F0FF]"
+                        className="w-full h-1.5 bg-[#222630] rounded appearance-none cursor-pointer accent-[#38BDF8]"
                       />
                     </div>
 
@@ -1549,7 +1549,7 @@ export const NoiseProfileModal: React.FC = () => {
                               stopAudition();
                               setDurationSec(Math.max(0.5, Math.min(10.0, Number(e.target.value))));
                             }}
-                            className="w-14 px-1 py-0.5 text-right font-mono text-[11px] bg-[#161922] border border-[#2B3040] rounded text-[#00F0FF]"
+                            className="w-14 px-1 py-0.5 text-right font-mono text-[11px] bg-[#161922] border border-[#2B3040] rounded text-[#38BDF8]"
                           />
                           <span className="text-[10px] text-[#8A92A6]">s</span>
                         </div>
@@ -1564,7 +1564,7 @@ export const NoiseProfileModal: React.FC = () => {
                           stopAudition();
                           setDurationSec(Number(e.target.value));
                         }}
-                        className="w-full h-1.5 bg-[#222630] rounded appearance-none cursor-pointer accent-[#00F0FF]"
+                        className="w-full h-1.5 bg-[#222630] rounded appearance-none cursor-pointer accent-[#38BDF8]"
                       />
                     </div>
                   </div>
@@ -1574,7 +1574,7 @@ export const NoiseProfileModal: React.FC = () => {
                   <button
                     onClick={handleCapture}
                     disabled={isCapturing}
-                    className="flex-1 py-1.5 px-3 rounded bg-[#00F0FF] hover:bg-[#34f3ff] text-[#0A0C10] font-bold text-xs flex items-center justify-center gap-1.5 shadow-[0_0_12px_rgba(0,240,255,0.25)] transition-all cursor-pointer disabled:opacity-50"
+                    className="flex-1 py-1.5 px-3 rounded bg-[#38BDF8] hover:bg-[#34f3ff] text-[#0A0C10] font-bold text-xs flex items-center justify-center gap-1.5 shadow-[0_0_12px_rgba(56, 189, 248,0.25)] transition-all cursor-pointer disabled:opacity-50"
                   >
                     <Sparkles size={13} />
                     <span>{isCapturing ? 'Analyzing Spectral Profile...' : `Get Noise Profile (${durationSec.toFixed(1)}s Sample)`}</span>
@@ -1610,7 +1610,7 @@ export const NoiseProfileModal: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <span
                         className={`text-[11px] font-bold font-mono transition-colors ${
-                          np.noiseReductionEnabled ? 'text-[#00F0FF]' : 'text-[#8A92A6]'
+                          np.noiseReductionEnabled ? 'text-[#38BDF8]' : 'text-[#8A92A6]'
                         }`}
                       >
                         {np.noiseReductionEnabled ? 'Denoise: ON' : 'Bypass: OFF'}
@@ -1625,7 +1625,7 @@ export const NoiseProfileModal: React.FC = () => {
                           onChange={(e) => handleToggleNoiseReduction(e.target.checked)}
                           className="sr-only peer"
                         />
-                        <div className="w-8 h-4 bg-[#222630] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3.5 after:transition-all peer-checked:bg-[#00F0FF]"></div>
+                        <div className="w-8 h-4 bg-[#222630] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3.5 after:transition-all peer-checked:bg-[#38BDF8]"></div>
                       </label>
                     </div>
                   </div>
@@ -1647,7 +1647,7 @@ export const NoiseProfileModal: React.FC = () => {
                                 reductionIntensityDb: Math.max(0, Math.min(48, Number(e.target.value))),
                               })
                             }
-                            className="w-14 px-1 py-0.5 text-right font-mono text-[11px] bg-[#161922] border border-[#2B3040] rounded text-[#00F0FF] font-bold"
+                            className="w-14 px-1 py-0.5 text-right font-mono text-[11px] bg-[#161922] border border-[#2B3040] rounded text-[#38BDF8] font-bold"
                           />
                           <span className="text-[10px] text-[#8A92A6]">dB</span>
                         </div>
@@ -1663,7 +1663,7 @@ export const NoiseProfileModal: React.FC = () => {
                             reductionIntensityDb: Number(e.target.value),
                           })
                         }
-                        className="w-full h-1.5 bg-[#222630] rounded appearance-none cursor-pointer accent-[#00F0FF]"
+                        className="w-full h-1.5 bg-[#222630] rounded appearance-none cursor-pointer accent-[#38BDF8]"
                       />
                     </div>
 
@@ -1698,7 +1698,7 @@ export const NoiseProfileModal: React.FC = () => {
                             sensitivity: Number(e.target.value),
                           })
                         }
-                        className="w-full h-1.5 bg-[#222630] rounded appearance-none cursor-pointer accent-[#00F0FF]"
+                        className="w-full h-1.5 bg-[#222630] rounded appearance-none cursor-pointer accent-[#38BDF8]"
                       />
                     </div>
                   </div>
@@ -1734,7 +1734,7 @@ export const NoiseProfileModal: React.FC = () => {
                           frequencySmoothingBands: Number(e.target.value),
                         })
                       }
-                      className="w-full h-1.5 bg-[#222630] rounded appearance-none cursor-pointer accent-[#00F0FF]"
+                      className="w-full h-1.5 bg-[#222630] rounded appearance-none cursor-pointer accent-[#38BDF8]"
                     />
                   </div>
                 </div>
@@ -1750,7 +1750,7 @@ export const NoiseProfileModal: React.FC = () => {
                       onChange={() =>
                         handleUpdateSettings({ auditionResidue: false })
                       }
-                      className="accent-[#00F0FF] cursor-pointer"
+                      className="accent-[#38BDF8] cursor-pointer"
                     />
                     <span className={!np.auditionResidue ? 'text-[#F0F3F8] font-bold' : 'text-[#8A92A6]'}>
                       Reduce (Clean Audio)
@@ -1868,7 +1868,7 @@ export const NoiseProfileModal: React.FC = () => {
                         ambientRecoveryEnabled: e.target.checked,
                       })
                     }
-                    className="rounded bg-[#0D0E11] border-[#222630] text-[#00F0FF] focus:ring-0 cursor-pointer w-3.5 h-3.5 accent-[#00F0FF]"
+                    className="rounded bg-[#0D0E11] border-[#222630] text-[#38BDF8] focus:ring-0 cursor-pointer w-3.5 h-3.5 accent-[#38BDF8]"
                   />
                   <span className="text-xs font-medium text-[#F0F3F8]">
                     Fill Cut Gaps with Ambient Room Tone Bed
@@ -1881,7 +1881,7 @@ export const NoiseProfileModal: React.FC = () => {
                 <div className="space-y-1 pl-5 pt-1">
                   <div className="flex items-center justify-between text-[11px]">
                     <span className="text-[#8A92A6]">Ambient Retrieval Intensity</span>
-                    <span className="font-mono text-xs font-bold text-[#00F0FF]">
+                    <span className="font-mono text-xs font-bold text-[#38BDF8]">
                       {Math.round(np.ambientFillIntensity * 100)}%
                     </span>
                   </div>
@@ -1896,7 +1896,7 @@ export const NoiseProfileModal: React.FC = () => {
                         ambientFillIntensity: Number(e.target.value),
                       })
                     }
-                    className="w-full h-1.5 bg-[#222630] rounded appearance-none cursor-pointer accent-[#00F0FF]"
+                    className="w-full h-1.5 bg-[#222630] rounded appearance-none cursor-pointer accent-[#38BDF8]"
                   />
                 </div>
               )}
@@ -1906,7 +1906,7 @@ export const NoiseProfileModal: React.FC = () => {
                 <button
                   onClick={handleRunAutoCut}
                   disabled={isRunningAutoCut}
-                  className="w-full py-2 px-3 rounded bg-gradient-to-r from-[#10B981] to-[#00F0FF] text-[#0A0C10] font-bold text-xs flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-all cursor-pointer disabled:opacity-50"
+                  className="w-full py-2 px-3 rounded bg-gradient-to-r from-[#10B981] to-[#38BDF8] text-[#0A0C10] font-bold text-xs flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-all cursor-pointer disabled:opacity-50"
                 >
                   <Scissors size={14} />
                   <span>
@@ -1931,12 +1931,12 @@ export const NoiseProfileModal: React.FC = () => {
               className={`py-1.5 px-3 rounded text-xs font-semibold flex items-center gap-1.5 border transition-all cursor-pointer ${
                 playbackMode === 'clean'
                   ? 'bg-[#10B981]/25 text-[#10B981] border-[#10B981] shadow-[0_0_12px_rgba(16,185,129,0.3)]'
-                  : 'bg-[#181B22] text-[#00F0FF] hover:bg-[#00F0FF]/15 border-[#00F0FF]/40'
+                  : 'bg-[#181B22] text-[#38BDF8] hover:bg-[#38BDF8]/15 border-[#38BDF8]/40'
               }`}
               title="Preview clean denoised audio across the entire clip without boundaries"
             >
               {isRenderingPreview ? (
-                <RotateCcw size={13} className="animate-spin text-[#00F0FF]" />
+                <RotateCcw size={13} className="animate-spin text-[#38BDF8]" />
               ) : playbackMode === 'clean' ? (
                 <Pause size={13} />
               ) : (
@@ -1981,7 +1981,7 @@ export const NoiseProfileModal: React.FC = () => {
             <button
               onClick={handleApplyToEntireClip}
               disabled={isApplyingFull}
-              className="px-4 py-1.5 rounded bg-gradient-to-r from-[#10B981] to-[#00F0FF] hover:from-[#17cf93] hover:to-[#22f4ff] text-[#0A0C10] font-bold text-xs flex items-center gap-1.5 shadow-[0_0_15px_rgba(0,240,255,0.3)] transition-all cursor-pointer disabled:opacity-50"
+              className="px-4 py-1.5 rounded bg-gradient-to-r from-[#10B981] to-[#38BDF8] hover:from-[#17cf93] hover:to-[#22f4ff] text-[#0A0C10] font-bold text-xs flex items-center gap-1.5 shadow-[0_0_15px_rgba(56, 189, 248,0.3)] transition-all cursor-pointer disabled:opacity-50"
             >
               {isApplyingFull ? <RotateCcw size={13} className="animate-spin" /> : <Check size={14} />}
               <span>{isApplyingFull ? 'Applying to Entire Clip...' : 'OK - Apply to Entire Clip'}</span>

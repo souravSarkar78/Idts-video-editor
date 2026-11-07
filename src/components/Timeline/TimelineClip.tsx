@@ -111,7 +111,7 @@ export const TimelineClip: React.FC<TimelineClipProps> = React.memo(
             top: '2px',
           }}
           className={`absolute rounded-xs overflow-hidden select-none cursor-pointer border ${
-            isSelected ? 'border-[#00F0FF] shadow-xs' : 'border-[#222630]'
+            isSelected ? 'border-[#38BDF8] shadow-xs' : 'border-[#222630]'
           } bg-[#14161F]`}
           onClick={(e) => {
             e.stopPropagation();
@@ -172,14 +172,14 @@ export const TimelineClip: React.FC<TimelineClipProps> = React.memo(
           isExternalDragging ? 'pointer-events-none' : ''
         } ${
           isDragging
-            ? 'ring-2 ring-[#00F0FF] border-white z-30 shadow-[0_0_16px_rgba(0,240,255,0.6)] opacity-95'
+            ? 'ring-2 ring-[#38BDF8] border-white z-30 shadow-[0_0_16px_rgba(56, 189, 248,0.6)] opacity-95'
             : isSelected
             ? isAdjustment
               ? 'border-white ring-2 ring-[#8B5CF6] z-20 shadow-[0_0_12px_rgba(139,92,246,0.5)]'
-              : 'border-white ring-2 ring-[#00F0FF] z-20 shadow-[0_0_12px_rgba(0,240,255,0.4)]'
+              : 'border-white ring-2 ring-[#38BDF8] z-20 shadow-[0_0_12px_rgba(56, 189, 248,0.4)]'
             : isAdjustment
             ? 'border-[#8B5CF6]/50 hover:border-[#8B5CF6] z-10'
-            : 'border-[#222630] hover:border-[#00F0FF]/80 z-10'
+            : 'border-[#222630] hover:border-[#38BDF8]/80 z-10'
         }`}
       >
         {/* Inner Clip Graphic Container */}
@@ -294,7 +294,7 @@ export const TimelineClip: React.FC<TimelineClipProps> = React.memo(
                       )}
                       {(clip.filterName || clip.filterId) && (
                         <div
-                          className="flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-[#00F0FF]/90 text-black shadow-xs shrink-0"
+                          className="flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-[#38BDF8]/90 text-black shadow-xs shrink-0"
                           title={`Active Filter: ${clip.filterName || clip.filterId} (${Math.round((clip.filterIntensity ?? 1) * 100)}%)`}
                         >
                           <Sparkles size={8} />
@@ -342,7 +342,7 @@ export const TimelineClip: React.FC<TimelineClipProps> = React.memo(
                   className="relative bg-[#0A0D14] border-t border-[#222630] overflow-hidden select-none"
                   title="Attached Audio Subtrack (Right-click to Extract Audio)"
                 >
-                  <div className="absolute left-1.5 top-0 bottom-0 flex items-center gap-1 z-10 pointer-events-none text-[8px] font-mono font-bold text-[#00F0FF]/80">
+                  <div className="absolute left-1.5 top-0 bottom-0 flex items-center gap-1 z-10 pointer-events-none text-[8px] font-mono font-bold text-[#38BDF8]/80">
                     <Volume2 size={9} />
                     <span>{clip.audioProcessing?.noiseProfile?.noiseReductionEnabled ? 'Audio (Clean)' : 'Audio'}</span>
                   </div>
@@ -394,7 +394,7 @@ export const TimelineClip: React.FC<TimelineClipProps> = React.memo(
                   <div className="flex items-center gap-1.5">
                     <span className="truncate bg-black/60 px-1.5 py-0.5 rounded backdrop-blur-xs">{clip.name}</span>
                     {clip.audioExtracted && (
-                      <span className="text-[9px] font-mono text-[#00F0FF] bg-black/70 px-1 py-0.5 rounded border border-[#00F0FF]/30">
+                      <span className="text-[9px] font-mono text-[#38BDF8] bg-black/70 px-1 py-0.5 rounded border border-[#38BDF8]/30">
                         [Extracted Audio]
                       </span>
                     )}
@@ -410,7 +410,7 @@ export const TimelineClip: React.FC<TimelineClipProps> = React.memo(
                     )}
                     {(clip.filterName || clip.filterId) && (
                       <div
-                        className="flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-[#00F0FF]/90 text-black shadow-xs shrink-0"
+                        className="flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-[#38BDF8]/90 text-black shadow-xs shrink-0"
                         title={`Active Filter: ${clip.filterName || clip.filterId} (${Math.round((clip.filterIntensity ?? 1) * 100)}%)`}
                       >
                         <Sparkles size={8} />
@@ -511,10 +511,10 @@ export const TimelineClip: React.FC<TimelineClipProps> = React.memo(
             clip.stabilizationProfile?.status?.type === 'probing' ||
             clip.stabilization?.status?.type === 'analyzing') && (
             <div className="absolute inset-0 z-35 pointer-events-none flex flex-col justify-end overflow-hidden">
-              <div className="absolute inset-0 opacity-40 bg-[repeating-linear-gradient(45deg,#00F0FF,#00F0FF_10px,transparent_10px,transparent_20px)] animate-pulse" />
-              <div className="relative z-10 bg-[#0D0E11]/90 backdrop-blur-xs px-2 py-0.5 flex items-center justify-between text-[9px] font-mono font-bold text-[#00F0FF] border-t border-[#00F0FF]/40">
+              <div className="absolute inset-0 opacity-40 bg-[repeating-linear-gradient(45deg,#38BDF8,#38BDF8_10px,transparent_10px,transparent_20px)] animate-pulse" />
+              <div className="relative z-10 bg-[#0D0E11]/90 backdrop-blur-xs px-2 py-0.5 flex items-center justify-between text-[9px] font-mono font-bold text-[#38BDF8] border-t border-[#38BDF8]/40">
                 <span className="flex items-center gap-1">
-                  <Loader2 size={10} className="animate-spin text-[#00F0FF]" />
+                  <Loader2 size={10} className="animate-spin text-[#38BDF8]" />
                   <span>
                     {clip.stabilizationProfile?.status?.type === 'probing' ? 'Probing IMU...' : 'Tracking Motion...'}{' '}
                     {Math.round(
@@ -530,7 +530,7 @@ export const TimelineClip: React.FC<TimelineClipProps> = React.memo(
               </div>
               <div className="w-full bg-[#181B22] h-1">
                 <div
-                  className="bg-[#00F0FF] h-1 transition-all duration-150"
+                  className="bg-[#38BDF8] h-1 transition-all duration-150"
                   style={{
                     width: `${Math.max(
                       5,
@@ -557,11 +557,11 @@ export const TimelineClip: React.FC<TimelineClipProps> = React.memo(
           {clip.keyframeTracks && clip.keyframeTracks.some((t) => t.keyframes.length > 0) && (
             <div
               onClick={(e) => e.stopPropagation()}
-              className="absolute bottom-0 left-0 right-0 h-4 bg-black/85 border-t border-[#00F0FF]/40 z-20 select-none overflow-hidden"
+              className="absolute bottom-0 left-0 right-0 h-4 bg-black/85 border-t border-[#38BDF8]/40 z-20 select-none overflow-hidden"
               title="Global Keyframe Sub-Lane: Click to seek playhead, drag diamond to adjust timing, double-click to delete"
             >
               {/* Floating KF indicator */}
-              <div className="absolute left-1 top-0 bottom-0 flex items-center gap-0.5 text-[8px] font-mono font-bold text-[#00F0FF]/70 pointer-events-none z-10">
+              <div className="absolute left-1 top-0 bottom-0 flex items-center gap-0.5 text-[8px] font-mono font-bold text-[#38BDF8]/70 pointer-events-none z-10">
                 <Diamond size={7} fill="currentColor" />
                 <span>KF</span>
               </div>
@@ -610,7 +610,7 @@ export const TimelineClip: React.FC<TimelineClipProps> = React.memo(
                           onRemoveKeyframe?.(clip.id, kfTime);
                         }}
                         title={`Keyframe at ${kfTime.toFixed(2)}s [${isMaster ? 'Master (All Properties)' : kfProps.join(', ')}]\n• Click: Seek playhead here\n• Drag: Shift timing\n• Double-click: Delete`}
-                        className="absolute top-1/2 -mt-1.5 -ml-1.5 w-3 h-3 rotate-45 bg-[#00F0FF] border border-black shadow-[0_0_6px_#00F0FF] hover:scale-130 transition-transform cursor-ew-resize z-30 pointer-events-auto"
+                        className="absolute top-1/2 -mt-1.5 -ml-1.5 w-3 h-3 rotate-45 bg-[#38BDF8] border border-black shadow-xs hover:scale-130 transition-transform cursor-ew-resize z-30 pointer-events-auto"
                       />
                     );
                   })}
@@ -628,7 +628,7 @@ export const TimelineClip: React.FC<TimelineClipProps> = React.memo(
             className={`absolute left-0 top-0 bottom-0 w-3.5 transition-colors cursor-col-resize z-25 flex items-center justify-center shadow-xs ${
               edgeDragMode === 'stretch'
                 ? 'bg-amber-950/40 hover:bg-[#F59E0B] group-hover:bg-[#F59E0B]/30'
-                : 'bg-black/40 hover:bg-[#00F0FF] group-hover:bg-[#00F0FF]/30'
+                : 'bg-black/40 hover:bg-[#38BDF8] group-hover:bg-[#38BDF8]/30'
             }`}
             title={
               edgeDragMode === 'stretch'
@@ -649,7 +649,7 @@ export const TimelineClip: React.FC<TimelineClipProps> = React.memo(
             className={`absolute right-0 top-0 bottom-0 w-3.5 transition-colors cursor-col-resize z-25 flex items-center justify-center shadow-xs ${
               edgeDragMode === 'stretch'
                 ? 'bg-amber-950/40 hover:bg-[#F59E0B] group-hover:bg-[#F59E0B]/30'
-                : 'bg-black/40 hover:bg-[#00F0FF] group-hover:bg-[#00F0FF]/30'
+                : 'bg-black/40 hover:bg-[#38BDF8] group-hover:bg-[#38BDF8]/30'
             }`}
             title={
               edgeDragMode === 'stretch'
@@ -662,7 +662,7 @@ export const TimelineClip: React.FC<TimelineClipProps> = React.memo(
         </div>
 
         {/* FLOATING HOVER CARD: Displays Full Filename and Detailed Clip Metrics on Hover */}
-        <div className="absolute bottom-full left-0 mb-2 hidden group-hover:flex flex-col gap-1 w-64 p-2.5 rounded-lg bg-[#0C0E12]/95 backdrop-blur-md border border-[#00F0FF]/60 shadow-[0_4px_24px_rgba(0,0,0,0.85)] pointer-events-none z-50 text-[11px]">
+        <div className="absolute bottom-full left-0 mb-2 hidden group-hover:flex flex-col gap-1 w-64 p-2.5 rounded-lg bg-[#0C0E12]/95 backdrop-blur-md border border-[#38BDF8]/60 shadow-[0_4px_24px_rgba(0,0,0,0.85)] pointer-events-none z-50 text-[11px]">
           {/* Cached Frame Preview (0 CPU/GPU resource overhead) */}
           {isVideo && (
             <div className="w-full h-24 rounded bg-[#0A0C10] overflow-hidden border border-[#222630] mb-1 relative flex items-center justify-center">
@@ -681,7 +681,7 @@ export const TimelineClip: React.FC<TimelineClipProps> = React.memo(
             </div>
           )}
 
-          <div className="flex items-center gap-1.5 text-[#00F0FF] font-bold">
+          <div className="flex items-center gap-1.5 text-[#38BDF8] font-bold">
             <FileCode size={13} className="shrink-0" />
             <span className="break-all leading-tight font-mono text-xs">{clip.name}</span>
           </div>

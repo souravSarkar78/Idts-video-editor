@@ -492,7 +492,7 @@ export interface MediaTrack {
   clips: Clip[];
 
   // Interop styling and mixer controls
-  color?: string; // Hex color for clip and header accent, e.g. #00F0FF, #A855F7, #F59E0B
+  color?: string; // Hex color for clip and header accent, e.g. #38BDF8, #A855F7, #F59E0B
   volume?: number; // 0.0 - 1.0 (or >1.0 for gain)
   pan?: number; // -1.0 to 1.0
   timeOffsetSeconds?: number;

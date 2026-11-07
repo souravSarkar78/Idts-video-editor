@@ -277,7 +277,7 @@ export const SplineCurvesPanel: React.FC<SplineCurvesProps> = ({ curves, onChang
             setLocalCurves(reset);
             onChange(reset);
           }}
-          className="text-[10px] font-mono text-[#64748B] hover:text-[#00F0FF] flex items-center gap-1 cursor-pointer"
+          className="text-[10px] font-mono text-[#64748B] hover:text-[#38BDF8] flex items-center gap-1 cursor-pointer"
         >
           <RotateCcw size={10} />
           <span>Reset {activeChannel}</span>

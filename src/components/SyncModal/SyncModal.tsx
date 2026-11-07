@@ -141,7 +141,7 @@ const TimeOffsetInput: React.FC<TimeOffsetInputProps> = ({
             }
           }}
           onKeyDown={handleKeyDown}
-          className="w-full bg-[#14161B] border border-[#222630] rounded px-2.5 py-1.5 pr-6 text-xs font-mono text-[#F0F3F8] focus:border-[#00F0FF] focus:outline-none transition-colors"
+          className="w-full bg-[#14161B] border border-[#222630] rounded px-2.5 py-1.5 pr-6 text-xs font-mono text-[#F0F3F8] focus:border-[#38BDF8] focus:outline-none transition-colors"
         />
 
         {/* Dedicated Up / Down Stepper Arrows */}
@@ -150,7 +150,7 @@ const TimeOffsetInput: React.FC<TimeOffsetInputProps> = ({
             type="button"
             tabIndex={-1}
             onClick={() => handleStep('up')}
-            className="p-0.5 text-[#64748B] hover:text-[#00F0FF] hover:bg-[#222630] rounded transition-colors cursor-pointer"
+            className="p-0.5 text-[#64748B] hover:text-[#38BDF8] hover:bg-[#222630] rounded transition-colors cursor-pointer"
             title="Increment"
           >
             <ChevronUp size={10} />
@@ -159,7 +159,7 @@ const TimeOffsetInput: React.FC<TimeOffsetInputProps> = ({
             type="button"
             tabIndex={-1}
             onClick={() => handleStep('down')}
-            className="p-0.5 text-[#64748B] hover:text-[#00F0FF] hover:bg-[#222630] rounded transition-colors cursor-pointer"
+            className="p-0.5 text-[#64748B] hover:text-[#38BDF8] hover:bg-[#222630] rounded transition-colors cursor-pointer"
             title="Decrement"
           >
             <ChevronDown size={10} />
@@ -448,7 +448,7 @@ export const SyncModal: React.FC = () => {
         {/* Modal Header */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#222630] bg-[#101217]">
           <div className="flex items-center gap-2.5">
-            <div className="p-1.5 rounded-md bg-[#00F0FF]/10 text-[#00F0FF] border border-[#00F0FF]/30">
+            <div className="p-1.5 rounded-md bg-[#38BDF8]/10 text-[#38BDF8] border border-[#38BDF8]/30">
               <RefreshCw size={18} />
             </div>
             <div>
@@ -474,7 +474,7 @@ export const SyncModal: React.FC = () => {
             onClick={() => setActiveMode('filename')}
             className={`flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-t border-t border-x transition-all ${
               activeMode === 'filename'
-                ? 'bg-[#14161B] text-[#00F0FF] border-[#222630] border-b-[#14161B] -mb-[1px] shadow-sm'
+                ? 'bg-[#14161B] text-[#38BDF8] border-[#222630] border-b-[#14161B] -mb-[1px] shadow-sm'
                 : 'text-[#8A92A6] border-transparent hover:text-[#F0F3F8]'
             }`}
           >
@@ -486,7 +486,7 @@ export const SyncModal: React.FC = () => {
             onClick={() => setActiveMode('waveform')}
             className={`flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-t border-t border-x transition-all ${
               activeMode === 'waveform'
-                ? 'bg-[#14161B] text-[#00F0FF] border-[#222630] border-b-[#14161B] -mb-[1px] shadow-sm'
+                ? 'bg-[#14161B] text-[#38BDF8] border-[#222630] border-b-[#14161B] -mb-[1px] shadow-sm'
                 : 'text-[#8A92A6] border-transparent hover:text-[#F0F3F8]'
             }`}
           >
@@ -498,7 +498,7 @@ export const SyncModal: React.FC = () => {
             onClick={() => setActiveMode('metadata')}
             className={`flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-t border-t border-x transition-all ${
               activeMode === 'metadata'
-                ? 'bg-[#14161B] text-[#00F0FF] border-[#222630] border-b-[#14161B] -mb-[1px] shadow-sm'
+                ? 'bg-[#14161B] text-[#38BDF8] border-[#222630] border-b-[#14161B] -mb-[1px] shadow-sm'
                 : 'text-[#8A92A6] border-transparent hover:text-[#F0F3F8]'
             }`}
           >
@@ -543,7 +543,7 @@ export const SyncModal: React.FC = () => {
                           setSelectedPreset(e.target.value);
                           setCustomPattern(e.target.value);
                         }}
-                        className="w-full bg-[#0D0E11] border border-[#222630] rounded px-3 py-1.5 text-xs text-[#F0F3F8] focus:border-[#00F0FF] focus:outline-none"
+                        className="w-full bg-[#0D0E11] border border-[#222630] rounded px-3 py-1.5 text-xs text-[#F0F3F8] focus:border-[#38BDF8] focus:outline-none"
                       >
                         {PRESETS.map((p) => (
                           <option key={p.pattern} value={p.pattern}>
@@ -560,7 +560,7 @@ export const SyncModal: React.FC = () => {
                       <select
                         value={referenceTrackId}
                         onChange={(e) => handleReferenceChange(e.target.value)}
-                        className="w-full bg-[#0D0E11] border border-[#222630] rounded px-3 py-1.5 text-xs text-[#F0F3F8] focus:border-[#00F0FF] focus:outline-none"
+                        className="w-full bg-[#0D0E11] border border-[#222630] rounded px-3 py-1.5 text-xs text-[#F0F3F8] focus:border-[#38BDF8] focus:outline-none"
                       >
                         {tracks.map((t, idx) => (
                           <option key={t.id} value={t.id}>
@@ -574,7 +574,7 @@ export const SyncModal: React.FC = () => {
                   <div>
                     <label className="block text-[11px] font-semibold text-[#8A92A6] uppercase tracking-wider mb-1.5 flex items-center justify-between">
                       <span>Custom Timestamp Extraction Pattern</span>
-                      <span className="text-[10px] text-[#00F0FF] font-mono lowercase">
+                      <span className="text-[10px] text-[#38BDF8] font-mono lowercase">
                         tokens: &#123;YYYY&#125; &#123;MM&#125; &#123;DD&#125; &#123;HH&#125; &#123;mm&#125; &#123;ss&#125;
                       </span>
                     </label>
@@ -582,7 +582,7 @@ export const SyncModal: React.FC = () => {
                       type="text"
                       value={customPattern}
                       onChange={(e) => setCustomPattern(e.target.value)}
-                      className="w-full bg-[#0D0E11] border border-[#222630] rounded px-3 py-1.5 text-xs font-mono text-[#00F0FF] focus:border-[#00F0FF] focus:outline-none"
+                      className="w-full bg-[#0D0E11] border border-[#222630] rounded px-3 py-1.5 text-xs font-mono text-[#38BDF8] focus:border-[#38BDF8] focus:outline-none"
                     />
                   </div>
                 </div>
@@ -590,7 +590,7 @@ export const SyncModal: React.FC = () => {
 
               {activeMode === 'waveform' && (
                 <div className="flex items-center gap-4 bg-[#0D0E11] p-3.5 rounded border border-[#222630]">
-                  <div className="p-2.5 rounded-full bg-[#00F0FF]/15 text-[#00F0FF] shrink-0">
+                  <div className="p-2.5 rounded-full bg-[#38BDF8]/15 text-[#38BDF8] shrink-0">
                     <Waves size={24} />
                   </div>
                   <div className="flex-1 text-xs">
@@ -626,7 +626,7 @@ export const SyncModal: React.FC = () => {
           {activeMode !== 'camera_offsets' && (
             <div className="p-5 bg-[#0F1116] space-y-3.5">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-[#00F0FF] flex items-center gap-1.5">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-[#38BDF8] flex items-center gap-1.5">
                   <Magnet size={13} />
                   <span>Timeline Placement Strategy (Idle Gaps)</span>
                 </span>
@@ -641,7 +641,7 @@ export const SyncModal: React.FC = () => {
                   onClick={() => setLocalPlacementMode('compact')}
                   className={`p-3 rounded-lg border cursor-pointer transition-all flex flex-col justify-between ${
                     localPlacementMode === 'compact'
-                      ? 'bg-[#18202A] border-[#00F0FF] shadow-[0_0_12px_rgba(0,240,255,0.2)]'
+                      ? 'bg-[#18202A] border-[#38BDF8] shadow-[0_0_12px_rgba(56, 189, 248,0.2)]'
                       : 'bg-[#14161B] border-[#222630] hover:border-[#384152]'
                   }`}
                 >
@@ -663,7 +663,7 @@ export const SyncModal: React.FC = () => {
                         value={localGapCushion}
                         onChange={(e) => setLocalGapCushion(Number(e.target.value))}
                         onClick={(e) => e.stopPropagation()}
-                        className="bg-[#0D0E11] border border-[#222630] text-[#00F0FF] text-[10px] rounded px-1.5 py-0.5 focus:outline-none"
+                        className="bg-[#0D0E11] border border-[#222630] text-[#38BDF8] text-[10px] rounded px-1.5 py-0.5 focus:outline-none"
                       >
                         <option value={0}>0s (Seamless)</option>
                         <option value={1}>1.0s Cushion</option>
@@ -679,7 +679,7 @@ export const SyncModal: React.FC = () => {
                   onClick={() => setLocalPlacementMode('absolute')}
                   className={`p-3 rounded-lg border cursor-pointer transition-all flex flex-col justify-between ${
                     localPlacementMode === 'absolute'
-                      ? 'bg-[#18202A] border-[#00F0FF] shadow-[0_0_12px_rgba(0,240,255,0.2)]'
+                      ? 'bg-[#18202A] border-[#38BDF8] shadow-[0_0_12px_rgba(56, 189, 248,0.2)]'
                       : 'bg-[#14161B] border-[#222630] hover:border-[#384152]'
                   }`}
                 >
@@ -698,7 +698,7 @@ export const SyncModal: React.FC = () => {
                   onClick={() => setLocalPlacementMode('capped')}
                   className={`p-3 rounded-lg border cursor-pointer transition-all flex flex-col justify-between ${
                     localPlacementMode === 'capped'
-                      ? 'bg-[#18202A] border-[#00F0FF] shadow-[0_0_12px_rgba(0,240,255,0.2)]'
+                      ? 'bg-[#18202A] border-[#38BDF8] shadow-[0_0_12px_rgba(56, 189, 248,0.2)]'
                       : 'bg-[#14161B] border-[#222630] hover:border-[#384152]'
                   }`}
                 >
@@ -717,7 +717,7 @@ export const SyncModal: React.FC = () => {
                         value={localGapCushion}
                         onChange={(e) => setLocalGapCushion(Number(e.target.value))}
                         onClick={(e) => e.stopPropagation()}
-                        className="bg-[#0D0E11] border border-[#222630] text-[#00F0FF] text-[10px] rounded px-1.5 py-0.5 focus:outline-none"
+                        className="bg-[#0D0E11] border border-[#222630] text-[#38BDF8] text-[10px] rounded px-1.5 py-0.5 focus:outline-none"
                       >
                         <option value={2}>Max 2s</option>
                         <option value={5}>Max 5s</option>
@@ -735,16 +735,16 @@ export const SyncModal: React.FC = () => {
           {activeMode === 'camera_offsets' && (
             <div className="p-5 space-y-4 bg-[#14161B]/80">
               {/* Master Anchor Camera Banner */}
-              <div className="p-4 rounded-lg bg-[#0E131C] border border-[#00F0FF]/35 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-md">
+              <div className="p-4 rounded-lg bg-[#0E131C] border border-[#38BDF8]/35 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-md">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <span className="p-1 rounded bg-[#00F0FF]/20 text-[#00F0FF]">
+                    <span className="p-1 rounded bg-[#38BDF8]/20 text-[#38BDF8]">
                       <Camera size={15} />
                     </span>
                     <span className="text-xs font-bold text-[#F0F3F8] uppercase tracking-wider">
                       Master Camera Reference (Anchor)
                     </span>
-                    <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#00F0FF]/15 text-[#00F0FF] border border-[#00F0FF]/30">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#38BDF8]/15 text-[#38BDF8] border border-[#38BDF8]/30">
                       MASTER • 0.000s OFFSET (LOCKED)
                     </span>
                   </div>
@@ -760,7 +760,7 @@ export const SyncModal: React.FC = () => {
                   <select
                     value={referenceTrackId}
                     onChange={(e) => handleReferenceChange(e.target.value)}
-                    className="bg-[#0D0E11] border border-[#00F0FF]/60 text-[#00F0FF] font-semibold rounded px-2.5 py-1.5 text-xs focus:outline-none cursor-pointer"
+                    className="bg-[#0D0E11] border border-[#38BDF8]/60 text-[#38BDF8] font-semibold rounded px-2.5 py-1.5 text-xs focus:outline-none cursor-pointer"
                   >
                     {tracks.map((t, idx) => (
                       <option key={t.id} value={t.id}>
@@ -827,7 +827,7 @@ export const SyncModal: React.FC = () => {
 
                           <div className="text-[11px] font-mono text-[#8A92A6] flex items-center gap-1.5">
                             <span>Base: <strong className="text-[#F0F3F8]">{baseSec.toFixed(3)}s</strong></span>
-                            <ArrowRight size={12} className="text-[#00F0FF]" />
+                            <ArrowRight size={12} className="text-[#38BDF8]" />
                             <span>Calibrated: <strong className="text-[#10B981]">{calibratedSec.toFixed(3)}s</strong></span>
                             <span className="text-[10px] text-[#64748B]">
                               ({offset.totalOffsetSeconds >= 0 ? '+' : ''}{offset.totalOffsetSeconds.toFixed(3)}s)
@@ -929,7 +929,7 @@ export const SyncModal: React.FC = () => {
                               <button
                                 key={val}
                                 onClick={() => handleQuickAdjust(track.id, val)}
-                                className="px-2 py-0.5 rounded text-[10px] font-mono bg-[#181B22] border border-[#262C38] text-[#8A92A6] hover:text-[#00F0FF] hover:border-[#00F0FF]/40 transition-colors cursor-pointer"
+                                className="px-2 py-0.5 rounded text-[10px] font-mono bg-[#181B22] border border-[#262C38] text-[#8A92A6] hover:text-[#38BDF8] hover:border-[#38BDF8]/40 transition-colors cursor-pointer"
                               >
                                 {label}
                               </button>
@@ -945,7 +945,7 @@ export const SyncModal: React.FC = () => {
 
                         {/* Card Summary Badge + Apply to this Track Button */}
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-[#1E222D]">
-                          <div className="font-mono text-[11px] text-[#00F0FF] bg-[#00F0FF]/10 px-2.5 py-1 rounded border border-[#00F0FF]/25 flex items-center gap-1.5">
+                          <div className="font-mono text-[11px] text-[#38BDF8] bg-[#38BDF8]/10 px-2.5 py-1 rounded border border-[#38BDF8]/25 flex items-center gap-1.5">
                             <span className="text-[#8A92A6]">Total Offset:</span>
                             <strong>{formatOffsetDisplay(offset)}</strong>
                           </div>
@@ -1007,7 +1007,7 @@ export const SyncModal: React.FC = () => {
                   Detected Clips & Calculated Offsets
                 </span>
                 <span className="text-[11px] text-[#64748B]">
-                  Anchor: <strong className="text-[#00F0FF]">{masterTrack?.name || 'Track 1'}</strong>
+                  Anchor: <strong className="text-[#38BDF8]">{masterTrack?.name || 'Track 1'}</strong>
                 </span>
               </div>
 
@@ -1041,7 +1041,7 @@ export const SyncModal: React.FC = () => {
                           </td>
                           <td className="py-2.5 px-3">
                             {candidate.isReference ? (
-                              <span className="font-mono text-xs text-[#00F0FF] font-semibold">
+                              <span className="font-mono text-xs text-[#38BDF8] font-semibold">
                                 0.000s (Anchor)
                               </span>
                             ) : (
@@ -1050,7 +1050,7 @@ export const SyncModal: React.FC = () => {
                                   {formatDeltaSeconds(candidate.calculatedOffsetSeconds)}
                                 </span>
                                 {camOffset && camOffset.totalOffsetSeconds !== 0 && (
-                                  <span className="text-[10px] font-mono text-[#00F0FF] bg-[#00F0FF]/10 px-1 rounded">
+                                  <span className="text-[10px] font-mono text-[#38BDF8] bg-[#38BDF8]/10 px-1 rounded">
                                     ±{camOffset.totalOffsetSeconds > 0 ? '+' : ''}{camOffset.totalOffsetSeconds.toFixed(3)}s
                                   </span>
                                 )}
@@ -1059,7 +1059,7 @@ export const SyncModal: React.FC = () => {
                           </td>
                           <td className="py-2.5 px-3 text-right">
                             {candidate.isReference ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-[#00F0FF]/15 text-[#00F0FF] border border-[#00F0FF]/30">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-[#38BDF8]/15 text-[#38BDF8] border border-[#38BDF8]/30">
                                 MASTER
                               </span>
                             ) : (
@@ -1099,7 +1099,7 @@ export const SyncModal: React.FC = () => {
         {/* Modal Actions Footer */}
         <div className="flex items-center justify-between px-5 py-3 border-t border-[#222630] bg-[#101217]">
           <div className="flex items-center gap-2 text-[11px] text-[#64748B]">
-            <AlertCircle size={13} className="text-[#00F0FF]" />
+            <AlertCircle size={13} className="text-[#38BDF8]" />
             {feedbackToast ? (
               <span className="text-[#10B981] font-semibold">{feedbackToast}</span>
             ) : activeMode === 'camera_offsets' ? (
@@ -1143,7 +1143,7 @@ export const SyncModal: React.FC = () => {
               <button
                 onClick={handleApplySync}
                 disabled={isAnalyzing}
-                className="flex items-center gap-1.5 px-4 py-1.5 rounded text-xs font-bold bg-[#00F0FF] hover:bg-[#38f2ff] text-[#0D0E11] shadow-[0_0_12px_rgba(0,240,255,0.35)] transition-all disabled:opacity-50 cursor-pointer"
+                className="flex items-center gap-1.5 px-4 py-1.5 rounded text-xs font-bold bg-[#38BDF8] hover:bg-[#38f2ff] text-[#0D0E11] shadow-[0_0_12px_rgba(56, 189, 248,0.35)] transition-all disabled:opacity-50 cursor-pointer"
               >
                 {isAnalyzing ? (
                   <>

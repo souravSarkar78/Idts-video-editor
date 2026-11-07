@@ -524,7 +524,7 @@ export const TransitionsPanel: React.FC = () => {
               {[
                 { name: 'Purple', hex: '#A855F7' },
                 { name: 'Pink', hex: '#EC4899' },
-                { name: 'Cyan', hex: '#00F0FF' },
+                { name: 'Cyan', hex: '#38BDF8' },
                 { name: 'White', hex: '#FFFFFF' },
                 { name: 'Amber', hex: '#F59E0B' },
                 { name: 'Emerald', hex: '#10B981' },

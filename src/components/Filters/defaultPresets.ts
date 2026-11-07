@@ -101,7 +101,7 @@ const CORE_BUILT_IN_FILTER_PRESETS: FilterPreset[] = [
     },
     defaultIntensity: 1.0,
     isCustom: false,
-    previewAccentColor: '#00F0FF',
+    previewAccentColor: '#38BDF8',
   },
   {
     id: 'lut_slog3_rec709',

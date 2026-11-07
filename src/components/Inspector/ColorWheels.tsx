@@ -35,7 +35,7 @@ export const ColorWheelsPanel: React.FC<ColorWheelsProps> = ({
               offset: { r: 0, g: 0, b: 0, luma: 0 },
             })
           }
-          className="text-[10px] font-mono text-[#64748B] hover:text-[#00F0FF] flex items-center gap-1 cursor-pointer"
+          className="text-[10px] font-mono text-[#64748B] hover:text-[#38BDF8] flex items-center gap-1 cursor-pointer"
         >
           <RotateCcw size={10} />
           <span>Reset Wheels</span>
@@ -176,7 +176,7 @@ const SingleColorWheel: React.FC<SingleWheelProps> = ({ label, wheel, onChange }
         <button
           onClick={() => onChange({ r: 0, g: 0, b: 0, luma: 0 })}
           title="Reset Wheel"
-          className="text-[#64748B] hover:text-[#00F0FF] transition-colors cursor-pointer"
+          className="text-[#64748B] hover:text-[#38BDF8] transition-colors cursor-pointer"
         >
           <RotateCcw size={10} />
         </button>
@@ -210,7 +210,7 @@ const SingleColorWheel: React.FC<SingleWheelProps> = ({ label, wheel, onChange }
       <div className="w-full mt-2 space-y-0.5">
         <div className="flex items-center justify-between text-[9px] font-mono text-[#8A92A6]">
           <span>Luma</span>
-          <span className="text-[#00F0FF]">{luma > 0 ? `+${(luma * 100).toFixed(0)}` : (luma * 100).toFixed(0)}</span>
+          <span className="text-[#38BDF8]">{luma > 0 ? `+${(luma * 100).toFixed(0)}` : (luma * 100).toFixed(0)}</span>
         </div>
         <input
           type="range"
@@ -219,7 +219,7 @@ const SingleColorWheel: React.FC<SingleWheelProps> = ({ label, wheel, onChange }
           step={0.01}
           value={luma}
           onChange={(e) => onChange({ ...wheel, luma: parseFloat(e.target.value) })}
-          className="w-full h-1 bg-[#222630] rounded appearance-none cursor-pointer accent-[#00F0FF]"
+          className="w-full h-1 bg-[#222630] rounded appearance-none cursor-pointer accent-[#38BDF8]"
         />
       </div>
     </div>

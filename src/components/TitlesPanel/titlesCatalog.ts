@@ -42,12 +42,12 @@ export const TITLES_CATALOG: TitlePresetItem[] = [
     defaultDuration: 3.5,
     animationType: 'typewriter',
     tags: ['typewriter', 'cursor', 'kinetic', 'terminal', 'trending'],
-    color: '#00F0FF',
+    color: '#38BDF8',
     style: {
       fontFamily: 'Courier New, monospace',
       fontSize: 32,
       fontWeight: 'bold',
-      fontColor: '#00F0FF',
+      fontColor: '#38BDF8',
       alignment: 'center',
     },
     drawtextExpression: "drawtext=text='TYPEWRITER':expansion=normal:alpha='if(lt(t,1.5),t/1.5,1)'",
@@ -60,7 +60,7 @@ export const TITLES_CATALOG: TitlePresetItem[] = [
       const cursorVisible = Math.floor(p * 10) % 2 === 0;
 
       ctx.font = 'bold 13px monospace';
-      ctx.fillStyle = '#00F0FF';
+      ctx.fillStyle = '#38BDF8';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(displayText + (cursorVisible ? '▌' : ' '), w / 2, h / 2);
@@ -260,7 +260,7 @@ export const TITLES_CATALOG: TitlePresetItem[] = [
       if (!flicker) return;
       const jitterX = (Math.random() - 0.5) * 6;
       ctx.font = 'bold 14px monospace';
-      ctx.fillStyle = '#00F0FF';
+      ctx.fillStyle = '#38BDF8';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('SYSTEM GLITCH', w / 2 + jitterX - 2, h / 2);
@@ -551,13 +551,13 @@ export const TITLES_CATALOG: TitlePresetItem[] = [
     defaultDuration: 3.0,
     animationType: 'social_pop',
     tags: ['social', 'tag', 'username', 'handle', 'badge'],
-    color: '#00F0FF',
+    color: '#38BDF8',
     style: {
       fontFamily: 'Inter, sans-serif',
       fontSize: 28,
       fontWeight: 'bold',
       fontColor: '#FFFFFF',
-      backgroundColor: '#00F0FF',
+      backgroundColor: '#38BDF8',
       alignment: 'center',
     },
     drawtextExpression: 'drawtext=text=@CHANNEL',
@@ -568,7 +568,7 @@ export const TITLES_CATALOG: TitlePresetItem[] = [
       ctx.save();
       ctx.translate(w / 2, h / 2);
       ctx.scale(scale, scale);
-      ctx.fillStyle = '#00F0FF';
+      ctx.fillStyle = '#38BDF8';
       ctx.beginPath();
       ctx.roundRect(-50, -12, 100, 24, 12);
       ctx.fill();
@@ -765,7 +765,7 @@ export const TITLES_CATALOG: TitlePresetItem[] = [
     defaultDuration: 4.0,
     animationType: 'glass_card',
     tags: ['lowerthird', 'glass', 'modern', 'corporate', 'interview'],
-    color: '#00F0FF',
+    color: '#38BDF8',
     style: {
       fontFamily: 'Inter, sans-serif',
       fontSize: 28,
@@ -780,7 +780,7 @@ export const TITLES_CATALOG: TitlePresetItem[] = [
       drawTitleBase(ctx, w, h);
       const cardW = Math.min(1, p * 1.5) * (w * 0.85);
       ctx.fillStyle = 'rgba(255,255,255,0.08)';
-      ctx.strokeStyle = 'rgba(0,240,255,0.4)';
+      ctx.strokeStyle = 'rgba(56, 189, 248,0.4)';
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.roundRect(12, h / 2 - 14, cardW, 28, 4);
@@ -789,7 +789,7 @@ export const TITLES_CATALOG: TitlePresetItem[] = [
 
       if (p > 0.3) {
         ctx.font = 'bold 10px sans-serif';
-        ctx.fillStyle = '#00F0FF';
+        ctx.fillStyle = '#38BDF8';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
         ctx.fillText('SARAH CHEN', 20, h / 2 - 4);
@@ -1190,19 +1190,19 @@ export const TITLES_CATALOG: TitlePresetItem[] = [
     defaultDuration: 4.0,
     animationType: 'boxed_badge',
     tags: ['badge', 'boxed', 'feature', 'documentary', 'media'],
-    color: '#00F0FF',
+    color: '#38BDF8',
     style: {
       fontFamily: 'Inter, sans-serif',
       fontSize: 30,
       fontWeight: '800',
-      fontColor: '#00F0FF',
+      fontColor: '#38BDF8',
       alignment: 'center',
     },
     drawtextExpression: 'drawtext=text=FEATURE',
     assTemplate: '{\\an5}FEATURE',
     renderThumbnail: (ctx, w, h, p) => {
       drawTitleBase(ctx, w, h);
-      ctx.fillStyle = '#00F0FF';
+      ctx.fillStyle = '#38BDF8';
       ctx.fillRect(w / 2 - 25, h / 2 - 14, 50, 12);
       ctx.font = '900 7px sans-serif';
       ctx.fillStyle = '#0B0D13';
@@ -1227,12 +1227,12 @@ export const TITLES_CATALOG: TitlePresetItem[] = [
     defaultDuration: 3.0,
     animationType: 'cyber_rgb',
     tags: ['cyberpunk', 'rgb', 'glitch', 'neon', 'futuristic'],
-    color: '#00F0FF',
+    color: '#38BDF8',
     style: {
       fontFamily: 'Impact, sans-serif',
       fontSize: 38,
       fontWeight: 'bold',
-      fontColor: '#00F0FF',
+      fontColor: '#38BDF8',
       alignment: 'center',
     },
     drawtextExpression: 'drawtext=text=CYBER',
@@ -1247,7 +1247,7 @@ export const TITLES_CATALOG: TitlePresetItem[] = [
       ctx.fillStyle = 'rgba(255, 0, 80, 0.8)';
       ctx.fillText('CYBERCITY', w / 2 + jx + 2, h / 2);
       // Cyan shift
-      ctx.fillStyle = 'rgba(0, 240, 255, 0.8)';
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.8)';
       ctx.fillText('CYBERCITY', w / 2 - jx - 2, h / 2);
       // Main text
       ctx.fillStyle = '#FFFFFF';
@@ -1631,12 +1631,12 @@ export const TITLES_CATALOG: TitlePresetItem[] = [
     defaultDuration: 2.5,
     animationType: 'electric_discharge',
     tags: ['electric', 'lightning', 'arc', 'voltage', 'energy'],
-    color: '#00F0FF',
+    color: '#38BDF8',
     style: {
       fontFamily: 'Impact, sans-serif',
       fontSize: 36,
       fontWeight: 'bold',
-      fontColor: '#00F0FF',
+      fontColor: '#38BDF8',
       alignment: 'center',
     },
     drawtextExpression: 'drawtext=text=VOLTAGE',
@@ -1644,7 +1644,7 @@ export const TITLES_CATALOG: TitlePresetItem[] = [
     renderThumbnail: (ctx, w, h, p) => {
       drawTitleBase(ctx, w, h);
       ctx.font = '900 14px Impact, sans-serif';
-      ctx.fillStyle = '#00F0FF';
+      ctx.fillStyle = '#38BDF8';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('HIGH VOLTAGE', w / 2, h / 2);
@@ -1736,12 +1736,12 @@ export const TITLES_CATALOG: TitlePresetItem[] = [
     defaultDuration: 3.5,
     animationType: 'reflection_floor',
     tags: ['reflection', 'mirror', 'floor', 'glossy', '3d'],
-    color: '#00F0FF',
+    color: '#38BDF8',
     style: {
       fontFamily: 'Inter, sans-serif',
       fontSize: 34,
       fontWeight: 'bold',
-      fontColor: '#00F0FF',
+      fontColor: '#38BDF8',
       alignment: 'center',
     },
     drawtextExpression: 'drawtext=text=MIRROR',
@@ -1749,7 +1749,7 @@ export const TITLES_CATALOG: TitlePresetItem[] = [
     renderThumbnail: (ctx, w, h, p) => {
       drawTitleBase(ctx, w, h);
       ctx.font = 'bold 13px sans-serif';
-      ctx.fillStyle = '#00F0FF';
+      ctx.fillStyle = '#38BDF8';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('MIRROR FLOOR', w / 2, h / 2 - 8);
@@ -1758,7 +1758,7 @@ export const TITLES_CATALOG: TitlePresetItem[] = [
       ctx.save();
       ctx.translate(w / 2, h / 2 + 10);
       ctx.scale(1, -0.6);
-      ctx.fillStyle = 'rgba(0, 240, 255, 0.25)';
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.25)';
       ctx.fillText('MIRROR FLOOR', 0, 0);
       ctx.restore();
     },
@@ -1836,13 +1836,13 @@ export const TITLES_CATALOG: TitlePresetItem[] = [
     defaultDuration: 3.5,
     animationType: 'contour_glow',
     tags: ['outline', 'stroke', 'wireframe', 'glow', 'vector'],
-    color: '#00F0FF',
+    color: '#38BDF8',
     style: {
       fontFamily: 'Inter, sans-serif',
       fontSize: 34,
       fontWeight: 'bold',
       fontColor: 'transparent',
-      strokeColor: '#00F0FF',
+      strokeColor: '#38BDF8',
       strokeWidth: 2,
       alignment: 'center',
     },
@@ -1852,8 +1852,8 @@ export const TITLES_CATALOG: TitlePresetItem[] = [
       drawTitleBase(ctx, w, h);
       ctx.font = '900 14px sans-serif';
       ctx.lineWidth = 1.5;
-      ctx.strokeStyle = '#00F0FF';
-      ctx.shadowColor = '#00F0FF';
+      ctx.strokeStyle = '#38BDF8';
+      ctx.shadowColor = '#38BDF8';
       ctx.shadowBlur = 6;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -1913,7 +1913,7 @@ export const TITLES_CATALOG: TitlePresetItem[] = [
       fontSize: 36,
       fontWeight: 'bold',
       fontColor: '#EC4899',
-      strokeColor: '#00F0FF',
+      strokeColor: '#38BDF8',
       strokeWidth: 2,
       alignment: 'center',
     },

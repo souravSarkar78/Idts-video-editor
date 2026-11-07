@@ -49,13 +49,13 @@ const EffectCard: React.FC<EffectCardProps> = ({
       onPointerDown={(e) => onPointerDown(item, e)}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      className="group relative flex flex-col bg-[#1A1D24] hover:bg-[#202530] border border-[#262B36] hover:border-[#00F0FF]/50 rounded-lg overflow-hidden transition-all duration-200 cursor-grab active:cursor-grabbing shadow-sm hover:shadow-[0_4px_16px_rgba(0,240,255,0.15)]"
+      className="group relative flex flex-col bg-[#1A1D24] hover:bg-[#202530] border border-[#262B36] hover:border-[#38BDF8]/50 rounded-lg overflow-hidden transition-all duration-200 cursor-grab active:cursor-grabbing shadow-sm hover:shadow-[0_4px_16px_rgba(56, 189, 248,0.15)]"
     >
       {/* Thumbnail Container */}
       <div
         className={`relative aspect-video w-full bg-[#0D0F14] overflow-hidden rounded-t-lg transition-all duration-200 ${
           isActive
-            ? 'ring-2 ring-[#00F0FF] shadow-[0_0_14px_rgba(0,240,255,0.4)]'
+            ? 'ring-2 ring-[#38BDF8] shadow-[0_0_14px_rgba(56, 189, 248,0.4)]'
             : 'border-b border-[#262B36]'
         }`}
       >
@@ -76,7 +76,7 @@ const EffectCard: React.FC<EffectCardProps> = ({
 
         {/* Active Pill Badge if applied */}
         {isActive && (
-          <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-1 bg-[#00F0FF] text-black px-1.5 py-0.5 rounded text-[9px] font-extrabold shadow-md">
+          <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-1 bg-[#38BDF8] text-black px-1.5 py-0.5 rounded text-[9px] font-extrabold shadow-md">
             <Check size={10} strokeWidth={3} />
             <span>ACTIVE</span>
           </div>
@@ -88,7 +88,7 @@ const EffectCard: React.FC<EffectCardProps> = ({
             e.stopPropagation();
             onApply(item);
           }}
-          className="absolute bottom-1.5 right-1.5 w-6 h-6 rounded-md flex items-center justify-center bg-[#00F0FF] text-[#0A0D14] opacity-0 group-hover:opacity-100 hover:scale-110 shadow-[0_0_8px_rgba(0,240,255,0.5)] transition-all z-10 cursor-pointer"
+          className="absolute bottom-1.5 right-1.5 w-6 h-6 rounded-md flex items-center justify-center bg-[#38BDF8] text-[#0A0D14] opacity-0 group-hover:opacity-100 hover:scale-110 shadow-[0_0_8px_rgba(56, 189, 248,0.5)] transition-all z-10 cursor-pointer"
           title="Apply Effect to Clip / Adjustment Layer"
         >
           <Plus size={13} strokeWidth={3} />
@@ -98,7 +98,7 @@ const EffectCard: React.FC<EffectCardProps> = ({
       {/* Info Bar */}
       <div className="p-2 flex flex-col justify-between flex-1 min-h-[46px]">
         <div className="flex items-center justify-between gap-1">
-          <span className="text-[11px] font-semibold text-[#F0F3F8] truncate group-hover:text-[#00F0FF] transition-colors">
+          <span className="text-[11px] font-semibold text-[#F0F3F8] truncate group-hover:text-[#38BDF8] transition-colors">
             {item.name}
           </span>
           <span
@@ -304,7 +304,7 @@ export const EffectsPanel: React.FC = () => {
       <div className="p-3 bg-[#101217] border-b border-[#222630] space-y-2.5 shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-md bg-[#00F0FF]/15 text-[#00F0FF] border border-[#00F0FF]/30">
+            <div className="p-1.5 rounded-md bg-[#38BDF8]/15 text-[#38BDF8] border border-[#38BDF8]/30">
               <Sparkles size={15} />
             </div>
             <div>
@@ -346,7 +346,7 @@ export const EffectsPanel: React.FC = () => {
                 }}
                 className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium whitespace-nowrap transition-all cursor-pointer ${
                   samplePreviewMode === 'video_frame'
-                    ? 'bg-[#00F0FF] text-black font-semibold shadow-xs'
+                    ? 'bg-[#38BDF8] text-black font-semibold shadow-xs'
                     : 'text-[#8E9CAE] hover:text-white'
                 }`}
                 title="Current Timeline Frame"
@@ -360,7 +360,7 @@ export const EffectsPanel: React.FC = () => {
                   type="button"
                   onClick={() => refreshVideoFrameSnapshot()}
                   disabled={isVideoFrameLoading}
-                  className="p-1 hover:text-[#00F0FF] text-[#8E9CAE] disabled:opacity-50 transition-colors ml-0.5 cursor-pointer"
+                  className="p-1 hover:text-[#38BDF8] text-[#8E9CAE] disabled:opacity-50 transition-colors ml-0.5 cursor-pointer"
                   title="Refresh timeline frame"
                 >
                   <RotateCcw size={11} className={isVideoFrameLoading ? 'animate-spin' : ''} />
@@ -370,7 +370,7 @@ export const EffectsPanel: React.FC = () => {
 
             <button
               onClick={() => addAdjustmentLayer?.()}
-              className="flex items-center gap-1 px-2 py-1 bg-[#1A1F29] hover:bg-[#222938] text-[#00F0FF] border border-[#00F0FF]/30 rounded text-[10px] font-semibold transition-colors cursor-pointer"
+              className="flex items-center gap-1 px-2 py-1 bg-[#1A1F29] hover:bg-[#222938] text-[#38BDF8] border border-[#38BDF8]/30 rounded text-[10px] font-semibold transition-colors cursor-pointer"
               title="Add Adjustment Layer Track for Global Grading"
             >
               <Layers size={11} />
@@ -387,7 +387,7 @@ export const EffectsPanel: React.FC = () => {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search 50+ shaders & visual filters..."
-            className="w-full bg-[#1A1D24] text-[#F0F3F8] text-xs pl-8 pr-3 py-1.5 rounded-md border border-[#2B303C] focus:border-[#00F0FF] focus:outline-hidden transition-colors placeholder:text-[#525D73]"
+            className="w-full bg-[#1A1D24] text-[#F0F3F8] text-xs pl-8 pr-3 py-1.5 rounded-md border border-[#2B303C] focus:border-[#38BDF8] focus:outline-hidden transition-colors placeholder:text-[#525D73]"
           />
         </div>
 
@@ -401,7 +401,7 @@ export const EffectsPanel: React.FC = () => {
                 onClick={() => setActiveCategory(cat)}
                 className={`px-2.5 py-1 rounded text-[11px] font-medium whitespace-nowrap transition-colors cursor-pointer ${
                   isSelected
-                    ? 'bg-[#00F0FF] text-[#0B0D13] font-bold shadow-[0_0_8px_rgba(0,240,255,0.3)]'
+                    ? 'bg-[#38BDF8] text-[#0B0D13] font-bold shadow-[0_0_8px_rgba(56, 189, 248,0.3)]'
                     : 'bg-[#181B22] text-[#8E9CAE] hover:text-[#F0F3F8] hover:bg-[#202530] border border-[#2B303C]'
                 }`}
               >
@@ -418,7 +418,7 @@ export const EffectsPanel: React.FC = () => {
           <div className="flex items-center gap-1.5 truncate">
             <span className="text-[10px] font-mono uppercase text-[#64748B] shrink-0">Active:</span>
             <span
-              className="text-xs font-semibold text-[#00F0FF] truncate max-w-[140px]"
+              className="text-xs font-semibold text-[#38BDF8] truncate max-w-[140px]"
               title={appliedFilterName || appliedFilterId}
             >
               {appliedFilterName || appliedFilterId}
@@ -441,7 +441,7 @@ export const EffectsPanel: React.FC = () => {
                   const val = parseInt(e.target.value, 10) / 100;
                   setClipFilterIntensity(val, activeClip.id);
                 }}
-                className="w-16 sm:w-20 h-1 bg-[#262B36] rounded-lg appearance-none cursor-pointer accent-[#00F0FF]"
+                className="w-16 sm:w-20 h-1 bg-[#262B36] rounded-lg appearance-none cursor-pointer accent-[#38BDF8]"
                 title="Effect Intensity"
               />
             </div>

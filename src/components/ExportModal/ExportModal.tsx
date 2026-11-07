@@ -211,7 +211,7 @@ export const ExportModal: React.FC = () => {
         {/* Header */}
         <div className="h-13 bg-[#181B22] border-b border-[#222630] px-5 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-[#00F0FF]/15 border border-[#00F0FF]/30 flex items-center justify-center text-[#00F0FF]">
+            <div className="w-7 h-7 rounded-lg bg-[#38BDF8]/15 border border-[#38BDF8]/30 flex items-center justify-center text-[#38BDF8]">
               <Download size={16} />
             </div>
             <div>
@@ -238,7 +238,7 @@ export const ExportModal: React.FC = () => {
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
               <label className="text-xs font-semibold text-[#8A92A6] flex items-center gap-1.5">
-                <FolderOpen size={13} className="text-[#00F0FF]" />
+                <FolderOpen size={13} className="text-[#38BDF8]" />
                 <span>Output Destination Path</span>
               </label>
               <span className="text-[10px] text-[#64748B]">MP4 / MOV / MKV</span>
@@ -250,13 +250,13 @@ export const ExportModal: React.FC = () => {
                 onChange={(e) => setOutputPath(e.target.value)}
                 disabled={isExporting}
                 placeholder="D:\Programming-Projects\video-editor\Master_Render.mp4"
-                className="flex-1 bg-[#0D0E11] border border-[#222630] focus:border-[#00F0FF] rounded-lg px-3 py-2 text-xs font-mono text-[#F0F3F8] outline-none transition-colors"
+                className="flex-1 bg-[#0D0E11] border border-[#222630] focus:border-[#38BDF8] rounded-lg px-3 py-2 text-xs font-mono text-[#F0F3F8] outline-none transition-colors"
               />
               <button
                 type="button"
                 onClick={handleBrowseOutputPath}
                 disabled={isExporting}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#00F0FF]/15 hover:bg-[#00F0FF]/25 border border-[#00F0FF]/40 text-xs font-semibold text-[#00F0FF] transition-all cursor-pointer disabled:opacity-50"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#38BDF8]/15 hover:bg-[#38BDF8]/25 border border-[#38BDF8]/40 text-xs font-semibold text-[#38BDF8] transition-all cursor-pointer disabled:opacity-50"
                 title="Browse folder and choose file name"
               >
                 <FolderOpen size={14} />
@@ -266,7 +266,7 @@ export const ExportModal: React.FC = () => {
                 type="button"
                 onClick={handleAutoName}
                 disabled={isExporting}
-                className="px-3 py-2 rounded-lg bg-[#1E222D] hover:bg-[#252B3A] border border-[#222630] text-xs font-semibold text-[#8A92A6] hover:text-[#00F0FF] transition-colors disabled:opacity-50"
+                className="px-3 py-2 rounded-lg bg-[#1E222D] hover:bg-[#252B3A] border border-[#222630] text-xs font-semibold text-[#8A92A6] hover:text-[#38BDF8] transition-colors disabled:opacity-50"
                 title="Generate timestamped filename"
               >
                 Auto Name
@@ -308,7 +308,7 @@ export const ExportModal: React.FC = () => {
             {/* Resolution */}
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-semibold text-[#8A92A6] flex items-center gap-1.5">
-                <Tv size={13} className="text-[#00F0FF]" />
+                <Tv size={13} className="text-[#38BDF8]" />
                 <span>Resolution</span>
               </label>
               <select
@@ -334,7 +334,7 @@ export const ExportModal: React.FC = () => {
                   }
                 }}
                 disabled={isExporting}
-                className="bg-[#0D0E11] border border-[#222630] focus:border-[#00F0FF] rounded-lg px-3 py-2 text-xs font-mono text-[#F0F3F8] outline-none cursor-pointer"
+                className="bg-[#0D0E11] border border-[#222630] focus:border-[#38BDF8] rounded-lg px-3 py-2 text-xs font-mono text-[#F0F3F8] outline-none cursor-pointer"
               >
                 <option value="1080p">1080p FHD (1920 x 1080)</option>
                 <option value="2K">2K QHD (2560 x 1440)</option>
@@ -348,14 +348,14 @@ export const ExportModal: React.FC = () => {
             {/* Frame Rate */}
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-semibold text-[#8A92A6] flex items-center gap-1.5">
-                <Film size={13} className="text-[#00F0FF]" />
+                <Film size={13} className="text-[#38BDF8]" />
                 <span>Framerate</span>
               </label>
               <select
                 value={fps}
                 onChange={(e) => setFps(Number(e.target.value))}
                 disabled={isExporting}
-                className="bg-[#0D0E11] border border-[#222630] focus:border-[#00F0FF] rounded-lg px-3 py-2 text-xs font-mono text-[#F0F3F8] outline-none"
+                className="bg-[#0D0E11] border border-[#222630] focus:border-[#38BDF8] rounded-lg px-3 py-2 text-xs font-mono text-[#F0F3F8] outline-none"
               >
                 <option value={24}>24 fps (Cinematic)</option>
                 <option value={30}>30 fps (Standard NTSC)</option>
@@ -366,13 +366,13 @@ export const ExportModal: React.FC = () => {
 
           {/* Custom Resolution Specifications */}
           {resolution === 'custom' && (
-            <div className="p-3.5 rounded-lg bg-[#0D0E11] border border-[#00F0FF]/30 space-y-2.5 animate-in fade-in duration-150">
+            <div className="p-3.5 rounded-lg bg-[#0D0E11] border border-[#38BDF8]/30 space-y-2.5 animate-in fade-in duration-150">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-semibold text-[#F0F3F8] flex items-center gap-1.5">
-                  <Sliders size={13} className="text-[#00F0FF]" />
+                  <Sliders size={13} className="text-[#38BDF8]" />
                   <span>Custom Resolution (Width × Height)</span>
                 </span>
-                <span className="text-[11px] font-mono text-[#00F0FF]">
+                <span className="text-[11px] font-mono text-[#38BDF8]">
                   {customWidth} × {customHeight} px ({(customWidth / (customHeight || 1)).toFixed(2)}:1)
                 </span>
               </div>
@@ -389,7 +389,7 @@ export const ExportModal: React.FC = () => {
                     value={customWidth}
                     disabled={isExporting}
                     onChange={(e) => handleWidthChange(Number(e.target.value))}
-                    className="w-full bg-[#14161B] border border-[#222630] focus:border-[#00F0FF] rounded-md px-2.5 py-1.5 text-xs font-mono text-[#F0F3F8] outline-none"
+                    className="w-full bg-[#14161B] border border-[#222630] focus:border-[#38BDF8] rounded-md px-2.5 py-1.5 text-xs font-mono text-[#F0F3F8] outline-none"
                     placeholder="Width"
                   />
                 </div>
@@ -400,7 +400,7 @@ export const ExportModal: React.FC = () => {
                     type="button"
                     onClick={handleSwapDimensions}
                     disabled={isExporting}
-                    className="p-1.5 rounded bg-[#181B22] hover:bg-[#222630] text-[#8A92A6] hover:text-[#00F0FF] transition-colors cursor-pointer border border-[#2A2E3B]"
+                    className="p-1.5 rounded bg-[#181B22] hover:bg-[#222630] text-[#8A92A6] hover:text-[#38BDF8] transition-colors cursor-pointer border border-[#2A2E3B]"
                     title="Swap Width & Height (Landscape ↔ Vertical)"
                   >
                     <RotateCw size={12} />
@@ -417,7 +417,7 @@ export const ExportModal: React.FC = () => {
                     value={customHeight}
                     disabled={isExporting}
                     onChange={(e) => handleHeightChange(Number(e.target.value))}
-                    className="w-full bg-[#14161B] border border-[#222630] focus:border-[#00F0FF] rounded-md px-2.5 py-1.5 text-xs font-mono text-[#F0F3F8] outline-none"
+                    className="w-full bg-[#14161B] border border-[#222630] focus:border-[#38BDF8] rounded-md px-2.5 py-1.5 text-xs font-mono text-[#F0F3F8] outline-none"
                     placeholder="Height"
                   />
                 </div>
@@ -430,7 +430,7 @@ export const ExportModal: React.FC = () => {
                     disabled={isExporting}
                     className={`p-1.5 rounded transition-colors cursor-pointer border ${
                       lockAspectRatio
-                        ? 'bg-[#00F0FF]/15 text-[#00F0FF] border-[#00F0FF]/40'
+                        ? 'bg-[#38BDF8]/15 text-[#38BDF8] border-[#38BDF8]/40'
                         : 'bg-[#181B22] text-[#64748B] border-[#2A2E3B] hover:text-[#F0F3F8]'
                     }`}
                     title={lockAspectRatio ? 'Aspect ratio locked' : 'Aspect ratio unlocked'}
@@ -458,7 +458,7 @@ export const ExportModal: React.FC = () => {
                       setCustomWidth(p.w);
                       setCustomHeight(p.h);
                     }}
-                    className="px-2 py-0.5 rounded bg-[#1A1D24] hover:bg-[#222630] text-[#8A92A6] hover:text-[#00F0FF] border border-[#2A2E3B] transition-colors shrink-0 cursor-pointer"
+                    className="px-2 py-0.5 rounded bg-[#1A1D24] hover:bg-[#222630] text-[#8A92A6] hover:text-[#38BDF8] border border-[#2A2E3B] transition-colors shrink-0 cursor-pointer"
                   >
                     {p.label}
                   </button>
@@ -470,7 +470,7 @@ export const ExportModal: React.FC = () => {
           {/* Hardware Encoder Selection */}
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-semibold text-[#8A92A6] flex items-center gap-1.5">
-              <Cpu size={13} className="text-[#00F0FF]" />
+              <Cpu size={13} className="text-[#38BDF8]" />
               <span>Video Encoder (Hardware / CPU Fallback)</span>
             </label>
             <div className="grid grid-cols-2 gap-2">
@@ -480,13 +480,13 @@ export const ExportModal: React.FC = () => {
                 disabled={isExporting}
                 className={`p-2.5 rounded-lg border text-left flex flex-col gap-0.5 transition-all ${
                   codec === 'h264_nvenc'
-                    ? 'bg-[#00F0FF]/10 border-[#00F0FF] text-[#F0F3F8]'
+                    ? 'bg-[#38BDF8]/10 border-[#38BDF8] text-[#F0F3F8]'
                     : 'bg-[#0D0E11] border-[#222630] text-[#64748B] hover:border-[#38BDF8]/50'
                 }`}
               >
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-[#F0F3F8]">NVIDIA NVENC</span>
-                  <Zap size={12} className={codec === 'h264_nvenc' ? 'text-[#00F0FF]' : 'text-zinc-600'} />
+                  <Zap size={12} className={codec === 'h264_nvenc' ? 'text-[#38BDF8]' : 'text-zinc-600'} />
                 </div>
                 <span className="text-[10px] font-mono text-[#64748B]">RTX / GTX Dedicated HW</span>
               </button>
@@ -497,13 +497,13 @@ export const ExportModal: React.FC = () => {
                 disabled={isExporting}
                 className={`p-2.5 rounded-lg border text-left flex flex-col gap-0.5 transition-all ${
                   codec === 'h264_qsv'
-                    ? 'bg-[#00F0FF]/10 border-[#00F0FF] text-[#F0F3F8]'
+                    ? 'bg-[#38BDF8]/10 border-[#38BDF8] text-[#F0F3F8]'
                     : 'bg-[#0D0E11] border-[#222630] text-[#64748B] hover:border-[#38BDF8]/50'
                 }`}
               >
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-[#F0F3F8]">Intel QuickSync</span>
-                  <Zap size={12} className={codec === 'h264_qsv' ? 'text-[#00F0FF]' : 'text-zinc-600'} />
+                  <Zap size={12} className={codec === 'h264_qsv' ? 'text-[#38BDF8]' : 'text-zinc-600'} />
                 </div>
                 <span className="text-[10px] font-mono text-[#64748B]">Core iGPU Acceleration</span>
               </button>
@@ -514,13 +514,13 @@ export const ExportModal: React.FC = () => {
                 disabled={isExporting}
                 className={`p-2.5 rounded-lg border text-left flex flex-col gap-0.5 transition-all ${
                   codec === 'h264_amf'
-                    ? 'bg-[#00F0FF]/10 border-[#00F0FF] text-[#F0F3F8]'
+                    ? 'bg-[#38BDF8]/10 border-[#38BDF8] text-[#F0F3F8]'
                     : 'bg-[#0D0E11] border-[#222630] text-[#64748B] hover:border-[#38BDF8]/50'
                 }`}
               >
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-[#F0F3F8]">AMD AMF</span>
-                  <Zap size={12} className={codec === 'h264_amf' ? 'text-[#00F0FF]' : 'text-zinc-600'} />
+                  <Zap size={12} className={codec === 'h264_amf' ? 'text-[#38BDF8]' : 'text-zinc-600'} />
                 </div>
                 <span className="text-[10px] font-mono text-[#64748B]">Radeon GPU Hardware</span>
               </button>
@@ -531,13 +531,13 @@ export const ExportModal: React.FC = () => {
                 disabled={isExporting}
                 className={`p-2.5 rounded-lg border text-left flex flex-col gap-0.5 transition-all ${
                   codec === 'libx264'
-                    ? 'bg-[#00F0FF]/10 border-[#00F0FF] text-[#F0F3F8]'
+                    ? 'bg-[#38BDF8]/10 border-[#38BDF8] text-[#F0F3F8]'
                     : 'bg-[#0D0E11] border-[#222630] text-[#64748B] hover:border-[#38BDF8]/50'
                 }`}
               >
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-[#F0F3F8]">Software x264</span>
-                  <Cpu size={12} className={codec === 'libx264' ? 'text-[#00F0FF]' : 'text-zinc-600'} />
+                  <Cpu size={12} className={codec === 'libx264' ? 'text-[#38BDF8]' : 'text-zinc-600'} />
                 </div>
                 <span className="text-[10px] font-mono text-[#64748B]">Universal CPU Fallback</span>
               </button>
@@ -606,7 +606,7 @@ export const ExportModal: React.FC = () => {
             <div className="flex flex-col gap-2 p-3.5 rounded-lg bg-[#0C0E12] border border-[#222630]">
               <div className="flex items-center justify-between text-xs font-semibold">
                 <span className="text-[#8A92A6] truncate">{exportStatusMessage || 'Rendering...'}</span>
-                <span className="font-mono text-[#00F0FF]">{pct.toFixed(1)}%</span>
+                <span className="font-mono text-[#38BDF8]">{pct.toFixed(1)}%</span>
               </div>
 
               {/* Progress Bar Container */}
@@ -618,7 +618,7 @@ export const ExportModal: React.FC = () => {
                       ? 'bg-red-500'
                       : exportComplete
                       ? 'bg-[#10B981]'
-                      : 'bg-gradient-to-r from-[#00F0FF] to-[#10B981]'
+                      : 'bg-gradient-to-r from-[#38BDF8] to-[#10B981]'
                   }`}
                 />
               </div>
@@ -675,7 +675,7 @@ export const ExportModal: React.FC = () => {
               <button
                 onClick={handleStartRender}
                 disabled={isExporting}
-                className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-[#00F0FF] hover:bg-[#3bf1ff] text-[#0D0E11] text-xs font-bold transition-all shadow-[0_0_12px_rgba(0,240,255,0.35)] cursor-pointer disabled:opacity-50"
+                className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-[#38BDF8] hover:bg-[#3bf1ff] text-[#0D0E11] text-xs font-bold transition-all shadow-[0_0_12px_rgba(56, 189, 248,0.35)] cursor-pointer disabled:opacity-50"
               >
                 <Download size={14} strokeWidth={2.5} />
                 <span>{isExporting ? 'Rendering...' : 'Start Render'}</span>

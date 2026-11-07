@@ -98,7 +98,7 @@ export const TITLE_TEMPLATES: TitleTemplate[] = [
       fontFamily: 'Impact',
       fontSize: 50,
       fontWeight: '900',
-      fontColor: '#00F0FF',
+      fontColor: '#38BDF8',
       strokeColor: '#000000',
       strokeWidth: 4,
       backgroundColor: 'rgba(10, 15, 25, 0.8)',

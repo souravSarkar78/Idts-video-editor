@@ -77,7 +77,7 @@ const TitleCard: React.FC<TitleCardProps> = ({ item, isAdded, onAdd, onPointerDo
       onPointerDown={(e) => onPointerDown(item, e)}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      className="group relative flex flex-col bg-[#1A1D24] hover:bg-[#202530] border border-[#262B36] hover:border-[#00F0FF]/50 rounded-lg overflow-hidden transition-all duration-200 cursor-grab active:cursor-grabbing shadow-sm hover:shadow-[0_4px_16px_rgba(0,240,255,0.15)]"
+      className="group relative flex flex-col bg-[#1A1D24] hover:bg-[#202530] border border-[#262B36] hover:border-[#38BDF8]/50 rounded-lg overflow-hidden transition-all duration-200 cursor-grab active:cursor-grabbing shadow-sm hover:shadow-[0_4px_16px_rgba(56, 189, 248,0.15)]"
     >
       {/* Thumbnail Canvas */}
       <div className="relative aspect-video w-full bg-[#0D0F14] overflow-hidden border-b border-[#262B36]">
@@ -102,7 +102,7 @@ const TitleCard: React.FC<TitleCardProps> = ({ item, isAdded, onAdd, onPointerDo
           className={`absolute bottom-1.5 right-1.5 w-6 h-6 rounded-md flex items-center justify-center transition-all ${
             isAdded
               ? 'bg-[#10B981] text-white shadow-[0_0_8px_#10B981]'
-              : 'bg-[#00F0FF] text-[#0A0D14] opacity-0 group-hover:opacity-100 hover:scale-110 shadow-[0_0_8px_rgba(0,240,255,0.5)]'
+              : 'bg-[#38BDF8] text-[#0A0D14] opacity-0 group-hover:opacity-100 hover:scale-110 shadow-[0_0_8px_rgba(56, 189, 248,0.5)]'
           }`}
           title="Add to Timeline"
         >
@@ -113,7 +113,7 @@ const TitleCard: React.FC<TitleCardProps> = ({ item, isAdded, onAdd, onPointerDo
       {/* Info Bar */}
       <div className="p-2 flex flex-col justify-between flex-1 min-h-[46px]">
         <div className="flex items-center justify-between gap-1">
-          <span className="text-[11px] font-semibold text-[#F0F3F8] truncate group-hover:text-[#00F0FF] transition-colors">
+          <span className="text-[11px] font-semibold text-[#F0F3F8] truncate group-hover:text-[#38BDF8] transition-colors">
             {item.name}
           </span>
           <span className="text-[9px] font-mono text-[#64748B] shrink-0">
@@ -249,7 +249,7 @@ export const TitlesPanel: React.FC = () => {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search 50+ animated text presets..."
-            className="w-full bg-[#1A1D24] text-[#F0F3F8] text-xs pl-8 pr-3 py-1.5 rounded-md border border-[#2B303C] focus:border-[#00F0FF] focus:outline-hidden transition-colors placeholder:text-[#525D73]"
+            className="w-full bg-[#1A1D24] text-[#F0F3F8] text-xs pl-8 pr-3 py-1.5 rounded-md border border-[#2B303C] focus:border-[#38BDF8] focus:outline-hidden transition-colors placeholder:text-[#525D73]"
           />
         </div>
 
@@ -263,7 +263,7 @@ export const TitlesPanel: React.FC = () => {
                 onClick={() => setActiveCategory(cat)}
                 className={`px-2.5 py-1 rounded text-[11px] font-medium whitespace-nowrap transition-colors cursor-pointer ${
                   isSelected
-                    ? 'bg-[#00F0FF] text-[#0B0D13] font-bold shadow-[0_0_8px_rgba(0,240,255,0.3)]'
+                    ? 'bg-[#38BDF8] text-[#0B0D13] font-bold shadow-[0_0_8px_rgba(56, 189, 248,0.3)]'
                     : 'bg-[#181B22] text-[#8E9CAE] hover:text-[#F0F3F8] hover:bg-[#202530] border border-[#2B303C]'
                 }`}
               >

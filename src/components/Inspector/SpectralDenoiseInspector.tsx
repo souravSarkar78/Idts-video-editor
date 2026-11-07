@@ -58,12 +58,12 @@ export const SpectralDenoiseInspector: React.FC<SpectralDenoiseInspectorProps> =
       {/* Header */}
       <div className="flex items-center justify-between pb-1 border-b border-[#222630]/60">
         <span className="text-xs font-bold text-[#F0F3F8] flex items-center gap-1.5">
-          <Waves size={14} className="text-[#00F0FF]" />
+          <Waves size={14} className="text-[#38BDF8]" />
           <span>Spectral Noise Profiling & Ambient Fill</span>
         </span>
         <span
           className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded ${
-            hasProfile ? 'bg-[#00F0FF]/15 text-[#00F0FF]' : 'bg-[#181B22] text-[#64748B]'
+            hasProfile ? 'bg-[#38BDF8]/15 text-[#38BDF8]' : 'bg-[#181B22] text-[#64748B]'
           }`}
         >
           {hasProfile ? `[ Profile Loaded: ${profileDuration} ]` : '[ No Profile ]'}
@@ -92,7 +92,7 @@ export const SpectralDenoiseInspector: React.FC<SpectralDenoiseInspectorProps> =
         <div className="flex items-center gap-2 pt-0.5">
           <button
             onClick={handleOpenModal}
-            className="flex-1 py-1.5 px-2.5 rounded bg-[#00F0FF] hover:bg-[#34f3ff] text-[#0A0C10] font-bold text-xs flex items-center justify-center gap-1.5 shadow-[0_0_10px_rgba(0,240,255,0.25)] transition-all cursor-pointer"
+            className="flex-1 py-1.5 px-2.5 rounded bg-[#38BDF8] hover:bg-[#34f3ff] text-[#0A0C10] font-bold text-xs flex items-center justify-center gap-1.5 shadow-[0_0_10px_rgba(56, 189, 248,0.25)] transition-all cursor-pointer"
             title="Open interactive waveform modal to select 2 to 5 seconds of noise"
           >
             <Sparkles size={13} />
@@ -121,7 +121,7 @@ export const SpectralDenoiseInspector: React.FC<SpectralDenoiseInspectorProps> =
           </span>
           <div className="flex items-center gap-2">
             <span className={`text-[10px] font-bold font-mono transition-colors ${
-              np.noiseReductionEnabled ? 'text-[#00F0FF]' : 'text-[#8A92A6]'
+              np.noiseReductionEnabled ? 'text-[#38BDF8]' : 'text-[#8A92A6]'
             }`}>
               {np.noiseReductionEnabled ? 'ON' : 'OFF'}
             </span>
@@ -132,7 +132,7 @@ export const SpectralDenoiseInspector: React.FC<SpectralDenoiseInspectorProps> =
                 onChange={(e) => updateNoiseProfileSettings(selectedClip.id, { noiseReductionEnabled: e.target.checked })}
                 className="sr-only peer"
               />
-              <div className="w-8 h-4 bg-[#222630] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3.5 after:transition-all peer-checked:bg-[#00F0FF]"></div>
+              <div className="w-8 h-4 bg-[#222630] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3.5 after:transition-all peer-checked:bg-[#38BDF8]"></div>
             </label>
           </div>
         </div>
@@ -142,7 +142,7 @@ export const SpectralDenoiseInspector: React.FC<SpectralDenoiseInspectorProps> =
           <div className="flex items-center justify-between text-[11px]">
             <span className="text-[#8A92A6]">Reduction Intensity</span>
             <div className="flex items-center gap-1">
-              <span className="font-mono text-[10px] font-bold text-[#00F0FF]">
+              <span className="font-mono text-[10px] font-bold text-[#38BDF8]">
                 {np.reductionIntensityDb.toFixed(1)} dB
               </span>
             </div>
@@ -154,7 +154,7 @@ export const SpectralDenoiseInspector: React.FC<SpectralDenoiseInspectorProps> =
             step={0.5}
             value={np.reductionIntensityDb}
             onChange={(e) => updateNoiseProfileSettings(selectedClip.id, { reductionIntensityDb: Number(e.target.value) })}
-            className="w-full h-1.5 bg-[#222630] rounded appearance-none cursor-pointer accent-[#00F0FF]"
+            className="w-full h-1.5 bg-[#222630] rounded appearance-none cursor-pointer accent-[#38BDF8]"
           />
 
           {/* Toggle Radio: Clean Output vs Audition Removed Noise */}
@@ -165,7 +165,7 @@ export const SpectralDenoiseInspector: React.FC<SpectralDenoiseInspectorProps> =
                 name="denoise_output_mode"
                 checked={!np.auditionResidue}
                 onChange={() => updateNoiseProfileSettings(selectedClip.id, { auditionResidue: false })}
-                className="accent-[#00F0FF] cursor-pointer"
+                className="accent-[#38BDF8] cursor-pointer"
               />
               <span className={!np.auditionResidue ? 'text-[#F0F3F8] font-medium' : 'text-[#8A92A6]'}>
                 Clean Output
@@ -259,7 +259,7 @@ export const SpectralDenoiseInspector: React.FC<SpectralDenoiseInspectorProps> =
               type="checkbox"
               checked={np.ambientRecoveryEnabled}
               onChange={(e) => updateNoiseProfileSettings(selectedClip.id, { ambientRecoveryEnabled: e.target.checked })}
-              className="rounded bg-[#0D0E11] border-[#222630] text-[#00F0FF] focus:ring-0 cursor-pointer w-3.5 h-3.5 accent-[#00F0FF]"
+              className="rounded bg-[#0D0E11] border-[#222630] text-[#38BDF8] focus:ring-0 cursor-pointer w-3.5 h-3.5 accent-[#38BDF8]"
             />
             <span className="text-[11px] font-medium text-[#F0F3F8]">
               Fill Cut Gaps with Ambient Noise Bed
@@ -272,7 +272,7 @@ export const SpectralDenoiseInspector: React.FC<SpectralDenoiseInspectorProps> =
           <div className="space-y-1 pl-5 pt-0.5">
             <div className="flex items-center justify-between text-[10px]">
               <span className="text-[#8A92A6]">Ambient Retrieval Intensity</span>
-              <span className="font-mono font-bold text-[#00F0FF]">
+              <span className="font-mono font-bold text-[#38BDF8]">
                 {Math.round(np.ambientFillIntensity * 100)}%
               </span>
             </div>
@@ -283,7 +283,7 @@ export const SpectralDenoiseInspector: React.FC<SpectralDenoiseInspectorProps> =
               step={0.01}
               value={np.ambientFillIntensity}
               onChange={(e) => updateNoiseProfileSettings(selectedClip.id, { ambientFillIntensity: Number(e.target.value) })}
-              className="w-full h-1 bg-[#222630] rounded appearance-none cursor-pointer accent-[#00F0FF]"
+              className="w-full h-1 bg-[#222630] rounded appearance-none cursor-pointer accent-[#38BDF8]"
             />
           </div>
         )}

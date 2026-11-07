@@ -500,13 +500,13 @@ export const AudioLibraryPanel: React.FC = () => {
       {/* Top Action Header: Import FX & Record Mic */}
       <div className="p-3 bg-[#111318] border-b border-[#222630] flex items-center justify-between gap-2 shrink-0">
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded bg-[#00F0FF]/15 border border-[#00F0FF]/30 flex items-center justify-center text-[#00F0FF]">
+          <div className="w-6 h-6 rounded bg-[#38BDF8]/15 border border-[#38BDF8]/30 flex items-center justify-center text-[#38BDF8]">
             <Music size={13} />
           </div>
           <div>
             <div className="text-xs font-bold text-[#F0F3F8] flex items-center gap-1.5">
               <span>Sound Effects & Audio Library</span>
-              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-[#00F0FF]/15 text-[#00F0FF]">
+              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-[#38BDF8]/15 text-[#38BDF8]">
                 {allSfxCombined.length} SFX
               </span>
             </div>
@@ -518,10 +518,10 @@ export const AudioLibraryPanel: React.FC = () => {
           {/* Import Custom FX Button */}
           <button
             onClick={handleImportCustomFx}
-            className="px-2.5 py-1 rounded-md bg-[#1C202B] hover:bg-[#252B3A] border border-[#222630] hover:border-[#00F0FF]/50 text-[#F0F3F8] hover:text-[#00F0FF] text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+            className="px-2.5 py-1 rounded-md bg-[#1C202B] hover:bg-[#252B3A] border border-[#222630] hover:border-[#38BDF8]/50 text-[#F0F3F8] hover:text-[#38BDF8] text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
             title="Import custom sound effect files permanently"
           >
-            <Upload size={12} className="text-[#00F0FF]" />
+            <Upload size={12} className="text-[#38BDF8]" />
             <span>Import FX</span>
           </button>
 
@@ -563,7 +563,7 @@ export const AudioLibraryPanel: React.FC = () => {
               onClick={() => setCategory(cat)}
               className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all whitespace-nowrap cursor-pointer ${
                 category === cat
-                  ? 'bg-[#00F0FF]/15 text-[#00F0FF] border border-[#00F0FF]/40'
+                  ? 'bg-[#38BDF8]/15 text-[#38BDF8] border border-[#38BDF8]/40'
                   : 'bg-[#181B22] text-[#8A92A6] hover:text-[#F0F3F8] border border-[#222630]'
               }`}
             >
@@ -577,7 +577,7 @@ export const AudioLibraryPanel: React.FC = () => {
       <div className="flex-1 overflow-y-auto p-2.5 space-y-2">
         {category === 'Custom FX' && customFxList.length === 0 ? (
           <div className="py-12 flex flex-col items-center justify-center text-center text-[#64748B] space-y-3">
-            <div className="w-10 h-10 rounded-full bg-[#1C202B] flex items-center justify-center text-[#00F0FF]">
+            <div className="w-10 h-10 rounded-full bg-[#1C202B] flex items-center justify-center text-[#38BDF8]">
               <Upload size={20} />
             </div>
             <div>
@@ -588,7 +588,7 @@ export const AudioLibraryPanel: React.FC = () => {
             </div>
             <button
               onClick={handleImportCustomFx}
-              className="px-3 py-1.5 rounded-md bg-[#00F0FF]/20 hover:bg-[#00F0FF] text-[#00F0FF] hover:text-[#0D0E11] text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+              className="px-3 py-1.5 rounded-md bg-[#38BDF8]/20 hover:bg-[#38BDF8] text-[#38BDF8] hover:text-[#0D0E11] text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
             >
               <Upload size={12} />
               <span>Import Audio FX Now</span>
@@ -608,10 +608,10 @@ export const AudioLibraryPanel: React.FC = () => {
               {projectAudioAssets.map((asset) => (
                 <div
                   key={asset.id}
-                  className="p-2 rounded-lg bg-[#0D0E11] border border-[#222630] hover:border-[#00F0FF]/50 flex items-center justify-between gap-3 group transition-all"
+                  className="p-2 rounded-lg bg-[#0D0E11] border border-[#222630] hover:border-[#38BDF8]/50 flex items-center justify-between gap-3 group transition-all"
                 >
                   <div className="flex items-center gap-2.5 truncate">
-                    <div className="w-7 h-7 rounded bg-[#1A1E27] border border-[#282E3C] flex items-center justify-center text-[#00F0FF] shrink-0">
+                    <div className="w-7 h-7 rounded bg-[#1A1E27] border border-[#282E3C] flex items-center justify-center text-[#38BDF8] shrink-0">
                       <Volume2 size={13} />
                     </div>
                     <div className="truncate">
@@ -629,7 +629,7 @@ export const AudioLibraryPanel: React.FC = () => {
                         addAssetToTrack(asset.id, audioTrack.id, playhead);
                       }
                     }}
-                    className="p-1.5 rounded bg-[#1C202B] hover:bg-[#00F0FF] text-[#8A92A6] hover:text-[#0D0E11] transition-all cursor-pointer"
+                    className="p-1.5 rounded bg-[#1C202B] hover:bg-[#38BDF8] text-[#8A92A6] hover:text-[#0D0E11] transition-all cursor-pointer"
                     title="Add to Timeline at Playhead"
                   >
                     <Plus size={13} />
@@ -646,10 +646,10 @@ export const AudioLibraryPanel: React.FC = () => {
                 <div
                   key={preset.id}
                   onPointerDown={(e) => handlePointerDown(preset, e)}
-                  className={`group relative bg-[#0D0E11] hover:bg-[#161922] border rounded-lg p-2.5 flex flex-col justify-between transition-all cursor-grab active:cursor-grabbing hover:shadow-[0_4px_16px_rgba(0,240,255,0.15)] ${
+                  className={`group relative bg-[#0D0E11] hover:bg-[#161922] border rounded-lg p-2.5 flex flex-col justify-between transition-all cursor-grab active:cursor-grabbing hover:shadow-[0_4px_16px_rgba(56, 189, 248,0.15)] ${
                     preset.isCustom
-                      ? 'border-[#00F0FF]/40 hover:border-[#00F0FF]'
-                      : 'border-[#222630] hover:border-[#00F0FF]/70'
+                      ? 'border-[#38BDF8]/40 hover:border-[#38BDF8]'
+                      : 'border-[#222630] hover:border-[#38BDF8]/70'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
@@ -661,20 +661,20 @@ export const AudioLibraryPanel: React.FC = () => {
                         }}
                         className={`w-7 h-7 rounded-full flex items-center justify-center transition-all cursor-pointer shrink-0 ${
                           isPlaying
-                            ? 'bg-[#00F0FF] text-[#0D0E11] animate-pulse shadow-[0_0_10px_#00F0FF]'
-                            : 'bg-[#1C202B] hover:bg-[#00F0FF] text-[#00F0FF] hover:text-[#0D0E11]'
+                            ? 'bg-[#38BDF8] text-[#0D0E11] animate-pulse shadow-[0_0_10px_#38BDF8]'
+                            : 'bg-[#1C202B] hover:bg-[#38BDF8] text-[#38BDF8] hover:text-[#0D0E11]'
                         }`}
                         title={isPlaying ? 'Stop Preview' : 'Audition Sound Effect'}
                       >
                         {isPlaying ? <Square size={10} fill="currentColor" /> : <Play size={10} fill="currentColor" />}
                       </button>
                       <div className="truncate">
-                        <div className="text-xs font-bold text-[#F0F3F8] group-hover:text-[#00F0FF] transition-colors leading-tight truncate">
+                        <div className="text-xs font-bold text-[#F0F3F8] group-hover:text-[#38BDF8] transition-colors leading-tight truncate">
                           {preset.name}
                         </div>
                         <span
                           className={`text-[9px] font-mono font-bold uppercase tracking-wider ${
-                            preset.isCustom ? 'text-[#10B981]' : 'text-[#00F0FF]'
+                            preset.isCustom ? 'text-[#10B981]' : 'text-[#38BDF8]'
                           }`}
                         >
                           {preset.isCustom ? 'CUSTOM FX' : preset.category}
@@ -699,7 +699,7 @@ export const AudioLibraryPanel: React.FC = () => {
                           e.stopPropagation();
                           handleAddSfxToTimeline(preset);
                         }}
-                        className="p-1 rounded bg-[#1C202B] hover:bg-[#00F0FF] text-[#8A92A6] hover:text-[#0D0E11] transition-all cursor-pointer"
+                        className="p-1 rounded bg-[#1C202B] hover:bg-[#38BDF8] text-[#8A92A6] hover:text-[#0D0E11] transition-all cursor-pointer"
                         title="Add to Timeline at Playhead"
                       >
                         <Plus size={12} />
@@ -713,7 +713,7 @@ export const AudioLibraryPanel: React.FC = () => {
 
                   <div className="mt-2.5 flex items-center justify-between text-[10px] font-mono text-[#525D73] pt-1.5 border-t border-[#1C202B]">
                     <span>{preset.durationSeconds}s</span>
-                    <span className="text-[9px] group-hover:text-[#00F0FF] transition-colors">Drag to Track</span>
+                    <span className="text-[9px] group-hover:text-[#38BDF8] transition-colors">Drag to Track</span>
                   </div>
                 </div>
               );

@@ -53,7 +53,7 @@ export const Preview: React.FC = () => {
               onClick={() => setActiveAngle('multicam')}
               className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-colors ${
                 activeAngle === 'multicam'
-                  ? 'bg-[#00F0FF] text-[#0D0E11]'
+                  ? 'bg-[#38BDF8] text-[#0D0E11]'
                   : 'text-[#8A92A6] hover:text-[#F0F3F8]'
               }`}
             >
@@ -63,7 +63,7 @@ export const Preview: React.FC = () => {
               onClick={() => setActiveAngle('cam1')}
               className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-colors ${
                 activeAngle === 'cam1'
-                  ? 'bg-[#00F0FF] text-[#0D0E11]'
+                  ? 'bg-[#38BDF8] text-[#0D0E11]'
                   : 'text-[#8A92A6] hover:text-[#F0F3F8]'
               }`}
             >
@@ -88,12 +88,12 @@ export const Preview: React.FC = () => {
             // Split Multicam View (Cam 1 & Cam 2 side-by-side)
             <div className="w-full h-full grid grid-cols-2 gap-2 p-2">
               {/* Cam 1 Stage */}
-              <div className="relative rounded border border-[#00F0FF]/40 bg-[#12141A] flex items-center justify-center overflow-hidden group">
-                <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-[#00F0FF]/20 border border-[#00F0FF]/40 text-[#00F0FF] text-[10px] font-bold font-mono">
+              <div className="relative rounded border border-[#38BDF8]/40 bg-[#12141A] flex items-center justify-center overflow-hidden group">
+                <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-[#38BDF8]/20 border border-[#38BDF8]/40 text-[#38BDF8] text-[10px] font-bold font-mono">
                   CAM 1 // MASTER 4K
                 </div>
                 <div className="text-center">
-                  <Camera size={36} className="mx-auto text-[#00F0FF] opacity-60 mb-2" />
+                  <Camera size={36} className="mx-auto text-[#38BDF8] opacity-60 mb-2" />
                   <span className="text-xs font-mono text-[#8A92A6]">VID_20261018_140000.mp4</span>
                 </div>
                 {/* Realtime Synced Tag */}
@@ -125,7 +125,7 @@ export const Preview: React.FC = () => {
                 <Video
                   size={56}
                   className="mx-auto opacity-70 mb-3"
-                  style={{ color: activeAngle === 'cam1' ? '#00F0FF' : '#A855F7' }}
+                  style={{ color: activeAngle === 'cam1' ? '#38BDF8' : '#A855F7' }}
                 />
                 <div className="text-sm font-semibold text-[#F0F3F8]">
                   {activeAngle === 'cam1' ? 'Cam 1 (Master / Center)' : 'Cam 2 (Side Angle)'}
@@ -144,7 +144,7 @@ export const Preview: React.FC = () => {
           )}
 
           {/* Timecode overlay badge on monitor */}
-          <div className="absolute bottom-3 right-3 px-3 py-1 bg-[#0D0E11]/90 backdrop-blur-md rounded border border-[#222630] text-[#00F0FF] timecode-display text-sm font-bold tracking-widest shadow-lg">
+          <div className="absolute bottom-3 right-3 px-3 py-1 bg-[#0D0E11]/90 backdrop-blur-md rounded border border-[#222630] text-[#38BDF8] timecode-display text-sm font-bold tracking-widest shadow-lg">
             {formatTimecode(playhead, project.fps)}
           </div>
         </div>

@@ -444,7 +444,7 @@ export const ClipAudioWaveform: React.FC<ClipAudioWaveformProps> = React.memo(({
             stroke="#10B981"
             strokeWidth={1.5}
             strokeDasharray={sortedPoints.length === 0 ? '4 2' : undefined}
-            className="transition-colors hover:stroke-[#00F0FF] hover:stroke-[2]"
+            className="transition-colors hover:stroke-[#38BDF8] hover:stroke-[2]"
             pointerEvents="stroke"
           />
 
@@ -475,7 +475,7 @@ export const ClipAudioWaveform: React.FC<ClipAudioWaveformProps> = React.memo(({
                   cx={cx}
                   cy={cy}
                   r={isDragging ? 5 : 3.5}
-                  fill={isDragging ? '#00F0FF' : '#10B981'}
+                  fill={isDragging ? '#38BDF8' : '#10B981'}
                   stroke="#FFFFFF"
                   strokeWidth={1.5}
                   className="transition-all hover:scale-125 pointer-events-none shadow-sm"

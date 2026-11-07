@@ -278,11 +278,11 @@ export const Header: React.FC = () => {
         <div data-tauri-drag-region="false" className="flex items-center gap-2 shrink-0">
           {/* Logo & App Name */}
           <div className="flex items-center gap-1.5 font-bold tracking-tight mr-1 pointer-events-none">
-            <div className="w-4.5 h-4.5 rounded bg-[#00F0FF] flex items-center justify-center text-black font-black shadow-[0_0_8px_rgba(0,240,255,0.4)]">
+            <div className="w-4.5 h-4.5 rounded bg-[#38BDF8] flex items-center justify-center text-black font-black shadow-[0_0_8px_rgba(56, 189, 248,0.4)]">
               <Film size={11} strokeWidth={2.5} />
             </div>
             <div className="flex items-center gap-1">
-              <span className="font-extrabold text-[12px] tracking-wide text-[#00F0FF]">IDTS</span>
+              <span className="font-extrabold text-[12px] tracking-wide text-[#38BDF8]">IDTS</span>
               <span className="font-bold text-[12px] text-white">video editor</span>
             </div>
           </div>
@@ -293,7 +293,7 @@ export const Header: React.FC = () => {
               data-tauri-drag-region="false"
               type="button"
               onClick={() => setIsFileMenuOpen(!isFileMenuOpen)}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#1B1F2A] hover:bg-[#252C3D] border border-white/5 hover:border-[#00F0FF]/40 text-[#CBD5E1] text-[11px] font-medium transition-all cursor-pointer"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#1B1F2A] hover:bg-[#252C3D] border border-white/5 hover:border-[#38BDF8]/40 text-[#CBD5E1] text-[11px] font-medium transition-all cursor-pointer"
             >
               <span>Menu</span>
               <ChevronDown
@@ -314,7 +314,7 @@ export const Header: React.FC = () => {
                       onClick={() => setActiveMenuTab(tab)}
                       className={`flex-1 py-1.5 text-[11px] font-bold capitalize transition-colors border-b-2 cursor-pointer ${
                         activeMenuTab === tab
-                          ? 'text-[#00F0FF] border-[#00F0FF] bg-[#161922]'
+                          ? 'text-[#38BDF8] border-[#38BDF8] bg-[#161922]'
                           : 'text-[#8A92A6] border-transparent hover:text-white'
                       }`}
                     >
@@ -333,7 +333,7 @@ export const Header: React.FC = () => {
                           setIsFileMenuOpen(false);
                           createNewProject();
                         }}
-                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#F0F3F8] hover:text-[#00F0FF] transition-colors cursor-pointer"
+                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#F0F3F8] hover:text-[#38BDF8] transition-colors cursor-pointer"
                       >
                         <div className="flex items-center gap-2">
                           <FilePlus size={14} className="text-[#8A92A6]" />
@@ -348,7 +348,7 @@ export const Header: React.FC = () => {
                           setIsFileMenuOpen(false);
                           await openProject();
                         }}
-                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#F0F3F8] hover:text-[#00F0FF] transition-colors cursor-pointer"
+                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#F0F3F8] hover:text-[#38BDF8] transition-colors cursor-pointer"
                       >
                         <div className="flex items-center gap-2">
                           <FolderOpen size={14} className="text-[#8A92A6]" />
@@ -363,7 +363,7 @@ export const Header: React.FC = () => {
                           setIsFileMenuOpen(false);
                           await saveProject(false);
                         }}
-                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#F0F3F8] hover:text-[#00F0FF] transition-colors cursor-pointer"
+                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#F0F3F8] hover:text-[#38BDF8] transition-colors cursor-pointer"
                       >
                         <div className="flex items-center gap-2">
                           <Save size={14} className="text-[#8A92A6]" />
@@ -378,7 +378,7 @@ export const Header: React.FC = () => {
                           setIsFileMenuOpen(false);
                           await saveProject(true);
                         }}
-                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#F0F3F8] hover:text-[#00F0FF] transition-colors cursor-pointer"
+                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#F0F3F8] hover:text-[#38BDF8] transition-colors cursor-pointer"
                       >
                         <div className="flex items-center gap-2">
                           <SaveAll size={14} className="text-[#8A92A6]" />
@@ -393,7 +393,7 @@ export const Header: React.FC = () => {
                           setIsFileMenuOpen(false);
                           await handleManualAutoSave();
                         }}
-                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#F0F3F8] hover:text-[#00F0FF] transition-colors cursor-pointer"
+                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#F0F3F8] hover:text-[#38BDF8] transition-colors cursor-pointer"
                       >
                         <div className="flex items-center gap-2">
                           <ShieldCheck size={14} className="text-[#10B981]" />
@@ -409,13 +409,13 @@ export const Header: React.FC = () => {
                           setIsFileMenuOpen(false);
                           setExportModalOpen(true);
                         }}
-                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#00F0FF] transition-colors cursor-pointer"
+                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#38BDF8] transition-colors cursor-pointer"
                       >
                         <div className="flex items-center gap-2">
-                          <Upload size={14} className="text-[#00F0FF]" />
+                          <Upload size={14} className="text-[#38BDF8]" />
                           <span className="font-bold">Export Master Video...</span>
                         </div>
-                        <span className="text-[10px] font-mono text-[#00F0FF]/80">Ctrl+E</span>
+                        <span className="text-[10px] font-mono text-[#38BDF8]/80">Ctrl+E</span>
                       </button>
                     </>
                   )}
@@ -429,7 +429,7 @@ export const Header: React.FC = () => {
                           setIsFileMenuOpen(false);
                           undo();
                         }}
-                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#F0F3F8] hover:text-[#00F0FF] transition-colors cursor-pointer"
+                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#F0F3F8] hover:text-[#38BDF8] transition-colors cursor-pointer"
                       >
                         <div className="flex items-center gap-2">
                           <Undo2 size={14} className="text-[#8A92A6]" />
@@ -444,7 +444,7 @@ export const Header: React.FC = () => {
                           setIsFileMenuOpen(false);
                           redo();
                         }}
-                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#F0F3F8] hover:text-[#00F0FF] transition-colors cursor-pointer"
+                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#F0F3F8] hover:text-[#38BDF8] transition-colors cursor-pointer"
                       >
                         <div className="flex items-center gap-2">
                           <Redo2 size={14} className="text-[#8A92A6]" />
@@ -461,7 +461,7 @@ export const Header: React.FC = () => {
                           setIsFileMenuOpen(false);
                           splitClipAtPlayhead();
                         }}
-                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#F0F3F8] hover:text-[#00F0FF] transition-colors cursor-pointer"
+                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#F0F3F8] hover:text-[#38BDF8] transition-colors cursor-pointer"
                       >
                         <div className="flex items-center gap-2">
                           <Scissors size={14} className="text-[#8A92A6]" />
@@ -476,7 +476,7 @@ export const Header: React.FC = () => {
                           setIsFileMenuOpen(false);
                           rippleDeleteClip(selectedClipId || undefined);
                         }}
-                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#F0F3F8] hover:text-[#00F0FF] transition-colors cursor-pointer"
+                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#F0F3F8] hover:text-[#38BDF8] transition-colors cursor-pointer"
                       >
                         <div className="flex items-center gap-2">
                           <Trash2 size={14} className="text-[#8A92A6]" />
@@ -491,7 +491,7 @@ export const Header: React.FC = () => {
                           setIsFileMenuOpen(false);
                           deleteSelectedClips();
                         }}
-                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#F0F3F8] hover:text-[#00F0FF] transition-colors cursor-pointer"
+                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#F0F3F8] hover:text-[#38BDF8] transition-colors cursor-pointer"
                       >
                         <div className="flex items-center gap-2">
                           <Trash2 size={14} className="text-[#8A92A6]" />
@@ -508,7 +508,7 @@ export const Header: React.FC = () => {
                           setIsFileMenuOpen(false);
                           openSettingsModal();
                         }}
-                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#F0F3F8] hover:text-[#00F0FF] transition-colors cursor-pointer"
+                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#F0F3F8] hover:text-[#38BDF8] transition-colors cursor-pointer"
                       >
                         <div className="flex items-center gap-2">
                           <Settings size={14} className="text-[#8A92A6]" />
@@ -528,7 +528,7 @@ export const Header: React.FC = () => {
                           setIsFileMenuOpen(false);
                           toggleMediaPoolCollapsed();
                         }}
-                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#F0F3F8] hover:text-[#00F0FF] transition-colors cursor-pointer"
+                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#F0F3F8] hover:text-[#38BDF8] transition-colors cursor-pointer"
                       >
                         <div className="flex items-center gap-2">
                           <Film size={14} className="text-[#8A92A6]" />
@@ -543,7 +543,7 @@ export const Header: React.FC = () => {
                           setIsFileMenuOpen(false);
                           toggleInspectorCollapsed();
                         }}
-                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#F0F3F8] hover:text-[#00F0FF] transition-colors cursor-pointer"
+                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#F0F3F8] hover:text-[#38BDF8] transition-colors cursor-pointer"
                       >
                         <div className="flex items-center gap-2">
                           <Layers size={14} className="text-[#8A92A6]" />
@@ -558,7 +558,7 @@ export const Header: React.FC = () => {
                           setIsFileMenuOpen(false);
                           resetWorkspaceLayout();
                         }}
-                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#F0F3F8] hover:text-[#00F0FF] transition-colors cursor-pointer"
+                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#F0F3F8] hover:text-[#38BDF8] transition-colors cursor-pointer"
                       >
                         <div className="flex items-center gap-2">
                           <RotateCcw size={14} className="text-[#8A92A6]" />
@@ -572,7 +572,7 @@ export const Header: React.FC = () => {
                           setIsFileMenuOpen(false);
                           handleToggleFullscreen();
                         }}
-                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#F0F3F8] hover:text-[#00F0FF] transition-colors cursor-pointer"
+                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#F0F3F8] hover:text-[#38BDF8] transition-colors cursor-pointer"
                       >
                         <div className="flex items-center gap-2">
                           <Maximize2 size={14} className="text-[#8A92A6]" />
@@ -592,10 +592,10 @@ export const Header: React.FC = () => {
                           setIsFileMenuOpen(false);
                           openSettingsModal();
                         }}
-                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#F0F3F8] hover:text-[#00F0FF] transition-colors cursor-pointer"
+                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#F0F3F8] hover:text-[#38BDF8] transition-colors cursor-pointer"
                       >
                         <div className="flex items-center gap-2">
-                          <HelpCircle size={14} className="text-[#00F0FF]" />
+                          <HelpCircle size={14} className="text-[#38BDF8]" />
                           <span>Keyboard Shortcuts Cheat Sheet</span>
                         </div>
                         <span className="text-[10px] font-mono text-[#64748B]">? / F1</span>
@@ -608,7 +608,7 @@ export const Header: React.FC = () => {
                           await fetchHealthStats();
                           setIsHealthModalOpen(true);
                         }}
-                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#F0F3F8] hover:text-[#00F0FF] transition-colors cursor-pointer"
+                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#F0F3F8] hover:text-[#38BDF8] transition-colors cursor-pointer"
                       >
                         <div className="flex items-center gap-2">
                           <Activity size={14} className="text-[#10B981]" />
@@ -622,7 +622,7 @@ export const Header: React.FC = () => {
                           setIsFileMenuOpen(false);
                           setIsAboutModalOpen(true);
                         }}
-                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#F0F3F8] hover:text-[#00F0FF] transition-colors cursor-pointer"
+                        className="w-full flex items-center justify-between px-3.5 py-1.5 hover:bg-[#1C202B] text-[#F0F3F8] hover:text-[#38BDF8] transition-colors cursor-pointer"
                       >
                         <div className="flex items-center gap-2">
                           <Info size={14} className="text-[#8A92A6]" />
@@ -651,7 +651,7 @@ export const Header: React.FC = () => {
                 if (e.key === 'Enter') handleNameSubmit();
                 if (e.key === 'Escape') setIsEditingName(false);
               }}
-              className="bg-[#0A0C10] border border-[#00F0FF] rounded px-2 py-0.5 text-xs text-white text-center font-semibold focus:outline-hidden max-w-[200px]"
+              className="bg-[#0A0C10] border border-[#38BDF8] rounded px-2 py-0.5 text-xs text-white text-center font-semibold focus:outline-hidden max-w-[200px]"
             />
           ) : (
             <div
@@ -675,7 +675,7 @@ export const Header: React.FC = () => {
               type="button"
               onClick={toggleMediaPoolCollapsed}
               className={`p-1 rounded transition-all cursor-pointer ${
-                !isMediaPoolCollapsed ? 'text-[#00F0FF]' : 'text-[#64748B] hover:text-white'
+                !isMediaPoolCollapsed ? 'text-[#38BDF8]' : 'text-[#64748B] hover:text-white'
               }`}
               title="Toggle Media Panel"
             >
@@ -686,7 +686,7 @@ export const Header: React.FC = () => {
               type="button"
               onClick={toggleInspectorCollapsed}
               className={`p-1 rounded transition-all cursor-pointer ${
-                !isInspectorCollapsed ? 'text-[#00F0FF]' : 'text-[#64748B] hover:text-white'
+                !isInspectorCollapsed ? 'text-[#38BDF8]' : 'text-[#64748B] hover:text-white'
               }`}
               title="Toggle Inspector Panel"
             >
@@ -699,7 +699,7 @@ export const Header: React.FC = () => {
             data-tauri-drag-region="false"
             type="button"
             onClick={() => executeTauriSync()}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#161922] hover:bg-[#202534] border border-[#262C3C] text-[11px] font-medium text-[#CBD5E1] hover:text-[#00F0FF] transition-all cursor-pointer"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#161922] hover:bg-[#202534] border border-[#262C3C] text-[11px] font-medium text-[#CBD5E1] hover:text-[#38BDF8] transition-all cursor-pointer"
             title="Smart Multicam Track Synchronization"
           >
             <Share2 size={12} className="text-[#8E9CAE]" />
@@ -711,7 +711,7 @@ export const Header: React.FC = () => {
             data-tauri-drag-region="false"
             type="button"
             onClick={() => setExportModalOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 py-1 bg-[#00F0FF] hover:bg-[#38BDF8] text-[#0D0E11] rounded-md text-xs font-extrabold transition-all shadow-[0_0_12px_rgba(0,240,255,0.4)] cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-1 bg-[#38BDF8] hover:bg-[#38BDF8] text-[#0D0E11] rounded-md text-xs font-extrabold transition-all shadow-[0_0_12px_rgba(56, 189, 248,0.4)] cursor-pointer"
             title="Export Video Project"
           >
             <Upload size={13} strokeWidth={2.8} />
@@ -771,14 +771,14 @@ export const Header: React.FC = () => {
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs font-semibold transition-all relative cursor-pointer ${
                   isActive
-                    ? 'text-[#00F0FF] bg-[#1A1F29]'
+                    ? 'text-[#38BDF8] bg-[#1A1F29]'
                     : 'text-[#8E9CAE] hover:text-[#F0F3F8] hover:bg-[#181B22]'
                 }`}
               >
-                <Icon size={13} className={isActive ? 'text-[#00F0FF]' : 'text-[#64748B]'} />
+                <Icon size={13} className={isActive ? 'text-[#38BDF8]' : 'text-[#64748B]'} />
                 <span>{tab.label}</span>
                 {isActive && (
-                  <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-[#00F0FF] rounded-full shadow-[0_0_6px_#00F0FF]" />
+                  <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-[#38BDF8] rounded-full shadow-xs" />
                 )}
               </button>
             );
@@ -841,7 +841,7 @@ export const Header: React.FC = () => {
               <div className="p-3.5 rounded-lg bg-[#0D0E11] border border-[#222630] space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-[#F0F3F8] flex items-center gap-1.5">
-                    <Cpu size={14} className="text-[#00F0FF]" />
+                    <Cpu size={14} className="text-[#38BDF8]" />
                     <span>Sidecar Child Processes</span>
                   </span>
                   <span className="font-mono text-[11px] text-[#10B981] bg-[#10B981]/10 px-2 py-0.5 rounded border border-[#10B981]/30">
@@ -854,7 +854,7 @@ export const Header: React.FC = () => {
                 {healthStats && healthStats.activeSidecarPids.length > 0 ? (
                   <div className="flex flex-wrap gap-1.5 pt-1">
                     {healthStats.activeSidecarPids.map((pid) => (
-                      <span key={pid} className="font-mono text-[10px] bg-[#1A1E29] text-[#00F0FF] border border-[#00F0FF]/30 px-2 py-0.5 rounded">
+                      <span key={pid} className="font-mono text-[10px] bg-[#1A1E29] text-[#38BDF8] border border-[#38BDF8]/30 px-2 py-0.5 rounded">
                         PID {pid}
                       </span>
                     ))}
@@ -867,7 +867,7 @@ export const Header: React.FC = () => {
               {/* Hardware Acceleration Status */}
               <div className="p-3.5 rounded-lg bg-[#0D0E11] border border-[#222630] space-y-1.5">
                 <span className="font-bold text-[#F0F3F8] flex items-center gap-1.5">
-                  <Zap size={14} className="text-[#00F0FF]" />
+                  <Zap size={14} className="text-[#38BDF8]" />
                   <span>Hardware Video Acceleration</span>
                 </span>
                 <p className="text-[11px] text-[#8A92A6]">
@@ -883,7 +883,7 @@ export const Header: React.FC = () => {
                 <span className="font-bold text-[#F0F3F8]">Crash Recovery & Auto-Save</span>
                 <p className="text-[10px] text-[#64748B] leading-relaxed">
                   Atomic timeline snapshots are saved every 60 seconds to:{' '}
-                  <code className="text-[#00F0FF] bg-[#1A1D24] px-1 py-0.5 rounded font-mono">
+                  <code className="text-[#38BDF8] bg-[#1A1D24] px-1 py-0.5 rounded font-mono">
                     %LOCALAPPDATA%/idts-video-editor/recovery/
                   </code>
                 </p>
@@ -915,12 +915,12 @@ export const Header: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4 animate-in fade-in duration-150 select-none">
           <div className="w-full max-w-md bg-[#14161B] border border-[#222630] rounded-xl shadow-2xl overflow-hidden flex flex-col text-[#F0F3F8]">
             <div className="p-6 flex flex-col items-center text-center space-y-3">
-              <div className="w-14 h-14 rounded-2xl bg-[#00F0FF] flex items-center justify-center text-black font-black shadow-[0_0_20px_rgba(0,240,255,0.4)]">
+              <div className="w-14 h-14 rounded-2xl bg-[#38BDF8] flex items-center justify-center text-black font-black shadow-[0_0_20px_rgba(56, 189, 248,0.4)]">
                 <Film size={28} strokeWidth={2.5} />
               </div>
               <div>
                 <h2 className="text-base font-extrabold text-[#F0F3F8]">
-                  <span className="text-[#00F0FF]">IDTS</span> video editor
+                  <span className="text-[#38BDF8]">IDTS</span> video editor
                 </h2>
                 <p className="text-xs text-[#8A92A6] mt-0.5 font-mono">Version 0.1.0 (Production Hardened)</p>
               </div>
@@ -941,7 +941,7 @@ export const Header: React.FC = () => {
             <div className="px-5 py-3 border-t border-[#222630] bg-[#101217] flex justify-end">
               <button
                 onClick={() => setIsAboutModalOpen(false)}
-                className="px-4 py-1.5 rounded-lg bg-[#00F0FF] hover:bg-[#3bf1ff] text-[#0D0E11] text-xs font-bold transition-all shadow-[0_0_10px_rgba(0,240,255,0.3)] cursor-pointer"
+                className="px-4 py-1.5 rounded-lg bg-[#38BDF8] hover:bg-[#3bf1ff] text-[#0D0E11] text-xs font-bold transition-all shadow-[0_0_10px_rgba(56, 189, 248,0.3)] cursor-pointer"
               >
                 Close
               </button>

@@ -113,9 +113,9 @@ export const HslSecondaryPanel: React.FC<HslSecondaryProps> = ({
           <button
             onClick={handleEyedropper}
             title="Sample Color from Screen / Viewport"
-            className="px-2 py-0.5 rounded bg-[#1C202B] hover:bg-[#252B3A] text-[#8A92A6] hover:text-[#00F0FF] text-[10px] font-mono flex items-center gap-1 border border-[#222630] cursor-pointer transition-colors"
+            className="px-2 py-0.5 rounded bg-[#1C202B] hover:bg-[#252B3A] text-[#8A92A6] hover:text-[#38BDF8] text-[10px] font-mono flex items-center gap-1 border border-[#222630] cursor-pointer transition-colors"
           >
-            <Pipette size={11} className="text-[#00F0FF]" />
+            <Pipette size={11} className="text-[#38BDF8]" />
             <span>Eyedropper</span>
           </button>
 
@@ -123,7 +123,7 @@ export const HslSecondaryPanel: React.FC<HslSecondaryProps> = ({
           <button
             onClick={handleReset}
             title="Reset Qualifier"
-            className="text-[#64748B] hover:text-[#00F0FF] p-1 transition-colors cursor-pointer"
+            className="text-[#64748B] hover:text-[#38BDF8] p-1 transition-colors cursor-pointer"
           >
             <RotateCcw size={11} />
           </button>
@@ -135,8 +135,8 @@ export const HslSecondaryPanel: React.FC<HslSecondaryProps> = ({
             title={current.enabled ? 'Click to Disable HSL Qualifier' : 'Click to Enable HSL Qualifier'}
             className="w-9 h-5 rounded-full transition-all relative cursor-pointer"
             style={{
-              backgroundColor: current.enabled ? '#00F0FF' : '#222630',
-              boxShadow: current.enabled ? '0 0 10px rgba(0, 240, 255, 0.45)' : 'none',
+              backgroundColor: current.enabled ? '#38BDF8' : '#222630',
+              boxShadow: current.enabled ? '0 0 10px rgba(56, 189, 248, 0.45)' : 'none',
             }}
           >
             <div
@@ -149,7 +149,7 @@ export const HslSecondaryPanel: React.FC<HslSecondaryProps> = ({
 
           <span
             className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
-              current.enabled ? 'bg-[#00F0FF]/15 text-[#00F0FF]' : 'bg-[#181B22] text-[#64748B]'
+              current.enabled ? 'bg-[#38BDF8]/15 text-[#38BDF8]' : 'bg-[#181B22] text-[#64748B]'
             }`}
           >
             {current.enabled ? 'ON' : 'OFF'}
@@ -164,19 +164,19 @@ export const HslSecondaryPanel: React.FC<HslSecondaryProps> = ({
             onClick={() => updateQualifier({ showMatte: !current.showMatte })}
             className={`flex items-center justify-between p-2 rounded border cursor-pointer transition-colors ${
               current.showMatte
-                ? 'bg-[#00F0FF]/15 border-[#00F0FF]/40 text-[#00F0FF]'
+                ? 'bg-[#38BDF8]/15 border-[#38BDF8]/40 text-[#38BDF8]'
                 : 'bg-[#14161F] border-[#222630] text-[#F0F3F8] hover:bg-[#1A1D27]'
             }`}
           >
             <span className="text-[11px] font-medium flex items-center gap-1.5">
-              <Eye size={13} className={current.showMatte ? 'text-[#00F0FF]' : 'text-[#64748B]'} />
+              <Eye size={13} className={current.showMatte ? 'text-[#38BDF8]' : 'text-[#64748B]'} />
               <span>Show Matte / Isolation Mask (Black & White)</span>
             </span>
             <input
               type="checkbox"
               checked={current.showMatte}
               onChange={(e) => updateQualifier({ showMatte: e.target.checked })}
-              className="accent-[#00F0FF] cursor-pointer"
+              className="accent-[#38BDF8] cursor-pointer"
             />
           </div>
 
@@ -190,7 +190,7 @@ export const HslSecondaryPanel: React.FC<HslSecondaryProps> = ({
             <div className="space-y-1">
               <div className="flex items-center justify-between text-[10px] font-mono text-[#8A92A6]">
                 <span>Hue Center & Tolerance</span>
-                <span className="text-[#00F0FF]">{Math.round(current.hueCenter)}° ± {Math.round(current.hueWidth)}°</span>
+                <span className="text-[#38BDF8]">{Math.round(current.hueCenter)}° ± {Math.round(current.hueWidth)}°</span>
               </div>
               <input
                 type="range"
@@ -211,7 +211,7 @@ export const HslSecondaryPanel: React.FC<HslSecondaryProps> = ({
                   max={180}
                   value={current.hueWidth}
                   onChange={(e) => updateQualifier({ hueWidth: Number(e.target.value) })}
-                  className="flex-1 h-1 bg-[#222630] rounded appearance-none cursor-pointer accent-[#00F0FF]"
+                  className="flex-1 h-1 bg-[#222630] rounded appearance-none cursor-pointer accent-[#38BDF8]"
                 />
               </div>
             </div>
@@ -220,7 +220,7 @@ export const HslSecondaryPanel: React.FC<HslSecondaryProps> = ({
             <div className="space-y-1">
               <div className="flex items-center justify-between text-[10px] font-mono text-[#8A92A6]">
                 <span>Saturation Range</span>
-                <span className="text-[#00F0FF]">{Math.round(current.satCenter * 100)}% ± {Math.round(current.satWidth * 100)}%</span>
+                <span className="text-[#38BDF8]">{Math.round(current.satCenter * 100)}% ± {Math.round(current.satWidth * 100)}%</span>
               </div>
               <input
                 type="range"
@@ -229,7 +229,7 @@ export const HslSecondaryPanel: React.FC<HslSecondaryProps> = ({
                 step={0.01}
                 value={current.satCenter}
                 onChange={(e) => updateQualifier({ satCenter: Number(e.target.value) })}
-                className="w-full h-1 bg-[#222630] rounded appearance-none cursor-pointer accent-[#00F0FF]"
+                className="w-full h-1 bg-[#222630] rounded appearance-none cursor-pointer accent-[#38BDF8]"
               />
               <div className="flex items-center gap-2 text-[9px] text-[#64748B]">
                 <span>Width:</span>
@@ -240,7 +240,7 @@ export const HslSecondaryPanel: React.FC<HslSecondaryProps> = ({
                   step={0.01}
                   value={current.satWidth}
                   onChange={(e) => updateQualifier({ satWidth: Number(e.target.value) })}
-                  className="flex-1 h-1 bg-[#222630] rounded appearance-none cursor-pointer accent-[#00F0FF]"
+                  className="flex-1 h-1 bg-[#222630] rounded appearance-none cursor-pointer accent-[#38BDF8]"
                 />
               </div>
             </div>
@@ -249,7 +249,7 @@ export const HslSecondaryPanel: React.FC<HslSecondaryProps> = ({
             <div className="space-y-1">
               <div className="flex items-center justify-between text-[10px] font-mono text-[#8A92A6]">
                 <span>Luma Range</span>
-                <span className="text-[#00F0FF]">{Math.round(current.lumCenter * 100)}% ± {Math.round(current.lumWidth * 100)}%</span>
+                <span className="text-[#38BDF8]">{Math.round(current.lumCenter * 100)}% ± {Math.round(current.lumWidth * 100)}%</span>
               </div>
               <input
                 type="range"
@@ -258,7 +258,7 @@ export const HslSecondaryPanel: React.FC<HslSecondaryProps> = ({
                 step={0.01}
                 value={current.lumCenter}
                 onChange={(e) => updateQualifier({ lumCenter: Number(e.target.value) })}
-                className="w-full h-1 bg-[#222630] rounded appearance-none cursor-pointer accent-[#00F0FF]"
+                className="w-full h-1 bg-[#222630] rounded appearance-none cursor-pointer accent-[#38BDF8]"
               />
               <div className="flex items-center gap-2 text-[9px] text-[#64748B]">
                 <span>Width:</span>
@@ -269,7 +269,7 @@ export const HslSecondaryPanel: React.FC<HslSecondaryProps> = ({
                   step={0.01}
                   value={current.lumWidth}
                   onChange={(e) => updateQualifier({ lumWidth: Number(e.target.value) })}
-                  className="flex-1 h-1 bg-[#222630] rounded appearance-none cursor-pointer accent-[#00F0FF]"
+                  className="flex-1 h-1 bg-[#222630] rounded appearance-none cursor-pointer accent-[#38BDF8]"
                 />
               </div>
             </div>
@@ -285,7 +285,7 @@ export const HslSecondaryPanel: React.FC<HslSecondaryProps> = ({
             <div className="space-y-1">
               <div className="flex items-center justify-between text-[10px] font-mono text-[#8A92A6]">
                 <span>Hue Shift</span>
-                <span className="text-[#00F0FF]">{Math.round(current.isolatedHueShift)}°</span>
+                <span className="text-[#38BDF8]">{Math.round(current.isolatedHueShift)}°</span>
               </div>
               <input
                 type="range"
@@ -293,7 +293,7 @@ export const HslSecondaryPanel: React.FC<HslSecondaryProps> = ({
                 max={180}
                 value={current.isolatedHueShift}
                 onChange={(e) => updateQualifier({ isolatedHueShift: Number(e.target.value) })}
-                className="w-full h-1 bg-[#222630] rounded appearance-none cursor-pointer accent-[#00F0FF]"
+                className="w-full h-1 bg-[#222630] rounded appearance-none cursor-pointer accent-[#38BDF8]"
               />
             </div>
 
@@ -301,7 +301,7 @@ export const HslSecondaryPanel: React.FC<HslSecondaryProps> = ({
             <div className="space-y-1">
               <div className="flex items-center justify-between text-[10px] font-mono text-[#8A92A6]">
                 <span>Isolated Saturation</span>
-                <span className="text-[#00F0FF]">{Math.round(current.isolatedSat * 100)}%</span>
+                <span className="text-[#38BDF8]">{Math.round(current.isolatedSat * 100)}%</span>
               </div>
               <input
                 type="range"
@@ -310,7 +310,7 @@ export const HslSecondaryPanel: React.FC<HslSecondaryProps> = ({
                 step={0.01}
                 value={current.isolatedSat}
                 onChange={(e) => updateQualifier({ isolatedSat: Number(e.target.value) })}
-                className="w-full h-1 bg-[#222630] rounded appearance-none cursor-pointer accent-[#00F0FF]"
+                className="w-full h-1 bg-[#222630] rounded appearance-none cursor-pointer accent-[#38BDF8]"
               />
             </div>
 
@@ -318,7 +318,7 @@ export const HslSecondaryPanel: React.FC<HslSecondaryProps> = ({
             <div className="space-y-1">
               <div className="flex items-center justify-between text-[10px] font-mono text-[#8A92A6]">
                 <span>Isolated Gain / Luma</span>
-                <span className="text-[#00F0FF]">{Math.round(current.isolatedGain * 100)}%</span>
+                <span className="text-[#38BDF8]">{Math.round(current.isolatedGain * 100)}%</span>
               </div>
               <input
                 type="range"
@@ -327,7 +327,7 @@ export const HslSecondaryPanel: React.FC<HslSecondaryProps> = ({
                 step={0.01}
                 value={current.isolatedGain}
                 onChange={(e) => updateQualifier({ isolatedGain: Number(e.target.value) })}
-                className="w-full h-1 bg-[#222630] rounded appearance-none cursor-pointer accent-[#00F0FF]"
+                className="w-full h-1 bg-[#222630] rounded appearance-none cursor-pointer accent-[#38BDF8]"
               />
             </div>
           </div>

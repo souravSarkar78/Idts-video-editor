@@ -14,7 +14,7 @@ export default {
           hover: '#242833',
           border: '#222630',
           borderLight: '#2E3442',
-          cyan: '#00F0FF',
+          cyan: '#38BDF8',
           emerald: '#10B981',
           muted: '#8A92A6',
           text: '#F0F3F8',
@@ -26,8 +26,8 @@ export default {
         mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
       },
       boxShadow: {
-        'cyan-glow': '0 0 12px rgba(0, 240, 255, 0.45)',
-        'emerald-glow': '0 0 12px rgba(16, 185, 129, 0.45)',
+        'cyan-glow': '0 0 10px rgba(56, 189, 248, 0.25)',
+        'emerald-glow': '0 0 10px rgba(16, 185, 129, 0.25)',
       }
     },
   },

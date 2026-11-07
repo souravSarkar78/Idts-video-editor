@@ -201,7 +201,7 @@ export const VoiceoverModal: React.FC = () => {
         {/* Modal Header */}
         <div className="px-5 py-4 bg-[#101217] border-b border-[#222630] flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className={`p-2 rounded-lg ${isRecordingVoiceover ? 'bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse' : 'bg-[#00F0FF]/15 text-[#00F0FF] border border-[#00F0FF]/30'}`}>
+            <div className={`p-2 rounded-lg ${isRecordingVoiceover ? 'bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse' : 'bg-[#38BDF8]/15 text-[#38BDF8] border border-[#38BDF8]/30'}`}>
               <Mic size={18} />
             </div>
             <div>
@@ -231,7 +231,7 @@ export const VoiceoverModal: React.FC = () => {
           {/* 3-Second Countdown Overlay */}
           {voiceoverCountdown !== null && (
             <div className="py-6 flex flex-col items-center justify-center bg-gradient-to-b from-[#1C162E] to-[#0D0E11] rounded-xl border border-[#A855F7]/40 shadow-inner">
-              <span className="text-5xl font-black text-[#00F0FF] animate-ping font-mono">
+              <span className="text-5xl font-black text-[#38BDF8] animate-ping font-mono">
                 {voiceoverCountdown}
               </span>
               <span className="text-xs text-[#8A92A6] mt-3 font-semibold tracking-wider uppercase">
@@ -284,12 +284,12 @@ export const VoiceoverModal: React.FC = () => {
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between text-xs font-semibold text-[#F0F3F8]">
                   <span className="flex items-center gap-1.5">
-                    <Radio size={13} className="text-[#00F0FF]" />
+                    <Radio size={13} className="text-[#38BDF8]" />
                     <span>Microphone Input Device</span>
                   </span>
                   <button
                     onClick={() => fetchAudioInputDevices()}
-                    className="text-[10px] text-[#00F0FF] hover:underline flex items-center gap-1 cursor-pointer"
+                    className="text-[10px] text-[#38BDF8] hover:underline flex items-center gap-1 cursor-pointer"
                   >
                     <RefreshCw size={10} />
                     <span>Refresh</span>
@@ -299,7 +299,7 @@ export const VoiceoverModal: React.FC = () => {
                 <select
                   value={voiceoverSelectedDeviceId}
                   onChange={(e) => setVoiceoverSelectedDeviceId(e.target.value)}
-                  className="w-full bg-[#0D0E11] border border-[#222630] rounded-lg px-3 py-2 text-xs text-[#F0F3F8] focus:outline-none focus:border-[#00F0FF] cursor-pointer"
+                  className="w-full bg-[#0D0E11] border border-[#222630] rounded-lg px-3 py-2 text-xs text-[#F0F3F8] focus:outline-none focus:border-[#38BDF8] cursor-pointer"
                 >
                   {availableAudioDevices.map((dev) => (
                     <option key={dev.id} value={dev.id}>
@@ -364,7 +364,7 @@ export const VoiceoverModal: React.FC = () => {
                       step="0.05"
                       value={inputGain}
                       onChange={(e) => setInputGain(Number(e.target.value))}
-                      className="w-28 accent-[#00F0FF] h-1 bg-[#222630] rounded cursor-pointer"
+                      className="w-28 accent-[#38BDF8] h-1 bg-[#222630] rounded cursor-pointer"
                     />
                     <span className="font-mono text-[#F0F3F8] w-8 text-right">
                       {(inputGain * 100).toFixed(0)}%
@@ -380,7 +380,7 @@ export const VoiceoverModal: React.FC = () => {
                     type="checkbox"
                     checked={voiceoverMuteTimeline}
                     onChange={(e) => setVoiceoverMuteTimeline(e.target.checked)}
-                    className="rounded border-[#222630] accent-[#00F0FF]"
+                    className="rounded border-[#222630] accent-[#38BDF8]"
                   />
                   <div className="min-w-0">
                     <div className="font-medium text-[#F0F3F8]">Mute Timeline</div>
@@ -393,7 +393,7 @@ export const VoiceoverModal: React.FC = () => {
                     type="checkbox"
                     checked={voiceoverUseCountdown}
                     onChange={(e) => setVoiceoverUseCountdown(e.target.checked)}
-                    className="rounded border-[#222630] accent-[#00F0FF]"
+                    className="rounded border-[#222630] accent-[#38BDF8]"
                   />
                   <div className="min-w-0">
                     <div className="font-medium text-[#F0F3F8]">3s Countdown</div>
@@ -408,7 +408,7 @@ export const VoiceoverModal: React.FC = () => {
         {/* Modal Footer Controls */}
         <div className="px-5 py-3.5 bg-[#101217] border-t border-[#222630] flex items-center justify-between">
           <div className="text-[11px] font-mono text-[#64748B]">
-            Anchored at: <span className="text-[#00F0FF] font-bold">{playhead.toFixed(2)}s</span>
+            Anchored at: <span className="text-[#38BDF8] font-bold">{playhead.toFixed(2)}s</span>
           </div>
 
           <div className="flex items-center gap-2">

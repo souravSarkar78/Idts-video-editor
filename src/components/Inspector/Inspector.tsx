@@ -743,7 +743,7 @@ export const Inspector: React.FC = () => {
       <div className="w-full h-full bg-[#14161B] border-l border-[#222630] flex flex-col items-center py-3 select-none">
         <button
           onClick={() => setIsCollapsed(false)}
-          className="p-1.5 rounded-lg bg-[#1E222D] hover:bg-[#252B3A] text-[#00F0FF] hover:scale-105 transition-all cursor-pointer"
+          className="p-1.5 rounded-lg bg-[#1E222D] hover:bg-[#252B3A] text-[#38BDF8] hover:scale-105 transition-all cursor-pointer"
           title="Expand Inspector Panel"
         >
           <ChevronLeft size={16} />
@@ -773,7 +773,7 @@ export const Inspector: React.FC = () => {
                   isActive
                     ? isTextClip && tab.id === 'text'
                       ? 'text-[#C084FC] bg-[#2E184D]'
-                      : 'text-[#00F0FF] bg-[#1A1E27]'
+                      : 'text-[#38BDF8] bg-[#1A1E27]'
                     : 'text-[#8A92A6] hover:text-[#F0F3F8]'
                 }`}
               >
@@ -803,8 +803,8 @@ export const Inspector: React.FC = () => {
                 <span
                   className="font-mono font-bold text-[10px] px-1.5 py-0.2 rounded"
                   style={{
-                    backgroundColor: `${parentTrack?.color || '#00F0FF'}20`,
-                    color: parentTrack?.color || '#00F0FF',
+                    backgroundColor: `${parentTrack?.color || '#38BDF8'}20`,
+                    color: parentTrack?.color || '#38BDF8',
                   }}
                 >
                   {parentTrack?.name}
@@ -826,7 +826,7 @@ export const Inspector: React.FC = () => {
                   </span>
                 </div>
                 {selectedClip.syncDeltaSeconds !== undefined && (
-                  <span className="text-[#00F0FF] font-bold">
+                  <span className="text-[#38BDF8] font-bold">
                     {formatDeltaSeconds(selectedClip.syncDeltaSeconds)}
                   </span>
                 )}
@@ -882,9 +882,9 @@ export const Inspector: React.FC = () => {
 
                           <button
                             onClick={() => applyTextPreset(selectedClip.id, 'cinematic')}
-                            className="px-2.5 py-1.5 rounded bg-[#14161B] hover:bg-[#1A1E27] border border-[#222630] hover:border-[#00F0FF]/50 text-left cursor-pointer transition-colors group"
+                            className="px-2.5 py-1.5 rounded bg-[#14161B] hover:bg-[#1A1E27] border border-[#222630] hover:border-[#38BDF8]/50 text-left cursor-pointer transition-colors group"
                           >
-                            <div className="text-[11px] font-bold text-[#F0F3F8] group-hover:text-[#00F0FF]">
+                            <div className="text-[11px] font-bold text-[#F0F3F8] group-hover:text-[#38BDF8]">
                               Cinematic Subtitle
                             </div>
                             <div className="text-[9px] text-[#64748B]">Clean letterbox caption</div>
@@ -1010,7 +1010,7 @@ export const Inspector: React.FC = () => {
                     className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#14161F]/60 transition-colors select-none"
                   >
                     <div className="flex items-center gap-1.5 text-xs font-bold text-[#F0F3F8]">
-                      <Palette size={13} className="text-[#00F0FF]" />
+                      <Palette size={13} className="text-[#38BDF8]" />
                       <span>Colors & Appearance</span>
                     </div>
                     <span className="text-[#8A92A6]">
@@ -1129,7 +1129,7 @@ export const Inspector: React.FC = () => {
                     className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#14161F]/60 transition-colors select-none"
                   >
                     <div className="flex items-center gap-1.5 text-xs font-bold text-[#F0F3F8]">
-                      <Move size={13} className="text-[#00F0FF]" />
+                      <Move size={13} className="text-[#38BDF8]" />
                       <span>Canvas Position & Alignment</span>
                     </div>
                     <span className="text-[#8A92A6]">
@@ -1335,7 +1335,7 @@ export const Inspector: React.FC = () => {
                     className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#14161F]/60 transition-colors select-none"
                   >
                     <div className="flex items-center gap-1.5 text-xs font-bold text-[#F0F3F8]">
-                      <Film size={13} className="text-[#00F0FF]" />
+                      <Film size={13} className="text-[#38BDF8]" />
                       <span>Video Properties</span>
                     </div>
                     <span className="text-[#8A92A6]">
@@ -1413,7 +1413,7 @@ export const Inspector: React.FC = () => {
                     className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#14161F]/60 transition-colors select-none"
                   >
                     <span className="text-xs font-bold text-[#F0F3F8] flex items-center gap-1.5">
-                      <Move size={13} className="text-[#00F0FF]" />
+                      <Move size={13} className="text-[#38BDF8]" />
                       <span>Motion & Transform</span>
                     </span>
                     <div className="flex items-center gap-2">
@@ -1423,7 +1423,7 @@ export const Inspector: React.FC = () => {
                           handleResetTransform();
                         }}
                         title="Reset all transforms to default"
-                        className="px-2 py-0.5 rounded bg-[#181B24] hover:bg-[#202532] text-[#8A92A6] hover:text-[#00F0FF] text-[10px] font-mono flex items-center gap-1 transition-colors cursor-pointer border border-[#222630]"
+                        className="px-2 py-0.5 rounded bg-[#181B24] hover:bg-[#202532] text-[#8A92A6] hover:text-[#38BDF8] text-[10px] font-mono flex items-center gap-1 transition-colors cursor-pointer border border-[#222630]"
                       >
                         <RotateCcw size={10} />
                         <span>Reset</span>
@@ -1443,7 +1443,7 @@ export const Inspector: React.FC = () => {
                       <span className="text-[#8A92A6] font-medium flex items-center gap-1.5">
                         <Diamond
                           size={11}
-                          className={hasKeyframeAtPlayhead ? 'text-[#00F0FF]' : 'text-[#64748B]'}
+                          className={hasKeyframeAtPlayhead ? 'text-[#38BDF8]' : 'text-[#64748B]'}
                           fill={hasKeyframeAtPlayhead ? 'currentColor' : 'none'}
                         />
                         <span>Master Keyframe</span>
@@ -1465,7 +1465,7 @@ export const Inspector: React.FC = () => {
                             ? `Jump to Previous Keyframe at ${prevKfTime.toFixed(2)}s`
                             : 'No previous keyframe'
                         }
-                        className="p-1.5 rounded bg-[#1C202B] hover:bg-[#252B3A] text-[#8A92A6] hover:text-[#00F0FF] disabled:text-[#3E4554] disabled:cursor-not-allowed border border-[#222630] transition-colors cursor-pointer"
+                        className="p-1.5 rounded bg-[#1C202B] hover:bg-[#252B3A] text-[#8A92A6] hover:text-[#38BDF8] disabled:text-[#3E4554] disabled:cursor-not-allowed border border-[#222630] transition-colors cursor-pointer"
                       >
                         <ChevronLeft size={13} />
                       </button>
@@ -1475,12 +1475,12 @@ export const Inspector: React.FC = () => {
                         onClick={handleToggleGlobalKeyframe}
                         className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded text-xs font-bold transition-all cursor-pointer border ${
                           hasKeyframeAtPlayhead && allPropertiesKeyframed
-                            ? 'bg-[#00F0FF]/20 text-[#00F0FF] border-[#00F0FF]/60 shadow-[0_0_10px_rgba(0,240,255,0.35)]'
+                            ? 'bg-[#38BDF8]/20 text-[#38BDF8] border-[#38BDF8]/60 shadow-[0_0_10px_rgba(56, 189, 248,0.35)]'
                             : hasKeyframeAtPlayhead
-                            ? 'bg-[#00F0FF]/15 text-[#00F0FF] border-[#00F0FF]/40'
+                            ? 'bg-[#38BDF8]/15 text-[#38BDF8] border-[#38BDF8]/40'
                             : keyframeTimes.length > 0
-                            ? 'bg-[#1C202B] hover:bg-[#252B3A] text-[#F0F3F8] hover:text-[#00F0FF] border-[#222630] hover:border-[#00F0FF]/50'
-                            : 'bg-[#00F0FF]/10 hover:bg-[#00F0FF]/20 text-[#00F0FF] border-[#00F0FF]/30'
+                            ? 'bg-[#1C202B] hover:bg-[#252B3A] text-[#F0F3F8] hover:text-[#38BDF8] border-[#222630] hover:border-[#38BDF8]/50'
+                            : 'bg-[#38BDF8]/10 hover:bg-[#38BDF8]/20 text-[#38BDF8] border-[#38BDF8]/30'
                         }`}
                         title={
                           hasKeyframeAtPlayhead && allPropertiesKeyframed
@@ -1493,7 +1493,7 @@ export const Inspector: React.FC = () => {
                         <Diamond
                           size={13}
                           fill={hasKeyframeAtPlayhead ? 'currentColor' : 'none'}
-                          className={hasKeyframeAtPlayhead ? 'text-[#00F0FF]' : 'text-[#8A92A6]'}
+                          className={hasKeyframeAtPlayhead ? 'text-[#38BDF8]' : 'text-[#8A92A6]'}
                         />
                         <span>
                           {hasKeyframeAtPlayhead && allPropertiesKeyframed
@@ -1513,7 +1513,7 @@ export const Inspector: React.FC = () => {
                             ? `Jump to Next Keyframe at ${nextKfTime.toFixed(2)}s`
                             : 'No next keyframe'
                         }
-                        className="p-1.5 rounded bg-[#1C202B] hover:bg-[#252B3A] text-[#8A92A6] hover:text-[#00F0FF] disabled:text-[#3E4554] disabled:cursor-not-allowed border border-[#222630] transition-colors cursor-pointer"
+                        className="p-1.5 rounded bg-[#1C202B] hover:bg-[#252B3A] text-[#8A92A6] hover:text-[#38BDF8] disabled:text-[#3E4554] disabled:cursor-not-allowed border border-[#222630] transition-colors cursor-pointer"
                       >
                         <ChevronRight size={13} />
                       </button>
@@ -1550,8 +1550,8 @@ export const Inspector: React.FC = () => {
                           }
                           className={`p-1 rounded transition-all cursor-pointer ${
                             hasPropertyKeyframe('scale')
-                              ? 'text-[#00F0FF] bg-[#00F0FF]/20 shadow-[0_0_6px_rgba(0,240,255,0.4)]'
-                              : 'text-[#64748B] hover:text-[#00F0FF] hover:bg-[#1C202B]'
+                              ? 'text-[#38BDF8] bg-[#38BDF8]/20 shadow-[0_0_6px_rgba(56, 189, 248,0.4)]'
+                              : 'text-[#64748B] hover:text-[#38BDF8] hover:bg-[#1C202B]'
                           }`}
                         >
                           <Diamond size={10} fill={hasPropertyKeyframe('scale') ? 'currentColor' : 'none'} />
@@ -1564,7 +1564,7 @@ export const Inspector: React.FC = () => {
                       <button
                         onClick={() => updateClipTransform(selectedClip.id, { scale: 1.0 })}
                         title="Reset scale to 1.0x"
-                        className="font-mono text-[#F0F3F8] hover:text-[#00F0FF] text-[10px] cursor-pointer"
+                        className="font-mono text-[#F0F3F8] hover:text-[#38BDF8] text-[10px] cursor-pointer"
                       >
                         {currentTransform.scale.toFixed(2)}x
                       </button>
@@ -1576,7 +1576,7 @@ export const Inspector: React.FC = () => {
                       step={0.05}
                       value={currentTransform.scale}
                       onChange={(e) => updateClipTransform(selectedClip.id, { scale: Number(e.target.value) })}
-                      className="w-full h-1 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#00F0FF]"
+                      className="w-full h-1 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#38BDF8]"
                     />
                   </div>
 
@@ -1593,8 +1593,8 @@ export const Inspector: React.FC = () => {
                           }
                           className={`p-1 rounded transition-all cursor-pointer ${
                             hasPropertyKeyframe('position_x')
-                              ? 'text-[#00F0FF] bg-[#00F0FF]/20 shadow-[0_0_6px_rgba(0,240,255,0.4)]'
-                              : 'text-[#64748B] hover:text-[#00F0FF] hover:bg-[#1C202B]'
+                              ? 'text-[#38BDF8] bg-[#38BDF8]/20 shadow-[0_0_6px_rgba(56, 189, 248,0.4)]'
+                              : 'text-[#64748B] hover:text-[#38BDF8] hover:bg-[#1C202B]'
                           }`}
                         >
                           <Diamond size={10} fill={hasPropertyKeyframe('position_x') ? 'currentColor' : 'none'} />
@@ -1606,7 +1606,7 @@ export const Inspector: React.FC = () => {
                       <button
                         onClick={() => updateClipTransform(selectedClip.id, { positionX: 0 })}
                         title="Reset Position X to 0"
-                        className="font-mono text-[#F0F3F8] hover:text-[#00F0FF] text-[10px] cursor-pointer"
+                        className="font-mono text-[#F0F3F8] hover:text-[#38BDF8] text-[10px] cursor-pointer"
                       >
                         {Math.round(currentTransform.positionX)} px
                       </button>
@@ -1618,7 +1618,7 @@ export const Inspector: React.FC = () => {
                       step={2}
                       value={currentTransform.positionX}
                       onChange={(e) => updateClipTransform(selectedClip.id, { positionX: Number(e.target.value) })}
-                      className="w-full h-1 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#00F0FF]"
+                      className="w-full h-1 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#38BDF8]"
                     />
                   </div>
 
@@ -1635,8 +1635,8 @@ export const Inspector: React.FC = () => {
                           }
                           className={`p-1 rounded transition-all cursor-pointer ${
                             hasPropertyKeyframe('position_y')
-                              ? 'text-[#00F0FF] bg-[#00F0FF]/20 shadow-[0_0_6px_rgba(0,240,255,0.4)]'
-                              : 'text-[#64748B] hover:text-[#00F0FF] hover:bg-[#1C202B]'
+                              ? 'text-[#38BDF8] bg-[#38BDF8]/20 shadow-[0_0_6px_rgba(56, 189, 248,0.4)]'
+                              : 'text-[#64748B] hover:text-[#38BDF8] hover:bg-[#1C202B]'
                           }`}
                         >
                           <Diamond size={10} fill={hasPropertyKeyframe('position_y') ? 'currentColor' : 'none'} />
@@ -1648,7 +1648,7 @@ export const Inspector: React.FC = () => {
                       <button
                         onClick={() => updateClipTransform(selectedClip.id, { positionY: 0 })}
                         title="Reset Position Y to 0"
-                        className="font-mono text-[#F0F3F8] hover:text-[#00F0FF] text-[10px] cursor-pointer"
+                        className="font-mono text-[#F0F3F8] hover:text-[#38BDF8] text-[10px] cursor-pointer"
                       >
                         {Math.round(currentTransform.positionY)} px
                       </button>
@@ -1660,7 +1660,7 @@ export const Inspector: React.FC = () => {
                       step={2}
                       value={currentTransform.positionY}
                       onChange={(e) => updateClipTransform(selectedClip.id, { positionY: Number(e.target.value) })}
-                      className="w-full h-1 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#00F0FF]"
+                      className="w-full h-1 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#38BDF8]"
                     />
                   </div>
 
@@ -1677,8 +1677,8 @@ export const Inspector: React.FC = () => {
                           }
                           className={`p-1 rounded transition-all cursor-pointer ${
                             hasPropertyKeyframe('rotation')
-                              ? 'text-[#00F0FF] bg-[#00F0FF]/20 shadow-[0_0_6px_rgba(0,240,255,0.4)]'
-                              : 'text-[#64748B] hover:text-[#00F0FF] hover:bg-[#1C202B]'
+                              ? 'text-[#38BDF8] bg-[#38BDF8]/20 shadow-[0_0_6px_rgba(56, 189, 248,0.4)]'
+                              : 'text-[#64748B] hover:text-[#38BDF8] hover:bg-[#1C202B]'
                           }`}
                         >
                           <Diamond size={10} fill={hasPropertyKeyframe('rotation') ? 'currentColor' : 'none'} />
@@ -1691,7 +1691,7 @@ export const Inspector: React.FC = () => {
                       <button
                         onClick={() => updateClipTransform(selectedClip.id, { rotation: 0 })}
                         title="Reset Rotation to 0°"
-                        className="font-mono text-[#F0F3F8] hover:text-[#00F0FF] text-[10px] cursor-pointer"
+                        className="font-mono text-[#F0F3F8] hover:text-[#38BDF8] text-[10px] cursor-pointer"
                       >
                         {Math.round(currentTransform.rotation)}°
                       </button>
@@ -1703,7 +1703,7 @@ export const Inspector: React.FC = () => {
                       step={1}
                       value={currentTransform.rotation}
                       onChange={(e) => updateClipTransform(selectedClip.id, { rotation: Number(e.target.value) })}
-                      className="w-full h-1 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#00F0FF]"
+                      className="w-full h-1 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#38BDF8]"
                     />
                   </div>
 
@@ -1720,8 +1720,8 @@ export const Inspector: React.FC = () => {
                           }
                           className={`p-1 rounded transition-all cursor-pointer ${
                             hasPropertyKeyframe('opacity')
-                              ? 'text-[#00F0FF] bg-[#00F0FF]/20 shadow-[0_0_6px_rgba(0,240,255,0.4)]'
-                              : 'text-[#64748B] hover:text-[#00F0FF] hover:bg-[#1C202B]'
+                              ? 'text-[#38BDF8] bg-[#38BDF8]/20 shadow-[0_0_6px_rgba(56, 189, 248,0.4)]'
+                              : 'text-[#64748B] hover:text-[#38BDF8] hover:bg-[#1C202B]'
                           }`}
                         >
                           <Diamond size={10} fill={hasPropertyKeyframe('opacity') ? 'currentColor' : 'none'} />
@@ -1734,7 +1734,7 @@ export const Inspector: React.FC = () => {
                       <button
                         onClick={() => updateClipTransform(selectedClip.id, { opacity: 1.0 })}
                         title="Reset Opacity to 100%"
-                        className="font-mono text-[#F0F3F8] hover:text-[#00F0FF] text-[10px] cursor-pointer"
+                        className="font-mono text-[#F0F3F8] hover:text-[#38BDF8] text-[10px] cursor-pointer"
                       >
                         {Math.round(currentTransform.opacity * 100)}%
                       </button>
@@ -1746,7 +1746,7 @@ export const Inspector: React.FC = () => {
                       step={0.01}
                       value={currentTransform.opacity}
                       onChange={(e) => updateClipTransform(selectedClip.id, { opacity: Number(e.target.value) })}
-                      className="w-full h-1 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#00F0FF]"
+                      className="w-full h-1 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#38BDF8]"
                     />
                   </div>
                 </div>
@@ -1839,10 +1839,10 @@ export const Inspector: React.FC = () => {
               className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#14161F]/60 transition-colors select-none"
             >
               <span className="text-xs font-bold text-[#F0F3F8] flex items-center gap-1.5">
-                <Shield size={13} className="text-[#00F0FF]" />
+                <Shield size={13} className="text-[#38BDF8]" />
                 <span>Video Stabilization</span>
                 {currentStabEnabled && (
-                  <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-[#00F0FF]/15 text-[#00F0FF] border border-[#00F0FF]/30 ml-1">
+                  <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-[#38BDF8]/15 text-[#38BDF8] border border-[#38BDF8]/30 ml-1">
                     {isStabilized ? 'STABILIZED' : isClipAnalyzing ? 'ANALYZING' : 'ENABLED'}
                   </span>
                 )}
@@ -1854,7 +1854,7 @@ export const Inspector: React.FC = () => {
                     handleResetStabilization();
                   }}
                   title="Reset video stabilization"
-                  className="px-2 py-0.5 rounded bg-[#181B24] hover:bg-[#202532] text-[#8A92A6] hover:text-[#00F0FF] text-[10px] font-mono flex items-center gap-1 transition-colors cursor-pointer border border-[#222630]"
+                  className="px-2 py-0.5 rounded bg-[#181B24] hover:bg-[#202532] text-[#8A92A6] hover:text-[#38BDF8] text-[10px] font-mono flex items-center gap-1 transition-colors cursor-pointer border border-[#222630]"
                 >
                   <RotateCcw size={10} />
                   <span>Reset</span>
@@ -1870,8 +1870,8 @@ export const Inspector: React.FC = () => {
                       {/* Telemetry Sensor Header Pill Badge */}
                       <div className="pt-2">
                         {hasGyroData ? (
-                          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-[#00F0FF]/10 border border-[#00F0FF]/30 text-[#00F0FF] text-[11px] font-mono">
-                            <Compass size={13} className="text-[#00F0FF] shrink-0 animate-pulse" />
+                          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-[#38BDF8]/10 border border-[#38BDF8]/30 text-[#38BDF8] text-[11px] font-mono">
+                            <Compass size={13} className="text-[#38BDF8] shrink-0 animate-pulse" />
                             <span className="font-semibold">[ 🧭 Action Cam Gyro Detected ]</span>
                             <span className="text-[10px] text-[#8A92A6] ml-auto">GPMF/CAMM IMU</span>
                           </div>
@@ -1893,13 +1893,13 @@ export const Inspector: React.FC = () => {
                             onChange={(e) =>
                               updateClipStabilization(selectedClip.id, { enabled: e.target.checked })
                             }
-                            className="rounded border-[#222630] accent-[#00F0FF]"
+                            className="rounded border-[#222630] accent-[#38BDF8]"
                           />
                           <span className="font-medium">Enable Stabilization</span>
                         </label>
                         <span
                           className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
-                            currentStabEnabled ? 'bg-[#00F0FF]/15 text-[#00F0FF]' : 'bg-[#181B24] text-[#64748B]'
+                            currentStabEnabled ? 'bg-[#38BDF8]/15 text-[#38BDF8]' : 'bg-[#181B24] text-[#64748B]'
                           }`}
                         >
                           {currentStabEnabled ? 'Active' : 'Off'}
@@ -1910,7 +1910,7 @@ export const Inspector: React.FC = () => {
                       <div className="space-y-1.5 pt-1">
                         <div className="flex items-center justify-between text-[11px]">
                           <span className="text-[#8A92A6]">Pipeline Mode</span>
-                          <span className="font-mono text-[#00F0FF] text-[10px]">
+                          <span className="font-mono text-[#38BDF8] text-[10px]">
                             {currentStabMode === 'realtime' ? '⚡ Real-Time (Instant)' : '🎬 Two-Pass (High Accuracy)'}
                           </span>
                         </div>
@@ -1928,11 +1928,11 @@ export const Inspector: React.FC = () => {
                             }}
                             className={`px-2.5 py-1.5 rounded text-[10px] font-mono transition-all border cursor-pointer flex items-center justify-center gap-1.5 ${
                               currentStabMode === 'realtime'
-                                ? 'bg-[#00F0FF]/20 text-[#00F0FF] border-[#00F0FF]/60 font-bold shadow-[0_0_8px_rgba(0,240,255,0.25)]'
+                                ? 'bg-[#38BDF8]/20 text-[#38BDF8] border-[#38BDF8]/60 font-bold shadow-[0_0_8px_rgba(56, 189, 248,0.25)]'
                                 : 'bg-[#14161F] hover:bg-[#1C202B] text-[#8A92A6] hover:text-[#F0F3F8] border-[#222630]'
                             } disabled:opacity-40 disabled:pointer-events-none`}
                           >
-                            <Zap size={12} className={currentStabMode === 'realtime' ? 'text-[#00F0FF]' : ''} />
+                            <Zap size={12} className={currentStabMode === 'realtime' ? 'text-[#38BDF8]' : ''} />
                             <span>Real-Time (Instant)</span>
                           </button>
                           <button
@@ -1941,11 +1941,11 @@ export const Inspector: React.FC = () => {
                             onClick={() => updateClipStabilization(selectedClip.id, { mode: 'two_pass' })}
                             className={`px-2.5 py-1.5 rounded text-[10px] font-mono transition-all border cursor-pointer flex items-center justify-center gap-1.5 ${
                               currentStabMode === 'two_pass'
-                                ? 'bg-[#00F0FF]/20 text-[#00F0FF] border-[#00F0FF]/60 font-bold shadow-[0_0_8px_rgba(0,240,255,0.25)]'
+                                ? 'bg-[#38BDF8]/20 text-[#38BDF8] border-[#38BDF8]/60 font-bold shadow-[0_0_8px_rgba(56, 189, 248,0.25)]'
                                 : 'bg-[#14161F] hover:bg-[#1C202B] text-[#8A92A6] hover:text-[#F0F3F8] border-[#222630]'
                             } disabled:opacity-40 disabled:pointer-events-none`}
                           >
-                            <Film size={12} className={currentStabMode === 'two_pass' ? 'text-[#00F0FF]' : ''} />
+                            <Film size={12} className={currentStabMode === 'two_pass' ? 'text-[#38BDF8]' : ''} />
                             <span>Two-Pass (Render)</span>
                           </button>
                         </div>
@@ -1955,7 +1955,7 @@ export const Inspector: React.FC = () => {
                       <div className="space-y-1.5 pt-1">
                         <div className="flex items-center justify-between text-[11px]">
                           <span className="text-[#8A92A6]">Tracking & Solver Engine</span>
-                          <span className="font-mono text-[#00F0FF] text-[10px]">
+                          <span className="font-mono text-[#38BDF8] text-[10px]">
                             {currentDetectionMode === 'forceGyro'
                               ? '🧭 Gyroflow IMU'
                               : currentDetectionMode === 'visualFeatureTracking'
@@ -1970,7 +1970,7 @@ export const Inspector: React.FC = () => {
                             onClick={() => updateClipStabilization(selectedClip.id, { detectionMode: 'auto' })}
                             className={`px-2 py-1.5 rounded text-[10px] font-mono transition-colors border cursor-pointer ${
                               currentDetectionMode === 'auto'
-                                ? 'bg-[#00F0FF]/20 text-[#00F0FF] border-[#00F0FF]/50 font-bold shadow-xs'
+                                ? 'bg-[#38BDF8]/20 text-[#38BDF8] border-[#38BDF8]/50 font-bold shadow-xs'
                                 : 'bg-[#14161F] hover:bg-[#1C202B] text-[#8A92A6] hover:text-[#F0F3F8] border-[#222630]'
                             } disabled:opacity-40 disabled:pointer-events-none`}
                           >
@@ -1982,7 +1982,7 @@ export const Inspector: React.FC = () => {
                             onClick={() => updateClipStabilization(selectedClip.id, { detectionMode: 'visualFeatureTracking' })}
                             className={`px-2 py-1.5 rounded text-[10px] font-mono transition-colors border cursor-pointer ${
                               currentDetectionMode === 'visualFeatureTracking'
-                                ? 'bg-[#00F0FF]/20 text-[#00F0FF] border-[#00F0FF]/50 font-bold shadow-xs'
+                                ? 'bg-[#38BDF8]/20 text-[#38BDF8] border-[#38BDF8]/50 font-bold shadow-xs'
                                 : 'bg-[#14161F] hover:bg-[#1C202B] text-[#8A92A6] hover:text-[#F0F3F8] border-[#222630]'
                             } disabled:opacity-40 disabled:pointer-events-none`}
                           >
@@ -1995,7 +1995,7 @@ export const Inspector: React.FC = () => {
                             onClick={() => updateClipStabilization(selectedClip.id, { detectionMode: 'forceGyro' })}
                             className={`px-2 py-1.5 rounded text-[10px] font-mono transition-colors border cursor-pointer ${
                               currentDetectionMode === 'forceGyro'
-                                ? 'bg-[#00F0FF]/20 text-[#00F0FF] border-[#00F0FF]/50 font-bold shadow-xs'
+                                ? 'bg-[#38BDF8]/20 text-[#38BDF8] border-[#38BDF8]/50 font-bold shadow-xs'
                                 : !hasGyroData
                                 ? 'bg-[#101217] text-[#475569] border-[#1C202B] cursor-not-allowed opacity-50'
                                 : 'bg-[#14161F] hover:bg-[#1C202B] text-[#8A92A6] hover:text-[#F0F3F8] border-[#222630]'
@@ -2009,10 +2009,10 @@ export const Inspector: React.FC = () => {
                       {/* Status Badges & Motion Analysis Action */}
                       <div className="space-y-2">
                         {isClipAnalyzing ? (
-                          <div className="p-2.5 rounded-md bg-[#00F0FF]/10 border border-[#00F0FF]/40 space-y-2">
-                            <div className="flex items-center justify-between text-xs font-semibold text-[#00F0FF]">
+                          <div className="p-2.5 rounded-md bg-[#38BDF8]/10 border border-[#38BDF8]/40 space-y-2">
+                            <div className="flex items-center justify-between text-xs font-semibold text-[#38BDF8]">
                               <span className="flex items-center gap-1.5">
-                                <Loader2 size={13} className="animate-spin text-[#00F0FF]" />
+                                <Loader2 size={13} className="animate-spin text-[#38BDF8]" />
                                 <span>
                                   {stabStatus.type === 'probing'
                                     ? '[ Probing IMU Sensors... ]'
@@ -2025,17 +2025,17 @@ export const Inspector: React.FC = () => {
                                   : 'KLT Homography'}
                               </span>
                             </div>
-                            <div className="w-full h-1.5 bg-[#14161F] rounded-full overflow-hidden border border-[#00F0FF]/30">
+                            <div className="w-full h-1.5 bg-[#14161F] rounded-full overflow-hidden border border-[#38BDF8]/30">
                               <div
-                                className="h-full bg-linear-to-r from-[#00F0FF] to-[#38BDF8] transition-all duration-200"
+                                className="h-full bg-linear-to-r from-[#38BDF8] to-[#38BDF8] transition-all duration-200"
                                 style={{ width: `${Math.max(5, analysisProgress)}%` }}
                               />
                             </div>
                           </div>
                         ) : isStabilizationRendering?.[selectedClip.id] ? (
-                          <div className="p-2.5 rounded-md bg-[#00F0FF]/10 border border-[#00F0FF]/40 flex items-center justify-between">
-                            <div className="flex items-center gap-1.5 text-xs font-semibold text-[#00F0FF]">
-                              <Loader2 size={13} className="animate-spin text-[#00F0FF]" />
+                          <div className="p-2.5 rounded-md bg-[#38BDF8]/10 border border-[#38BDF8]/40 flex items-center justify-between">
+                            <div className="flex items-center gap-1.5 text-xs font-semibold text-[#38BDF8]">
+                              <Loader2 size={13} className="animate-spin text-[#38BDF8]" />
                               <span>[ Rendering Stabilized Video... ]</span>
                             </div>
                             <button
@@ -2063,7 +2063,7 @@ export const Inspector: React.FC = () => {
                               onClick={() => analyzeClipStabilization(selectedClip.id)}
                               disabled={!currentStabEnabled}
                               title="Re-run Motion Tracking"
-                              className="px-2 py-1 rounded bg-[#181B24] hover:bg-[#202532] text-[10px] font-mono text-[#8A92A6] hover:text-[#00F0FF] border border-[#222630] transition-colors cursor-pointer flex items-center gap-1 disabled:opacity-40"
+                              className="px-2 py-1 rounded bg-[#181B24] hover:bg-[#202532] text-[10px] font-mono text-[#8A92A6] hover:text-[#38BDF8] border border-[#222630] transition-colors cursor-pointer flex items-center gap-1 disabled:opacity-40"
                             >
                               <RotateCcw size={10} />
                               <span>Re-Analyze</span>
@@ -2080,7 +2080,7 @@ export const Inspector: React.FC = () => {
                             <button
                               onClick={() => analyzeClipStabilization(selectedClip.id)}
                               disabled={!currentStabEnabled}
-                              className="w-full py-2 px-3 rounded-md bg-[#00F0FF] hover:bg-[#38BDF8] disabled:bg-[#1A1E27] disabled:text-[#64748B] text-[#0D0E11] text-xs font-bold transition-all shadow-[0_0_12px_rgba(0,240,255,0.25)] hover:shadow-[0_0_16px_rgba(0,240,255,0.45)] cursor-pointer flex items-center justify-center gap-2 select-none"
+                              className="w-full py-2 px-3 rounded-md bg-[#38BDF8] hover:bg-[#38BDF8] disabled:bg-[#1A1E27] disabled:text-[#64748B] text-[#0D0E11] text-xs font-bold transition-all shadow-[0_0_12px_rgba(56, 189, 248,0.25)] hover:shadow-[0_0_16px_rgba(56, 189, 248,0.45)] cursor-pointer flex items-center justify-center gap-2 select-none"
                             >
                               <Sparkles size={14} />
                               <span>Stabilize Clip</span>
@@ -2095,7 +2095,7 @@ export const Inspector: React.FC = () => {
                         <div className="space-y-1.5">
                           <div className="flex items-center justify-between text-[11px]">
                             <span className="text-[#8A92A6]">Smoothness Strength</span>
-                            <span className="font-mono text-[#00F0FF] text-[10px]">{currentSmoothness}%</span>
+                            <span className="font-mono text-[#38BDF8] text-[10px]">{currentSmoothness}%</span>
                           </div>
                           <input
                             type="range"
@@ -2110,7 +2110,7 @@ export const Inspector: React.FC = () => {
                                 smoothing: Math.round(Number(e.target.value) * 0.9),
                               })
                             }
-                            className="w-full h-1 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#00F0FF] disabled:opacity-40"
+                            className="w-full h-1 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#38BDF8] disabled:opacity-40"
                           />
                           <div className="flex justify-between text-[9px] text-[#475569] font-mono">
                             <span>Subtle (10%)</span>
@@ -2133,7 +2133,7 @@ export const Inspector: React.FC = () => {
                                 cropMode: e.target.value === 'keepEdgesWithBlurFill' ? 'keep_aspect' : 'auto',
                               })
                             }
-                            className="w-full bg-[#14161F] text-[#F0F3F8] border border-[#222630] rounded-md px-2 py-1.5 text-xs font-mono focus:border-[#00F0FF] outline-hidden disabled:opacity-40 cursor-pointer"
+                            className="w-full bg-[#14161F] text-[#F0F3F8] border border-[#222630] rounded-md px-2 py-1.5 text-xs font-mono focus:border-[#38BDF8] outline-hidden disabled:opacity-40 cursor-pointer"
                           >
                             <option value="dynamicAdaptiveZoom">Dynamic Auto-Zoom (Conceal Edges)</option>
                             <option value="fixedZoom">Fixed Zoom 110% (Zero Breathing)</option>
@@ -2159,7 +2159,7 @@ export const Inspector: React.FC = () => {
                                 maxCropLimit: Number(e.target.value) / 100,
                               })
                             }
-                            className="w-full h-1 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#00F0FF] disabled:opacity-40"
+                            className="w-full h-1 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#38BDF8] disabled:opacity-40"
                           />
                           <div className="flex justify-between text-[9px] text-[#475569] font-mono whitespace-nowrap">
                             <span>100% (No crop)</span>
@@ -2172,7 +2172,7 @@ export const Inspector: React.FC = () => {
                         <div className="flex items-center justify-between text-[11px] pt-1">
                           <div className="space-y-0.5">
                             <span className="text-[#F0F3F8] font-medium flex items-center gap-1.5">
-                              <Compass size={12} className={hasGyroData ? 'text-[#00F0FF]' : 'text-[#64748B]'} />
+                              <Compass size={12} className={hasGyroData ? 'text-[#38BDF8]' : 'text-[#64748B]'} />
                               <span>Horizon Lock</span>
                             </span>
                             <p className="text-[9.5px] text-[#64748B]">
@@ -2191,7 +2191,7 @@ export const Inspector: React.FC = () => {
                               }
                               className="sr-only peer"
                             />
-                            <div className="w-8 h-4 bg-[#14161F] peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-[#00F0FF] disabled:opacity-40"></div>
+                            <div className="w-8 h-4 bg-[#14161F] peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-[#38BDF8] disabled:opacity-40"></div>
                           </label>
                         </div>
 
@@ -2199,7 +2199,7 @@ export const Inspector: React.FC = () => {
                         <div className="space-y-1.5 pt-1">
                           <div className="flex items-center justify-between text-[11px]">
                             <span className="text-[#8A92A6]">Rolling Shutter Compensation</span>
-                            <span className="font-mono text-[#00F0FF] text-[10px]">{currentRollingShutter} ms</span>
+                            <span className="font-mono text-[#38BDF8] text-[10px]">{currentRollingShutter} ms</span>
                           </div>
                           <input
                             type="range"
@@ -2213,7 +2213,7 @@ export const Inspector: React.FC = () => {
                                 rollingShutterCompensationMs: Number(e.target.value),
                               })
                             }
-                            className="w-full h-1 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#00F0FF] disabled:opacity-40"
+                            className="w-full h-1 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#38BDF8] disabled:opacity-40"
                           />
                           <div className="flex justify-between text-[9px] text-[#475569] font-mono">
                             <span>0 ms (Off)</span>
@@ -2226,11 +2226,11 @@ export const Inspector: React.FC = () => {
                         <div className="pt-2 border-t border-[#1C202B] space-y-2.5">
                           <div className="flex items-center justify-between text-[11px]">
                             <span className="font-semibold text-[#F0F3F8] flex items-center gap-1.5">
-                              <Shield size={12} className="text-[#00F0FF]" />
+                              <Shield size={12} className="text-[#38BDF8]" />
                               <span>Stabilization Diagnostics</span>
                             </span>
                             {clipDiagnostics && (
-                              <span className="text-[9.5px] font-mono text-[#00F0FF] bg-[#00F0FF]/10 px-1.5 py-0.5 rounded border border-[#00F0FF]/30">
+                              <span className="text-[9.5px] font-mono text-[#38BDF8] bg-[#38BDF8]/10 px-1.5 py-0.5 rounded border border-[#38BDF8]/30">
                                 {clipDiagnostics.transformsExist ? 'Verified' : 'Unchecked'}
                               </span>
                             )}
@@ -2241,7 +2241,7 @@ export const Inspector: React.FC = () => {
                             <div className="p-2.5 rounded-md bg-[#14161F] border border-[#222630] space-y-1.5 text-[10.5px] font-mono">
                               <div className="flex items-center justify-between">
                                 <span className="text-[#8A92A6]">Avg Correction Shift:</span>
-                                <span className="text-[#00F0FF] font-bold">±{clipDiagnostics.meanDisplacementPixels} px</span>
+                                <span className="text-[#38BDF8] font-bold">±{clipDiagnostics.meanDisplacementPixels} px</span>
                               </div>
                               <div className="flex items-center justify-between">
                                 <span className="text-[#8A92A6]">Max Rotation Corrected:</span>
@@ -2276,8 +2276,8 @@ export const Inspector: React.FC = () => {
                             }}
                             className={`w-full py-1.5 px-2.5 rounded text-[10px] font-mono transition-all border cursor-pointer flex items-center justify-center gap-1.5 ${
                               currentDebugViewMode === 'showBordersNoCrop'
-                                ? 'bg-[#00F0FF] text-[#0D0E11] font-bold border-[#00F0FF] shadow-[0_0_10px_rgba(0,240,255,0.4)]'
-                                : 'bg-[#181B24] hover:bg-[#202532] text-[#8A92A6] hover:text-[#00F0FF] border-[#222630]'
+                                ? 'bg-[#38BDF8] text-[#0D0E11] font-bold border-[#38BDF8] shadow-[0_0_10px_rgba(56, 189, 248,0.4)]'
+                                : 'bg-[#181B24] hover:bg-[#202532] text-[#8A92A6] hover:text-[#38BDF8] border-[#222630]'
                             } disabled:opacity-40 disabled:pointer-events-none`}
                             title="Toggle uncropped 1.0x edge view to see camera shake compensation within black border margins"
                           >
@@ -2289,7 +2289,7 @@ export const Inspector: React.FC = () => {
                           <div className="space-y-1.5">
                             <div className="flex items-center justify-between text-[11px]">
                               <span className="text-[#8A92A6]">Diagnostic View Mode</span>
-                              <span className="font-mono text-[9.5px] text-[#00F0FF]">
+                              <span className="font-mono text-[9.5px] text-[#38BDF8]">
                                 {currentDebugViewMode === 'normal' && 'Normal (Compensated)'}
                                 {currentDebugViewMode === 'splitWipe' && 'Split Wipe (Before vs After)'}
                                 {currentDebugViewMode === 'showBordersNoCrop' && 'Show Borders (No Crop)'}
@@ -2307,7 +2307,7 @@ export const Inspector: React.FC = () => {
                                 });
                                 setSplitStabilizationComparison(mode === 'splitWipe');
                               }}
-                              className="w-full bg-[#14161F] text-[#F0F3F8] border border-[#222630] rounded-md px-2 py-1.5 text-xs font-mono focus:border-[#00F0FF] outline-hidden disabled:opacity-40 cursor-pointer"
+                              className="w-full bg-[#14161F] text-[#F0F3F8] border border-[#222630] rounded-md px-2 py-1.5 text-xs font-mono focus:border-[#38BDF8] outline-hidden disabled:opacity-40 cursor-pointer"
                             >
                               <option value="normal">Normal (Fully Compensated)</option>
                               <option value="splitWipe">Split Wipe (Interactive Divider)</option>
@@ -2322,7 +2322,7 @@ export const Inspector: React.FC = () => {
                             <div className="space-y-1.5 p-2 rounded bg-[#14161F] border border-[#222630]">
                               <div className="flex items-center justify-between text-[10.5px]">
                                 <span className="text-[#8A92A6]">Split Wipe Position</span>
-                                <span className="font-mono text-[#00F0FF] text-[10px]">{currentSplitWipePos}%</span>
+                                <span className="font-mono text-[#38BDF8] text-[10px]">{currentSplitWipePos}%</span>
                               </div>
                               <input
                                 type="range"
@@ -2335,11 +2335,11 @@ export const Inspector: React.FC = () => {
                                     splitWipePosition: Number(e.target.value) / 100,
                                   })
                                 }
-                                className="w-full h-1 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#00F0FF]"
+                                className="w-full h-1 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#38BDF8]"
                               />
                               <div className="flex justify-between text-[9px] font-mono">
                                 <span className="text-amber-400">RAW [Left]</span>
-                                <span className="text-[#00F0FF]">STABILIZED [Right]</span>
+                                <span className="text-[#38BDF8]">STABILIZED [Right]</span>
                               </div>
                             </div>
                           )}
@@ -2358,11 +2358,11 @@ export const Inspector: React.FC = () => {
                               }
                             }}
                             disabled={!currentStabEnabled || !isStabilized || isGeneratingPreview}
-                            className="w-full py-1.5 px-3 rounded bg-[#181B24] hover:bg-[#202532] border border-[#222630] hover:border-[#00F0FF]/50 text-xs font-mono text-[#8A92A6] hover:text-[#00F0FF] transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-30 disabled:pointer-events-none"
+                            className="w-full py-1.5 px-3 rounded bg-[#181B24] hover:bg-[#202532] border border-[#222630] hover:border-[#38BDF8]/50 text-xs font-mono text-[#8A92A6] hover:text-[#38BDF8] transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-30 disabled:pointer-events-none"
                           >
                             {isGeneratingPreview ? (
                               <>
-                                <Loader2 size={12} className="animate-spin text-[#00F0FF]" />
+                                <Loader2 size={12} className="animate-spin text-[#38BDF8]" />
                                 <span>Rendering Preview Stream...</span>
                               </>
                             ) : (
@@ -2377,9 +2377,9 @@ export const Inspector: React.FC = () => {
                         {/* Why Dual-Engine Stabilization Info Card */}
                         <div className="pt-2 border-t border-[#1C202B]">
                           <details className="group text-[11px] text-[#8A92A6]">
-                            <summary className="cursor-pointer flex items-center justify-between text-[#8A92A6] hover:text-[#00F0FF] transition-colors select-none py-1">
+                            <summary className="cursor-pointer flex items-center justify-between text-[#8A92A6] hover:text-[#38BDF8] transition-colors select-none py-1">
                               <span className="flex items-center gap-1.5 font-medium">
-                                <HelpCircle size={12} className="text-[#00F0FF]" />
+                                <HelpCircle size={12} className="text-[#38BDF8]" />
                                 <span>How Dual-Engine Stabilization works</span>
                               </span>
                               <ChevronDown size={12} className="group-open:rotate-180 transition-transform" />
@@ -2391,7 +2391,7 @@ export const Inspector: React.FC = () => {
                               <p>
                                 <strong className="text-[#F0F3F8]">👁️ Optical Flow RANSAC:</strong> For DSLR, mirrorless, and phone footage, multi-pass KLT corner tracking calculates 8-DOF planar homographies, filtering foreground moving objects to isolate true camera trajectory.
                               </p>
-                              <p className="text-[#00F0FF] font-medium">
+                              <p className="text-[#38BDF8] font-medium">
                                 💡 Transform matrices are cached permanently (.mat). Sliders update smoothing, framing, and borders instantly without re-analyzing!
                               </p>
                             </div>
@@ -2409,9 +2409,9 @@ export const Inspector: React.FC = () => {
                     className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#14161F]/60 transition-colors select-none"
                   >
                     <span className="text-xs font-bold text-[#F0F3F8] flex items-center gap-1.5">
-                      <Gauge size={13} className="text-[#00F0FF]" />
+                      <Gauge size={13} className="text-[#38BDF8]" />
                       <span>Speed Ramping</span>
-                      <span className="px-1.5 py-0.2 rounded bg-[#00F0FF]/15 text-[#00F0FF] border border-[#00F0FF]/30 font-mono text-[10px] font-bold ml-1">
+                      <span className="px-1.5 py-0.2 rounded bg-[#38BDF8]/15 text-[#38BDF8] border border-[#38BDF8]/30 font-mono text-[10px] font-bold ml-1">
                         {currentSpeed.toFixed(2)}x
                       </span>
                     </span>
@@ -2437,7 +2437,7 @@ export const Inspector: React.FC = () => {
                           step={0.05}
                           value={currentSpeed}
                           onChange={(e) => updateClipSpeed(selectedClip.id, Number(e.target.value), currentPitchCorrection)}
-                          className="w-full h-1.5 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#00F0FF]"
+                          className="w-full h-1.5 bg-[#1A1E27] rounded-lg appearance-none cursor-pointer accent-[#38BDF8]"
                         />
                         <div className="flex justify-between text-[9px] font-mono text-[#525D73]">
                           <span>0.1x</span>
@@ -2457,7 +2457,7 @@ export const Inspector: React.FC = () => {
                               onClick={() => updateClipSpeed(selectedClip.id, rate, currentPitchCorrection)}
                               className={`py-1 rounded text-[11px] font-mono font-medium transition-colors cursor-pointer border ${
                                 Math.abs(currentSpeed - rate) < 0.01
-                                  ? 'bg-[#00F0FF] text-[#0D0E11] border-[#00F0FF] font-bold shadow-[0_0_8px_rgba(0,240,255,0.4)]'
+                                  ? 'bg-[#38BDF8] text-[#0D0E11] border-[#38BDF8] font-bold shadow-[0_0_8px_rgba(56, 189, 248,0.4)]'
                                   : 'bg-[#14161B] text-[#8A92A6] border-[#222630] hover:text-[#F0F3F8]'
                               }`}
                             >
@@ -2474,7 +2474,7 @@ export const Inspector: React.FC = () => {
                             type="checkbox"
                             checked={currentPitchCorrection}
                             onChange={(e) => updateClipSpeed(selectedClip.id, currentSpeed, e.target.checked)}
-                            className="rounded border-[#222630] accent-[#00F0FF]"
+                            className="rounded border-[#222630] accent-[#38BDF8]"
                           />
                           <span>Maintain Audio Pitch (atempo)</span>
                         </label>
@@ -2582,7 +2582,7 @@ export const Inspector: React.FC = () => {
                       <div className="space-y-1.5 pt-1">
                         <div className="flex items-center justify-between text-[11px]">
                           <span className="text-[#8A92A6]">Stereo Pan</span>
-                          <span className="font-mono text-xs font-bold text-[#00F0FF]">
+                          <span className="font-mono text-xs font-bold text-[#38BDF8]">
                             {pan === 0 ? 'Center' : pan < 0 ? `${Math.round(Math.abs(pan) * 100)}% L` : `${Math.round(pan * 100)}% R`}
                           </span>
                         </div>
@@ -2594,14 +2594,14 @@ export const Inspector: React.FC = () => {
                           step={0.05}
                           value={pan}
                           onChange={(e) => handlePanChange(Number(e.target.value))}
-                          className="w-full h-1.5 bg-[#222630] rounded appearance-none cursor-pointer accent-[#00F0FF]"
+                          className="w-full h-1.5 bg-[#222630] rounded appearance-none cursor-pointer accent-[#38BDF8]"
                         />
 
                         <div className="flex items-center justify-between text-[9px] font-mono text-[#525D73] px-0.5">
                           <span>Left</span>
                           <button
                             onClick={() => handlePanChange(0)}
-                            className="hover:text-[#00F0FF] transition-colors cursor-pointer"
+                            className="hover:text-[#38BDF8] transition-colors cursor-pointer"
                             title="Center Pan"
                           >
                             Center
@@ -2676,7 +2676,7 @@ export const Inspector: React.FC = () => {
                     className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#14161F]/60 transition-colors select-none"
                   >
                     <span className="text-xs font-bold text-[#F0F3F8] flex items-center gap-1.5">
-                      <SlidersHorizontal size={13} className="text-[#00F0FF]" />
+                      <SlidersHorizontal size={13} className="text-[#38BDF8]" />
                       <span>3-Band Parametric EQ</span>
                     </span>
                     <div className="flex items-center gap-2">
@@ -2686,7 +2686,7 @@ export const Inspector: React.FC = () => {
                           handleApplyEqPreset(0, 0, 0);
                         }}
                         title="Reset EQ to Flat (0dB)"
-                        className="text-[#64748B] hover:text-[#00F0FF] transition-colors cursor-pointer"
+                        className="text-[#64748B] hover:text-[#38BDF8] transition-colors cursor-pointer"
                       >
                         <RotateCcw size={12} />
                       </button>
@@ -2704,7 +2704,7 @@ export const Inspector: React.FC = () => {
                           onClick={() => handleApplyEqPreset(0, 0, 0)}
                           className={`px-1.5 py-1 rounded text-[10px] font-semibold border transition-all cursor-pointer ${
                             bassGain === 0 && midGain === 0 && trebleGain === 0
-                              ? 'bg-[#00F0FF]/15 border-[#00F0FF]/40 text-[#00F0FF]'
+                              ? 'bg-[#38BDF8]/15 border-[#38BDF8]/40 text-[#38BDF8]'
                               : 'bg-[#181B22] border-[#222630] text-[#8A92A6] hover:text-white'
                           }`}
                         >
@@ -2712,21 +2712,21 @@ export const Inspector: React.FC = () => {
                         </button>
                         <button
                           onClick={() => handleApplyEqPreset(-2.0, 2.5, 3.5)}
-                          className="px-1.5 py-1 rounded text-[10px] font-semibold bg-[#181B22] hover:bg-[#222630] border border-[#222630] text-[#8A92A6] hover:text-[#00F0FF] transition-all cursor-pointer truncate"
+                          className="px-1.5 py-1 rounded text-[10px] font-semibold bg-[#181B22] hover:bg-[#222630] border border-[#222630] text-[#8A92A6] hover:text-[#38BDF8] transition-all cursor-pointer truncate"
                           title="Vocal Clarity (+2.5dB Mid, +3.5dB Treble, -2dB Bass)"
                         >
                           Vocal
                         </button>
                         <button
                           onClick={() => handleApplyEqPreset(4.5, 0, -1.0)}
-                          className="px-1.5 py-1 rounded text-[10px] font-semibold bg-[#181B22] hover:bg-[#222630] border border-[#222630] text-[#8A92A6] hover:text-[#00F0FF] transition-all cursor-pointer truncate"
+                          className="px-1.5 py-1 rounded text-[10px] font-semibold bg-[#181B22] hover:bg-[#222630] border border-[#222630] text-[#8A92A6] hover:text-[#38BDF8] transition-all cursor-pointer truncate"
                           title="Bass Punch (+4.5dB Low, -1dB Treble)"
                         >
                           Bass+
                         </button>
                         <button
                           onClick={() => handleApplyEqPreset(2.0, 3.0, -3.0)}
-                          className="px-1.5 py-1 rounded text-[10px] font-semibold bg-[#181B22] hover:bg-[#222630] border border-[#222630] text-[#8A92A6] hover:text-[#00F0FF] transition-all cursor-pointer truncate"
+                          className="px-1.5 py-1 rounded text-[10px] font-semibold bg-[#181B22] hover:bg-[#222630] border border-[#222630] text-[#8A92A6] hover:text-[#38BDF8] transition-all cursor-pointer truncate"
                           title="Warm Radio (+2dB Bass, +3dB Mid, -3dB Treble)"
                         >
                           Radio
@@ -2748,7 +2748,7 @@ export const Inspector: React.FC = () => {
                           step={0.5}
                           value={bassGain}
                           onChange={(e) => handleBassChange(Number(e.target.value))}
-                          className="w-full h-1.5 bg-[#222630] rounded appearance-none cursor-pointer accent-[#00F0FF]"
+                          className="w-full h-1.5 bg-[#222630] rounded appearance-none cursor-pointer accent-[#38BDF8]"
                         />
                       </div>
 
@@ -2767,7 +2767,7 @@ export const Inspector: React.FC = () => {
                           step={0.5}
                           value={midGain}
                           onChange={(e) => handleMidChange(Number(e.target.value))}
-                          className="w-full h-1.5 bg-[#222630] rounded appearance-none cursor-pointer accent-[#00F0FF]"
+                          className="w-full h-1.5 bg-[#222630] rounded appearance-none cursor-pointer accent-[#38BDF8]"
                         />
                       </div>
 
@@ -2786,7 +2786,7 @@ export const Inspector: React.FC = () => {
                           step={0.5}
                           value={trebleGain}
                           onChange={(e) => handleTrebleChange(Number(e.target.value))}
-                          className="w-full h-1.5 bg-[#222630] rounded appearance-none cursor-pointer accent-[#00F0FF]"
+                          className="w-full h-1.5 bg-[#222630] rounded appearance-none cursor-pointer accent-[#38BDF8]"
                         />
                       </div>
                     </div>
@@ -2991,7 +2991,7 @@ export const Inspector: React.FC = () => {
                                   <div className="flex items-center gap-1.5">
                                     <button
                                       onClick={() => setPlayhead(absTime)}
-                                      className="text-[#64748B] hover:text-[#00F0FF] p-0.5 transition-colors cursor-pointer"
+                                      className="text-[#64748B] hover:text-[#38BDF8] p-0.5 transition-colors cursor-pointer"
                                       title={`Seek playhead to ${absTime.toFixed(2)}s`}
                                     >
                                       <Play size={10} />

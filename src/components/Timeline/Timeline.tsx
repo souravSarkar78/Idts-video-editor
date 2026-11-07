@@ -37,6 +37,7 @@ import {
   Compass,
   Loader2,
   Clock,
+  X,
 } from 'lucide-react';
 import { Diamond, Subtitles, Waves } from '@/components/Icons';
 import { useShallow } from 'zustand/react/shallow';
@@ -68,15 +69,15 @@ const TimelinePlayhead: React.FC<TimelinePlayheadProps> = React.memo(({ zoom, is
       }}
       className="absolute top-0 bottom-0 w-0 pointer-events-none z-40"
     >
-      {/* Playhead Marker (Cyan Drag Handle above the tracks on the ruler) */}
+      {/* Playhead Marker (Studio Sky Drag Handle above the tracks on the ruler) */}
       <div
         onMouseDown={onScrubStart}
         style={{ transform: 'translateX(-50%)' }}
-        className="w-4 h-6 bg-[#00F0FF] shadow-[0_0_12px_#00F0FF] -top-7 absolute flex flex-col items-center justify-center cursor-ew-resize pointer-events-auto z-50 hover:scale-110 active:scale-95 transition-transform rounded-xs select-none"
+        className="w-3.5 h-5 bg-[#38BDF8] shadow-xs -top-6 absolute flex flex-col items-center justify-center cursor-ew-resize pointer-events-auto z-50 hover:brightness-110 active:scale-95 transition-all rounded-xs select-none"
         title="Drag to Scrub Playhead"
       >
-        <div className="w-1 h-2.5 bg-[#0D0E11] rounded-xs" />
-        <div className="w-0 h-0 border-l-[3px] border-l-transparent border-r-[3px] border-r-transparent border-t-[4px] border-t-[#00F0FF] absolute -bottom-1" />
+        <div className="w-0.5 h-2 bg-[#0D0E11]/80 rounded-xs" />
+        <div className="w-0 h-0 border-l-[3px] border-l-transparent border-r-[3px] border-r-transparent border-t-[4px] border-t-[#38BDF8] absolute -bottom-1" />
       </div>
 
       {/* Laser Needle Line with Wide Hit Target for Easy Scrubbing */}
@@ -85,7 +86,7 @@ const TimelinePlayhead: React.FC<TimelinePlayheadProps> = React.memo(({ zoom, is
         className="w-4 -ml-2 h-full cursor-ew-resize pointer-events-auto flex justify-center group"
         title="Drag Playhead Line"
       >
-        <div className="w-[1.5px] h-full bg-[#00F0FF] shadow-[0_0_8px_#00F0FF] group-hover:w-[3px] group-hover:shadow-[0_0_12px_#00F0FF] transition-all" />
+        <div className="w-[1.5px] h-full bg-[#38BDF8] group-hover:w-[2px] transition-all" />
       </div>
     </div>
   );
@@ -1147,8 +1148,8 @@ export const Timeline: React.FC = () => {
     >
       {/* Toast Notification for Multi-Sync Action */}
       {syncToast && (
-        <div className="absolute top-12 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg bg-[#14161B]/95 backdrop-blur-md border border-[#00F0FF]/60 text-xs font-semibold text-[#F0F3F8] shadow-2xl flex items-center gap-2 animate-bounce">
-          <Zap size={14} className="text-[#00F0FF]" />
+        <div className="absolute top-12 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg bg-[#14161B]/95 backdrop-blur-md border border-[#38BDF8]/60 text-xs font-semibold text-[#F0F3F8] shadow-2xl flex items-center gap-2 animate-bounce">
+          <Zap size={14} className="text-[#38BDF8]" />
           <span>{syncToast}</span>
         </div>
       )}
@@ -1164,7 +1165,7 @@ export const Timeline: React.FC = () => {
             title="Undo (Ctrl+Z)"
             className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors ${
               canUndo()
-                ? 'hover:bg-[#222630] text-[#8A92A6] hover:text-[#00F0FF] cursor-pointer'
+                ? 'hover:bg-[#222630] text-[#8A92A6] hover:text-[#38BDF8] cursor-pointer'
                 : 'text-[#3E4554] cursor-not-allowed'
             }`}
           >
@@ -1177,7 +1178,7 @@ export const Timeline: React.FC = () => {
             title="Redo (Ctrl+Y)"
             className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors ${
               canRedo()
-                ? 'hover:bg-[#222630] text-[#8A92A6] hover:text-[#00F0FF] cursor-pointer'
+                ? 'hover:bg-[#222630] text-[#8A92A6] hover:text-[#38BDF8] cursor-pointer'
                 : 'text-[#3E4554] cursor-not-allowed'
             }`}
           >
@@ -1191,7 +1192,7 @@ export const Timeline: React.FC = () => {
             onClick={toggleSnapping}
             className={`w-7 h-7 flex items-center justify-center rounded-md transition-all cursor-pointer border ${
               isSnappingEnabled
-                ? 'bg-[#00F0FF]/15 text-[#00F0FF] border-[#00F0FF]/50 shadow-[0_0_8px_rgba(0,240,255,0.25)]'
+                ? 'bg-[#38BDF8]/15 text-[#38BDF8] border-[#38BDF8]/50 shadow-[0_0_8px_rgba(56, 189, 248,0.25)]'
                 : 'bg-[#181B22] text-[#64748B] border-[#222630] hover:text-[#F0F3F8]'
             }`}
             title={`Magnetic Snapping: ${isSnappingEnabled ? 'ON' : 'OFF'} (S)`}
@@ -1222,7 +1223,7 @@ export const Timeline: React.FC = () => {
                 ? `Split ${selectedClipIds.length} Selected Clips at Playhead (C)`
                 : 'Split at Playhead (C)'
             }
-            className="w-7 h-7 flex items-center justify-center rounded-md bg-[#1C202B] hover:bg-[#252B3A] text-[#8A92A6] hover:text-[#00F0FF] transition-colors border border-[#222630] cursor-pointer"
+            className="w-7 h-7 flex items-center justify-center rounded-md bg-[#1C202B] hover:bg-[#252B3A] text-[#8A92A6] hover:text-[#38BDF8] transition-colors border border-[#222630] cursor-pointer"
           >
             <Scissors size={13} />
           </button>
@@ -1233,12 +1234,12 @@ export const Timeline: React.FC = () => {
               onClick={() => setEdgeDragMode('trim')}
               className={`w-6 h-6 flex items-center justify-center rounded transition-all cursor-pointer ${
                 edgeDragMode === 'trim'
-                  ? 'bg-[#00F0FF] text-[#0D0E11] font-bold shadow-[0_0_8px_rgba(0,240,255,0.4)]'
+                  ? 'bg-[#38BDF8] text-[#0D0E11] font-bold shadow-[0_0_8px_rgba(56, 189, 248,0.4)]'
                   : 'text-[#8A92A6] hover:text-[#F0F3F8]'
               }`}
               title="Trim / Recover Mode (T): Drag clip edges to trim or recover hidden video (Hold Alt for Slow-Mo)"
             >
-              <Scissors size={12} className={edgeDragMode === 'trim' ? 'text-[#0D0E11]' : 'text-[#00F0FF]'} />
+              <Scissors size={12} className={edgeDragMode === 'trim' ? 'text-[#0D0E11]' : 'text-[#38BDF8]'} />
             </button>
             <button
               onClick={() => setEdgeDragMode('stretch')}
@@ -1258,16 +1259,23 @@ export const Timeline: React.FC = () => {
           {/* 6. Delete */}
           <button
             onClick={() => {
+              if (selectedTransitionId) {
+                removeTransition(selectedTransitionId);
+                setSelectedTransitionId(null);
+                return;
+              }
               if (selectedClipId || selectedClipIds.length > 0) deleteSelectedClips();
             }}
-            disabled={!selectedClipId && selectedClipIds.length === 0}
+            disabled={!selectedTransitionId && !selectedClipId && selectedClipIds.length === 0}
             title={
-              selectedClipIds.length > 1
+              selectedTransitionId
+                ? 'Delete Selected Transition (Del)'
+                : selectedClipIds.length > 1
                 ? `Delete ${selectedClipIds.length} Selected Clips (Del)`
                 : 'Delete Selected Clip (Del)'
             }
             className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors ${
-              selectedClipId || selectedClipIds.length > 0
+              selectedTransitionId || selectedClipId || selectedClipIds.length > 0
                 ? 'hover:bg-red-500/20 text-[#8A92A6] hover:text-red-400 cursor-pointer'
                 : 'text-[#3E4554] cursor-not-allowed'
             }`}
@@ -1310,11 +1318,11 @@ export const Timeline: React.FC = () => {
           {/* 9. Dynamic Track Adders */}
           <button
             onClick={() => addTrack('video')}
-            className="h-7 px-2 flex items-center gap-1 rounded-md bg-[#1A1D24] hover:bg-[#222630] border border-[#222630] text-[#8A92A6] hover:text-[#00F0FF] transition-colors cursor-pointer"
+            className="h-7 px-2 flex items-center gap-1 rounded-md bg-[#1A1D24] hover:bg-[#222630] border border-[#222630] text-[#8A92A6] hover:text-[#38BDF8] transition-colors cursor-pointer"
             title="Add Video Track"
           >
-            <Plus size={10} strokeWidth={3} className="text-[#00F0FF]" />
-            <Video size={13} className="text-[#00F0FF]" />
+            <Plus size={10} strokeWidth={3} className="text-[#38BDF8]" />
+            <Video size={13} className="text-[#38BDF8]" />
           </button>
 
           <button
@@ -1372,7 +1380,7 @@ export const Timeline: React.FC = () => {
           {/* Sync Buttons */}
           <button
             onClick={handleSyncAll}
-            className="h-7 px-2.5 flex items-center gap-1.5 rounded-md bg-gradient-to-r from-[#00F0FF] to-[#10B981] hover:brightness-110 text-[#0D0E11] text-xs font-bold transition-all shadow-[0_0_8px_rgba(0,240,255,0.3)] cursor-pointer"
+            className="h-7 px-2.5 flex items-center gap-1.5 rounded-md bg-gradient-to-r from-[#38BDF8] to-[#10B981] hover:brightness-110 text-[#0D0E11] text-xs font-bold transition-all shadow-[0_0_8px_rgba(56, 189, 248,0.3)] cursor-pointer"
             title={`Sync All Tracks (${syncedCount}/${allClips.length}) - Analyze clip filenames and synchronize tracks`}
           >
             <Zap size={13} fill="currentColor" />
@@ -1387,7 +1395,7 @@ export const Timeline: React.FC = () => {
               setSyncModalTab('filename');
               setSyncModalOpen(true);
             }}
-            className="w-7 h-7 flex items-center justify-center rounded-md bg-[#1C202B] hover:bg-[#252B3A] border border-[#222630] hover:border-[#00F0FF]/50 text-[#8A92A6] hover:text-[#00F0FF] transition-all cursor-pointer"
+            className="w-7 h-7 flex items-center justify-center rounded-md bg-[#1C202B] hover:bg-[#252B3A] border border-[#222630] hover:border-[#38BDF8]/50 text-[#8A92A6] hover:text-[#38BDF8] transition-all cursor-pointer"
             title={`Sync Placement Settings: ${
               syncPlacementMode === 'compact'
                 ? `Snapped (${syncGapCushionSec}s cushion)`
@@ -1396,7 +1404,7 @@ export const Timeline: React.FC = () => {
                 : 'Real Time Wall-Clock'
             } (Click to open settings)`}
           >
-            <Sliders size={13} className="text-[#00F0FF]" />
+            <Sliders size={13} className="text-[#38BDF8]" />
           </button>
 
           {/* Camera Clock Manual Time Offsets (Fine-tune non-master cameras relative to Track 1) */}
@@ -1418,7 +1426,7 @@ export const Timeline: React.FC = () => {
           <div className="flex items-center gap-1.5 bg-[#0D0E11] px-2 py-1 rounded-md border border-[#222630] h-7">
             <button
               onClick={handleZoomToFit}
-              className="flex items-center gap-1 px-1 py-0.5 rounded text-[10px] font-mono text-[#8A92A6] hover:text-[#00F0FF] hover:bg-[#1A1D24] transition-colors cursor-pointer"
+              className="flex items-center gap-1 px-1 py-0.5 rounded text-[10px] font-mono text-[#8A92A6] hover:text-[#38BDF8] hover:bg-[#1A1D24] transition-colors cursor-pointer"
               title="Zoom to Fit All Media in Timeline"
             >
               <Maximize2 size={11} />
@@ -1426,7 +1434,7 @@ export const Timeline: React.FC = () => {
             </button>
             <button
               onClick={() => applyAnchoredZoom(Math.max(zoom / 1.25, 0.05))}
-              className="text-[#8A92A6] hover:text-[#00F0FF] transition-colors cursor-pointer"
+              className="text-[#8A92A6] hover:text-[#38BDF8] transition-colors cursor-pointer"
               title="Zoom Out (Ctrl+Scroll Down)"
             >
               <ZoomOut size={13} />
@@ -1438,12 +1446,12 @@ export const Timeline: React.FC = () => {
               step={0.5}
               value={zoom}
               onChange={(e) => applyAnchoredZoom(Number(e.target.value))}
-              className="w-16 h-1 bg-[#222630] rounded-lg appearance-none cursor-pointer accent-[#00F0FF]"
+              className="w-16 h-1 bg-[#222630] rounded-lg appearance-none cursor-pointer accent-[#38BDF8]"
               title={`Zoom: ${zoom.toFixed(1)} px/sec`}
             />
             <button
               onClick={() => applyAnchoredZoom(Math.min(zoom * 1.25, 3000))}
-              className="text-[#8A92A6] hover:text-[#00F0FF] transition-colors cursor-pointer"
+              className="text-[#8A92A6] hover:text-[#38BDF8] transition-colors cursor-pointer"
               title="Zoom In (Ctrl+Scroll Up)"
             >
               <ZoomIn size={13} />
@@ -1473,7 +1481,7 @@ export const Timeline: React.FC = () => {
 
           {/* Dynamic Track Header Items */}
           <div ref={trackHeadersScrollRef} onScroll={handleLeftScroll} className="flex-1 overflow-y-auto no-scrollbar">
-            {tracks.map((track) => {
+            {tracks.map((track, trackIndex) => {
               const isVideo = track.trackType === 'video' || track.type === 'video';
               const isText = track.trackType === 'text' || track.type === 'text';
               const defaultHeight = isVideo ? 80 : isText ? 64 : 64;
@@ -1597,17 +1605,17 @@ export const Timeline: React.FC = () => {
                   width: `${Math.abs(marqueeBox.currentX - marqueeBox.startX)}px`,
                   height: `${Math.abs(marqueeBox.currentY - marqueeBox.startY)}px`,
                 }}
-                className="absolute pointer-events-none z-50 border-2 border-[#00F0FF] bg-[#00F0FF]/15 rounded shadow-[0_0_16px_rgba(0,240,255,0.35)] backdrop-blur-[1px]"
+                className="absolute pointer-events-none z-50 border-2 border-[#38BDF8] bg-[#38BDF8]/15 rounded shadow-[0_0_16px_rgba(56, 189, 248,0.35)] backdrop-blur-[1px]"
               >
                 {selectedClipIds.length > 0 && (
-                  <div className="absolute top-1 right-1 px-1.5 py-0.5 rounded bg-black/85 border border-[#00F0FF]/50 text-[9px] font-mono font-bold text-[#00F0FF] shadow-md">
+                  <div className="absolute top-1 right-1 px-1.5 py-0.5 rounded bg-black/85 border border-[#38BDF8]/50 text-[9px] font-mono font-bold text-[#38BDF8] shadow-md">
                     {selectedClipIds.length} {selectedClipIds.length === 1 ? 'clip' : 'clips'}
                   </div>
                 )}
               </div>
             )}
 
-            {tracks.map((track) => {
+            {tracks.map((track, trackIndex) => {
               const isLaneHoveredByPointer = Boolean(
                 activeDragAsset &&
                   document
@@ -1634,6 +1642,7 @@ export const Timeline: React.FC = () => {
                 <DynamicTrackLane
                   key={track.id}
                   track={track}
+                  trackIndex={trackIndex}
                   trackHeight={trackHeight}
                   onStartResize={(e) => handleStartTrackResize(track.id, e, trackHeight)}
                   onResetHeight={() => resetTrackHeight(track.id)}
@@ -1799,9 +1808,9 @@ export const Timeline: React.FC = () => {
                 extractAudioFromClip(contextMenu.clipId);
                 setContextMenu(null);
               }}
-              className="w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-[#1C202B] text-[#00F0FF] hover:text-[#3bf1ff] transition-colors cursor-pointer text-left"
+              className="w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-[#1C202B] text-[#38BDF8] hover:text-[#3bf1ff] transition-colors cursor-pointer text-left"
             >
-              <Music size={13} className="text-[#00F0FF]" />
+              <Music size={13} className="text-[#38BDF8]" />
               <span>Extract Audio to New Track</span>
             </button>
           )}
@@ -1818,9 +1827,9 @@ export const Timeline: React.FC = () => {
               setInspectorTab('audio');
               setContextMenu(null);
             }}
-            className="w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-[#1C202B] text-[#00F0FF] hover:text-[#3bf1ff] transition-colors cursor-pointer text-left"
+            className="w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-[#1C202B] text-[#38BDF8] hover:text-[#3bf1ff] transition-colors cursor-pointer text-left"
           >
-            <Waves size={13} className="text-[#00F0FF]" />
+            <Waves size={13} className="text-[#38BDF8]" />
             <span>Capture Room Tone Profile...</span>
           </button>
 
@@ -1928,7 +1937,7 @@ export const Timeline: React.FC = () => {
           className={`fixed pointer-events-none z-[999999] px-2.5 py-1 rounded shadow-xl text-xs font-mono font-bold border backdrop-blur-md flex items-center gap-1.5 transition-none ${
             trimDragTooltip.isSlowMo
               ? 'bg-[#F59E0B]/95 text-[#0D0E11] border-[#F59E0B] shadow-[0_0_14px_rgba(245,158,11,0.5)]'
-              : 'bg-[#00F0FF]/95 text-[#0D0E11] border-[#00F0FF] shadow-[0_0_14px_rgba(0,240,255,0.5)]'
+              : 'bg-[#38BDF8]/95 text-[#0D0E11] border-[#38BDF8] shadow-[0_0_14px_rgba(56, 189, 248,0.5)]'
           }`}
         >
           {trimDragTooltip.isSlowMo ? <Gauge size={13} /> : <Scissors size={13} />}
@@ -1985,7 +1994,7 @@ const DynamicTrackHeader: React.FC<DynamicTrackHeaderProps> = ({
   const isMuted = track.muted || track.isMuted;
   const isSolo = track.solo || track.isSolo;
   const isLocked = track.locked || track.isLocked;
-  const color = track.color || (isText ? '#A855F7' : isVideo ? '#00F0FF' : '#F59E0B');
+  const color = track.color || (isText ? '#A855F7' : isVideo ? '#38BDF8' : '#F59E0B');
   const offsetSec = track.timeOffsetSeconds ?? 0;
 
   return (
@@ -2006,7 +2015,7 @@ const DynamicTrackHeader: React.FC<DynamicTrackHeaderProps> = ({
         isGradingSelected
           ? 'ring-2 ring-[#8B5CF6] border-l-4 border-l-[#8B5CF6] bg-[#8B5CF6]/15'
           : isDragOver
-          ? 'bg-[#00F0FF]/15 border-l-4 border-l-[#00F0FF]'
+          ? 'bg-[#38BDF8]/15 border-l-4 border-l-[#38BDF8]'
           : 'hover:bg-[#181B22]'
       }`}
     >
@@ -2069,7 +2078,7 @@ const DynamicTrackHeader: React.FC<DynamicTrackHeaderProps> = ({
                 isVisible
                   ? isText
                     ? 'bg-[#222630] text-[#A855F7]'
-                    : 'bg-[#222630] text-[#00F0FF]'
+                    : 'bg-[#222630] text-[#38BDF8]'
                   : 'bg-zinc-800 text-[#525D73]'
               }`}
             >
@@ -2153,7 +2162,7 @@ const DynamicTrackHeader: React.FC<DynamicTrackHeaderProps> = ({
       {isVideo && trackHeight >= 64 && (
         <div className="flex items-center justify-between pl-1 text-[9px] font-mono text-[#64748B] pt-0.5 border-t border-[#1F232D]">
           <div className="flex items-center gap-1">
-            <Volume2 size={9} className="text-[#00F0FF]/70" />
+            <Volume2 size={9} className="text-[#38BDF8]/70" />
             <span>Audio Subtrack</span>
           </div>
           <span className="text-[8px] text-[#525D73]">Linked</span>
@@ -2167,10 +2176,10 @@ const DynamicTrackHeader: React.FC<DynamicTrackHeaderProps> = ({
           e.stopPropagation();
           onResetHeight?.();
         }}
-        className="absolute bottom-0 left-0 right-0 h-1.5 cursor-row-resize z-40 group/resizer hover:bg-[#00F0FF]/60 active:bg-[#00F0FF] flex items-center justify-center transition-colors"
+        className="absolute bottom-0 left-0 right-0 h-1.5 cursor-row-resize z-40 group/resizer hover:bg-[#38BDF8]/60 active:bg-[#38BDF8] flex items-center justify-center transition-colors"
         title="Hold and drag to resize track height (Double-click to reset)"
       >
-        <div className="w-8 h-[2px] bg-transparent group-hover/resizer:bg-[#00F0FF] rounded-full transition-colors" />
+        <div className="w-8 h-[2px] bg-transparent group-hover/resizer:bg-[#38BDF8] rounded-full transition-colors" />
       </div>
     </div>
   );
@@ -2179,6 +2188,7 @@ const DynamicTrackHeader: React.FC<DynamicTrackHeaderProps> = ({
 // DYNAMIC TRACK LANE COMPONENT
 interface DynamicTrackLaneProps {
   track: MediaTrack;
+  trackIndex?: number;
   trackHeight: number;
   onStartResize?: (e: React.MouseEvent) => void;
   onResetHeight?: () => void;
@@ -2286,6 +2296,7 @@ const LiveVoiceoverOverlay: React.FC<LiveVoiceoverOverlayProps> = ({
 
 const DynamicTrackLane: React.FC<DynamicTrackLaneProps> = React.memo(({
   track,
+  trackIndex = 0,
   trackHeight,
   onStartResize,
   onResetHeight,
@@ -2322,7 +2333,7 @@ const DynamicTrackLane: React.FC<DynamicTrackLaneProps> = React.memo(({
 }) => {
   const isVideo = track.trackType === 'video' || track.type === 'video';
   const isText = track.trackType === 'text' || track.type === 'text';
-  const color = track.color || (isText ? '#A855F7' : isVideo ? '#00F0FF' : '#F59E0B');
+  const color = track.color || (isText ? '#A855F7' : isVideo ? '#38BDF8' : '#F59E0B');
 
   const setInspectorTab = useTimelineStore((state) => state.setInspectorTab);
   const isStabilizationAnalyzing = useTimelineStore((state) => state.isStabilizationAnalyzing);
@@ -2353,7 +2364,7 @@ const DynamicTrackLane: React.FC<DynamicTrackLaneProps> = React.memo(({
       }}
       className={`border-b border-[#222630] relative transition-colors ${
         isDragOver
-          ? 'bg-[#00F0FF]/10 ring-1 ring-[#00F0FF]/50 border-[#00F0FF]/40'
+          ? 'bg-[#38BDF8]/10 ring-1 ring-[#38BDF8]/50 border-[#38BDF8]/40'
           : track.locked
           ? 'bg-[#0E0F14]/80'
           : 'hover:bg-[#12141A]/50'
@@ -2366,12 +2377,12 @@ const DynamicTrackLane: React.FC<DynamicTrackLaneProps> = React.memo(({
             left: `${ghostDropSec * zoom}px`,
             width: `${Math.max(28, (ghostDurationSec || 10) * zoom)}px`,
           }}
-          className="absolute top-1 bottom-1 rounded border-2 border-dashed border-[#00F0FF] bg-[#00F0FF]/25 shadow-[0_0_16px_rgba(0,240,255,0.4)] pointer-events-none z-40 flex items-center px-2 animate-pulse overflow-hidden backdrop-blur-xs select-none"
+          className="absolute top-1 bottom-1 rounded border-2 border-dashed border-[#38BDF8] bg-[#38BDF8]/25 shadow-[0_0_16px_rgba(56, 189, 248,0.4)] pointer-events-none z-40 flex items-center px-2 animate-pulse overflow-hidden backdrop-blur-xs select-none"
         >
           <div className="flex items-center gap-1.5 text-[10px] font-mono font-bold text-white drop-shadow truncate">
-            <span className="w-2 h-2 rounded-full bg-[#00F0FF] shadow-[0_0_6px_#00F0FF] shrink-0" />
+            <span className="w-2 h-2 rounded-full bg-[#38BDF8] shadow-xs shrink-0" />
             <span className="truncate">{ghostAssetName || 'New Clip'}</span>
-            <span className="text-[#00F0FF] shrink-0">({formatTimecode(ghostDropSec, fps)})</span>
+            <span className="text-[#38BDF8] shrink-0">({formatTimecode(ghostDropSec, fps)})</span>
           </div>
         </div>
       )}
@@ -2463,6 +2474,8 @@ const DynamicTrackLane: React.FC<DynamicTrackLaneProps> = React.memo(({
             const isSelected = selectedTransitionId === transition.id;
             const transWidth = Math.max(38, Math.min(120, transition.duration * zoom));
             const transLeft = cutJointPx - transWidth / 2;
+            const openBelow = trackIndex < 2;
+            const isNearLeft = transLeft < 120;
 
             return (
               <div
@@ -2473,14 +2486,16 @@ const DynamicTrackLane: React.FC<DynamicTrackLaneProps> = React.memo(({
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
+                  useTimelineStore.getState().selectClip(null);
+                  useTimelineStore.getState().selectClips([]);
                   setSelectedTransitionId?.(isSelected ? null : transition.id);
                 }}
-                className={`absolute top-1.5 bottom-1.5 rounded-md z-30 flex items-center justify-center cursor-pointer select-none transition-all shadow-lg backdrop-blur-xs ${
+                className={`absolute top-1.5 bottom-1.5 rounded-md flex items-center justify-center cursor-pointer select-none transition-all shadow-lg backdrop-blur-xs ${
                   isSelected
-                    ? 'bg-[#A855F7] border-2 border-white ring-2 ring-[#A855F7] text-white shadow-[0_0_16px_rgba(168,85,247,0.85)]'
-                    : 'bg-[#A855F7]/80 hover:bg-[#A855F7] border border-[#A855F7] text-white'
+                    ? 'z-[100] bg-[#A855F7] border-2 border-white ring-2 ring-[#A855F7] text-white shadow-[0_0_16px_rgba(168,85,247,0.85)]'
+                    : 'z-30 bg-[#A855F7]/80 hover:bg-[#A855F7] border border-[#A855F7] text-white'
                 }`}
-                title={`Transition: ${transition.transitionType} (${transition.duration.toFixed(1)}s)\nClick to edit duration or delete`}
+                title={`Transition: ${transition.transitionType} (${transition.duration.toFixed(1)}s)\nClick to edit or press Del to remove`}
               >
                 <div className="flex items-center gap-1 px-1 py-0.5 truncate text-[10px] font-mono font-bold">
                   <Sparkles size={11} className="shrink-0 text-white" />
@@ -2491,20 +2506,51 @@ const DynamicTrackLane: React.FC<DynamicTrackLaneProps> = React.memo(({
                 {isSelected && (
                   <div
                     onClick={(e) => e.stopPropagation()}
-                    className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-2.5 rounded-lg bg-[#0F1117]/95 border border-[#A855F7] shadow-2xl z-50 flex flex-col gap-2 text-xs backdrop-blur-md"
+                    className={`absolute ${openBelow ? 'top-full mt-2' : 'bottom-full mb-2'} ${
+                      isNearLeft ? 'left-0' : 'left-1/2 -translate-x-1/2'
+                    } w-60 p-3 rounded-xl bg-[#0F1117] border border-[#A855F7] shadow-[0_12px_32px_rgba(0,0,0,0.85),0_0_20px_rgba(168,85,247,0.4)] z-[100] flex flex-col gap-2.5 text-xs backdrop-blur-xl`}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-white capitalize flex items-center gap-1">
-                        <Sparkles size={12} className="text-[#A855F7]" />
-                        <span>{transition.transitionType}</span>
+                    {/* Popover Directional Arrow */}
+                    <div
+                      className={`absolute ${isNearLeft ? 'left-6' : 'left-1/2 -translate-x-1/2'} w-2.5 h-2.5 bg-[#0F1117] border-[#A855F7] rotate-45 pointer-events-none ${
+                        openBelow
+                          ? '-top-1.5 border-t border-l'
+                          : '-bottom-1.5 border-b border-r'
+                      }`}
+                    />
+
+                    {/* Header with Title and Prominent Delete Button */}
+                    <div className="flex items-center justify-between border-b border-[#222630] pb-2">
+                      <span className="font-bold text-white capitalize flex items-center gap-1.5 text-[11px]">
+                        <Sparkles size={12} className="text-[#A855F7] shrink-0" />
+                        <span className="truncate">{transition.transitionType}</span>
                       </span>
-                      <button
-                        onClick={() => removeTransition?.(transition.id)}
-                        className="p-1 rounded hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors cursor-pointer"
-                        title="Delete Transition"
-                      >
-                        <Trash2 size={12} />
-                      </button>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeTransition?.(transition.id);
+                            setSelectedTransitionId?.(null);
+                          }}
+                          className="px-2 py-0.5 rounded bg-red-500/20 hover:bg-red-500/30 text-red-400 hover:text-red-300 text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer border border-red-500/30"
+                          title="Delete Transition (Del)"
+                        >
+                          <Trash2 size={11} />
+                          <span>Delete</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedTransitionId?.(null);
+                          }}
+                          className="w-5 h-5 flex items-center justify-center rounded hover:bg-[#222630] text-[#8A92A6] hover:text-white transition-colors cursor-pointer"
+                          title="Close"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
                     </div>
 
                     <div className="space-y-1.5">
@@ -2587,7 +2633,7 @@ const DynamicTrackLane: React.FC<DynamicTrackLaneProps> = React.memo(({
                                 {[
                                   { name: 'Purple', hex: '#A855F7' },
                                   { name: 'Pink', hex: '#EC4899' },
-                                  { name: 'Cyan', hex: '#00F0FF' },
+                                  { name: 'Cyan', hex: '#38BDF8' },
                                   { name: 'White', hex: '#FFFFFF' },
                                   { name: 'Yellow', hex: '#EAB308' },
                                   { name: 'Green', hex: '#10B981' },
@@ -2636,6 +2682,11 @@ const DynamicTrackLane: React.FC<DynamicTrackLaneProps> = React.memo(({
                           )}
                         </div>
                       )}
+                    </div>
+
+                    {/* Footer Hint */}
+                    <div className="pt-1.5 border-t border-[#222630]/60 flex items-center justify-between text-[9.5px] text-[#8A92A6]">
+                      <span>Press <kbd className="px-1 py-0.5 rounded bg-[#1C202B] border border-[#3E4554] text-white font-mono text-[9px]">Del</kbd> to delete</span>
                     </div>
                   </div>
                 )}
@@ -2687,10 +2738,10 @@ const DynamicTrackLane: React.FC<DynamicTrackLaneProps> = React.memo(({
           e.stopPropagation();
           onResetHeight?.();
         }}
-        className="absolute bottom-0 left-0 right-0 h-1.5 cursor-row-resize z-40 group/resizer hover:bg-[#00F0FF]/60 active:bg-[#00F0FF] flex items-center justify-center transition-colors pointer-events-auto"
+        className="absolute bottom-0 left-0 right-0 h-1.5 cursor-row-resize z-40 group/resizer hover:bg-[#38BDF8]/60 active:bg-[#38BDF8] flex items-center justify-center transition-colors pointer-events-auto"
         title="Hold and drag to resize track height (Double-click to reset)"
       >
-        <div className="w-16 h-[2px] bg-transparent group-hover/resizer:bg-[#00F0FF] rounded-full transition-colors" />
+        <div className="w-16 h-[2px] bg-transparent group-hover/resizer:bg-[#38BDF8] rounded-full transition-colors" />
       </div>
     </div>
   );

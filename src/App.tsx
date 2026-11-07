@@ -274,13 +274,27 @@ export const App: React.FC = () => {
         return;
       }
 
-      // Ignore if user is currently typing in an input, textarea, select, or contentEditable
+      // Ignore if user is currently typing in a text field (allow sliders/ranges/buttons)
       const target = (document.activeElement || e.target) as HTMLElement | null;
-      if (
+      const isTextInput = Boolean(
         target &&
-        (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable)
-      ) {
+        ((target.tagName === 'INPUT' && !['range', 'color', 'checkbox', 'radio', 'button'].includes((target as HTMLInputElement).type?.toLowerCase())) ||
+          ['TEXTAREA', 'SELECT'].includes(target.tagName) ||
+          target.isContentEditable)
+      );
+      if (isTextInput) {
         return;
+      }
+
+      // Fast path: If a transition is currently selected on timeline, Delete or Backspace removes it immediately
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        const { selectedTransitionId, removeTransition } = useTimelineStore.getState();
+        if (selectedTransitionId) {
+          e.preventDefault();
+          e.stopPropagation();
+          removeTransition(selectedTransitionId);
+          return;
+        }
       }
 
       // Ignore global timeline shortcuts if modal dialogs (like Noise Profile or Sync Modal) are open
@@ -336,12 +350,19 @@ export const App: React.FC = () => {
             e.preventDefault();
             splitClipAtPlayhead();
             return;
-          case 'delete_clip':
+          case 'delete_clip': {
+            const { selectedTransitionId, removeTransition } = useTimelineStore.getState();
+            if (selectedTransitionId) {
+              e.preventDefault();
+              removeTransition(selectedTransitionId);
+              return;
+            }
             if (selectedClipId || selectedClipIds.length > 0) {
               e.preventDefault();
               deleteSelectedClips();
             }
             return;
+          }
           case 'ripple_delete':
             if (selectedClipId) {
               e.preventDefault();
@@ -440,7 +461,7 @@ export const App: React.FC = () => {
           <div className="flex items-center gap-2">
             <button
               onClick={() => restoreCrashSnapshot()}
-              className="px-3 py-1 rounded bg-[#00F0FF] hover:bg-[#3bf1ff] text-[#0D0E11] font-bold text-xs cursor-pointer transition-all shadow-[0_0_8px_rgba(0,240,255,0.3)] flex items-center gap-1.5"
+              className="px-3 py-1 rounded bg-[#38BDF8] hover:bg-[#3bf1ff] text-[#0D0E11] font-bold text-xs cursor-pointer transition-all shadow-[0_0_8px_rgba(56, 189, 248,0.3)] flex items-center gap-1.5"
             >
               <RefreshCw size={12} />
               <span>Restore Snapshot</span>
@@ -474,7 +495,7 @@ export const App: React.FC = () => {
                   e.stopPropagation();
                   toggleMediaPoolCollapsed();
                 }}
-                className="p-1 rounded bg-[#1C202B] hover:bg-[#00F0FF] text-[#8A92A6] hover:text-[#0D0E11] transition-all cursor-pointer"
+                className="p-1 rounded bg-[#1C202B] hover:bg-[#38BDF8] text-[#8A92A6] hover:text-[#0D0E11] transition-all cursor-pointer"
                 title="Expand Media Pool"
               >
                 <ChevronRight size={13} />
@@ -483,7 +504,7 @@ export const App: React.FC = () => {
                 <span className="text-[10px] font-bold tracking-widest uppercase [writing-mode:vertical-lr] rotate-180">
                   Media Pool
                 </span>
-                <Film size={13} className="text-[#8A92A6] group-hover:text-[#00F0FF] transition-colors" />
+                <Film size={13} className="text-[#8A92A6] group-hover:text-[#38BDF8] transition-colors" />
               </div>
             </div>
           ) : (
@@ -501,7 +522,7 @@ export const App: React.FC = () => {
               <div
                 onMouseDown={handleMediaPoolResizeStart}
                 onDoubleClick={() => setMediaPoolWidthPx(400)}
-                className="w-1.5 hover:w-2 bg-[#12141A] hover:bg-[#00F0FF]/40 active:bg-[#00F0FF] cursor-col-resize relative flex flex-col items-center justify-center transition-all group z-20 border-x border-[#222630] select-none shrink-0"
+                className="w-1.5 hover:w-2 bg-[#12141A] hover:bg-[#38BDF8]/40 active:bg-[#38BDF8] cursor-col-resize relative flex flex-col items-center justify-center transition-all group z-20 border-x border-[#222630] select-none shrink-0"
                 title="Hold and drag to resize Media Pool (Double-click to reset)"
               >
                 <button
@@ -509,12 +530,12 @@ export const App: React.FC = () => {
                     e.stopPropagation();
                     toggleMediaPoolCollapsed();
                   }}
-                  className="absolute top-2 -left-2 w-4 h-6 bg-[#181B22] hover:bg-[#00F0FF] text-[#8A92A6] hover:text-[#0D0E11] rounded border border-[#222630] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md z-30 cursor-pointer"
+                  className="absolute top-2 -left-2 w-4 h-6 bg-[#181B22] hover:bg-[#38BDF8] text-[#8A92A6] hover:text-[#0D0E11] rounded border border-[#222630] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md z-30 cursor-pointer"
                   title="Hide Media Pool (Maximize Monitor Space)"
                 >
                   <ChevronLeft size={11} />
                 </button>
-                <div className="h-8 w-1 bg-[#374151] group-hover:bg-[#00F0FF] rounded-full transition-colors" />
+                <div className="h-8 w-1 bg-[#374151] group-hover:bg-[#38BDF8] rounded-full transition-colors" />
               </div>
             </>
           )}
@@ -531,7 +552,7 @@ export const App: React.FC = () => {
             <div
               onMouseDown={handleInspectorResizeStart}
               onDoubleClick={() => setInspectorWidthPx(300)}
-              className="w-1.5 hover:w-2 bg-[#12141A] hover:bg-[#00F0FF]/40 active:bg-[#00F0FF] cursor-col-resize relative flex flex-col items-center justify-center transition-all group z-20 border-x border-[#222630] select-none shrink-0"
+              className="w-1.5 hover:w-2 bg-[#12141A] hover:bg-[#38BDF8]/40 active:bg-[#38BDF8] cursor-col-resize relative flex flex-col items-center justify-center transition-all group z-20 border-x border-[#222630] select-none shrink-0"
               title="Hold and drag to resize Inspector (Double-click to reset)"
             >
               <button
@@ -539,12 +560,12 @@ export const App: React.FC = () => {
                   e.stopPropagation();
                   toggleInspectorCollapsed();
                 }}
-                className="absolute top-2 -right-2 w-4 h-6 bg-[#181B22] hover:bg-[#00F0FF] text-[#8A92A6] hover:text-[#0D0E11] rounded border border-[#222630] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md z-30 cursor-pointer"
+                className="absolute top-2 -right-2 w-4 h-6 bg-[#181B22] hover:bg-[#38BDF8] text-[#8A92A6] hover:text-[#0D0E11] rounded border border-[#222630] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md z-30 cursor-pointer"
                 title="Hide Inspector (Maximize Monitor Space)"
               >
                 <ChevronRight size={11} />
               </button>
-              <div className="h-8 w-1 bg-[#374151] group-hover:bg-[#00F0FF] rounded-full transition-colors" />
+              <div className="h-8 w-1 bg-[#374151] group-hover:bg-[#38BDF8] rounded-full transition-colors" />
             </div>
           )}
 
@@ -563,10 +584,10 @@ export const App: React.FC = () => {
         <div
           onMouseDown={handleTimelineResizeStart}
           onDoubleClick={() => setTimelineHeightPct(50)}
-          className="h-2 bg-[#12141A] hover:bg-[#00F0FF]/40 active:bg-[#00F0FF] cursor-row-resize relative flex items-center justify-center transition-colors group z-20 border-y border-[#222630] select-none shrink-0"
+          className="h-2 bg-[#12141A] hover:bg-[#38BDF8]/40 active:bg-[#38BDF8] cursor-row-resize relative flex items-center justify-center transition-colors group z-20 border-y border-[#222630] select-none shrink-0"
           title="Hold and drag to resize Timeline height (Double-click to reset to 50%)"
         >
-          <div className="w-14 h-1 bg-[#374151] group-hover:bg-[#00F0FF] rounded-full transition-colors flex items-center justify-center gap-1">
+          <div className="w-14 h-1 bg-[#374151] group-hover:bg-[#38BDF8] rounded-full transition-colors flex items-center justify-center gap-1">
             <span className="w-1 h-0.5 bg-black/40 rounded-full" />
             <span className="w-1 h-0.5 bg-black/40 rounded-full" />
             <span className="w-1 h-0.5 bg-black/40 rounded-full" />
@@ -624,7 +645,7 @@ export const App: React.FC = () => {
               left: `${activeDragAsset.mouseX + 16}px`,
               top: `${activeDragAsset.mouseY + 16}px`,
             }}
-            className="fixed pointer-events-none z-[99999] flex items-center gap-2.5 px-3 py-2 rounded-lg bg-[#0F1117]/95 border-2 border-[#00F0FF] shadow-[0_8px_32px_rgba(0,240,255,0.45)] text-white text-xs font-semibold backdrop-blur-md select-none ring-1 ring-white/20"
+            className="fixed pointer-events-none z-[99999] flex items-center gap-2.5 px-3 py-2 rounded-lg bg-[#0F1117]/95 border-2 border-[#38BDF8] shadow-[0_8px_32px_rgba(56, 189, 248,0.45)] text-white text-xs font-semibold backdrop-blur-md select-none ring-1 ring-white/20"
           >
             {thumb ? (
               <img
@@ -637,7 +658,7 @@ export const App: React.FC = () => {
                 <Music size={16} />
               </div>
             ) : (
-              <div className="w-10 h-7 rounded bg-[#1A1D24] flex items-center justify-center text-[#00F0FF] shrink-0">
+              <div className="w-10 h-7 rounded bg-[#1A1D24] flex items-center justify-center text-[#38BDF8] shrink-0">
                 <Video size={16} />
               </div>
             )}
@@ -645,7 +666,7 @@ export const App: React.FC = () => {
               <span className="truncate max-w-[180px] text-xs text-white font-mono font-bold leading-tight">
                 {activeDragAsset.asset.name}
               </span>
-              <span className="text-[10px] text-[#00F0FF] font-mono leading-tight mt-0.5">
+              <span className="text-[10px] text-[#38BDF8] font-mono leading-tight mt-0.5">
                 Drop to place on track ({durStr})
               </span>
             </div>
@@ -687,7 +708,7 @@ export const App: React.FC = () => {
                   ? 'bg-red-500/15 text-red-400 border border-red-500/30'
                   : appToast.type === 'success'
                   ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                  : 'bg-[#00F0FF]/15 text-[#00F0FF] border border-[#00F0FF]/30'
+                  : 'bg-[#38BDF8]/15 text-[#38BDF8] border border-[#38BDF8]/30'
               }`}
             >
               {appToast.type === 'warning' || appToast.type === 'error' ? (

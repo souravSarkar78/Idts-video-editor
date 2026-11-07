@@ -43,7 +43,7 @@ export const TRANSITIONS_CATALOG: TransitionPresetItem[] = [
     defaultDuration: 0.5,
     xfadeName: 'smoothleft',
     tags: ['whip', 'pan', 'left', 'fast', 'trending'],
-    color: '#00F0FF',
+    color: '#38BDF8',
     renderThumbnail: (ctx, w, h, p) => {
       const { gradA, gradB } = drawBaseFrames(ctx, w, h);
       const offset = p * w;
@@ -64,7 +64,7 @@ export const TRANSITIONS_CATALOG: TransitionPresetItem[] = [
     defaultDuration: 0.5,
     xfadeName: 'smoothright',
     tags: ['whip', 'pan', 'right', 'fast'],
-    color: '#00F0FF',
+    color: '#38BDF8',
     renderThumbnail: (ctx, w, h, p) => {
       const { gradA, gradB } = drawBaseFrames(ctx, w, h);
       const offset = p * w;
@@ -82,7 +82,7 @@ export const TRANSITIONS_CATALOG: TransitionPresetItem[] = [
     defaultDuration: 0.5,
     xfadeName: 'slideup',
     tags: ['whip', 'pan', 'up', 'vertical'],
-    color: '#00F0FF',
+    color: '#38BDF8',
     renderThumbnail: (ctx, w, h, p) => {
       const { gradA, gradB } = drawBaseFrames(ctx, w, h);
       const offset = p * h;
@@ -100,7 +100,7 @@ export const TRANSITIONS_CATALOG: TransitionPresetItem[] = [
     defaultDuration: 0.5,
     xfadeName: 'slidedown',
     tags: ['whip', 'pan', 'down', 'vertical'],
-    color: '#00F0FF',
+    color: '#38BDF8',
     renderThumbnail: (ctx, w, h, p) => {
       const { gradA, gradB } = drawBaseFrames(ctx, w, h);
       const offset = p * h;
@@ -357,7 +357,7 @@ export const TRANSITIONS_CATALOG: TransitionPresetItem[] = [
       const glitch = Math.sin(p * Math.PI) * 15;
       ctx.fillStyle = 'rgba(255, 0, 50, 0.4)';
       ctx.fillRect(glitch, 0, w, h);
-      ctx.fillStyle = 'rgba(0, 240, 255, 0.4)';
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.4)';
       ctx.fillRect(-glitch, 0, w, h);
     },
   },
@@ -376,7 +376,7 @@ export const TRANSITIONS_CATALOG: TransitionPresetItem[] = [
       ctx.fillRect(0, 0, w, h);
       const intensity = Math.sin(p * Math.PI);
       if (intensity > 0.2) {
-        ctx.fillStyle = 'rgba(0, 240, 255, 0.5)';
+        ctx.fillStyle = 'rgba(56, 189, 248, 0.5)';
         for (let i = 0; i < 8; i++) {
           ctx.fillRect(Math.random() * w, Math.random() * h, 30, 8);
         }
@@ -484,7 +484,7 @@ export const TRANSITIONS_CATALOG: TransitionPresetItem[] = [
       ctx.fillStyle = gradB;
       ctx.fillRect(0, 0, w, p * h);
       // Beam line
-      ctx.fillStyle = '#00F0FF';
+      ctx.fillStyle = '#38BDF8';
       ctx.fillRect(0, p * h - 2, w, 4);
     },
   },
@@ -548,9 +548,9 @@ export const TRANSITIONS_CATALOG: TransitionPresetItem[] = [
       ctx.fillRect(0, 0, w, h);
       const x = p * w;
       const flare = ctx.createLinearGradient(x - 40, 0, x + 40, 0);
-      flare.addColorStop(0, 'rgba(0, 240, 255, 0)');
+      flare.addColorStop(0, 'rgba(56, 189, 248, 0)');
       flare.addColorStop(0.5, 'rgba(255, 255, 255, 0.9)');
-      flare.addColorStop(1, 'rgba(0, 240, 255, 0)');
+      flare.addColorStop(1, 'rgba(56, 189, 248, 0)');
       ctx.fillStyle = flare;
       ctx.fillRect(x - 40, 0, 80, h);
     },
@@ -1130,7 +1130,7 @@ export const TRANSITIONS_CATALOG: TransitionPresetItem[] = [
       ctx.globalAlpha = p;
       ctx.fillRect(0, 0, w, h);
       ctx.globalAlpha = 1;
-      ctx.strokeStyle = `rgba(0, 240, 255, ${Math.sin(p * Math.PI) * 0.7})`;
+      ctx.strokeStyle = `rgba(56, 189, 248, ${Math.sin(p * Math.PI) * 0.7})`;
       ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.arc(w / 2, h / 2, p * w * 0.5, 0, Math.PI * 2);

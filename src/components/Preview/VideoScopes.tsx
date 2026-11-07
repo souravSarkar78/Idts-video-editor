@@ -98,7 +98,7 @@ export const VideoScopes: React.FC<VideoScopesProps> = ({
       {/* Header bar */}
       <div className="h-9 px-3 bg-[#10131A] border-b border-[#222630] flex items-center justify-between shrink-0 select-none">
         <div className="flex items-center gap-2">
-          <Activity size={14} className="text-[#00F0FF]" />
+          <Activity size={14} className="text-[#38BDF8]" />
           <span className="text-xs font-bold text-[#F0F3F8] tracking-wide">Studio Video Scopes</span>
         </div>
 
@@ -110,7 +110,7 @@ export const VideoScopes: React.FC<VideoScopesProps> = ({
               onClick={() => onSelectScope(type)}
               className={`px-2 py-0.5 rounded transition-all capitalize cursor-pointer ${
                 activeScope === type
-                  ? 'bg-[#00F0FF] text-[#0D0E11] font-bold shadow-[0_0_8px_rgba(0,240,255,0.4)]'
+                  ? 'bg-[#38BDF8] text-[#0D0E11] font-bold shadow-[0_0_8px_rgba(56, 189, 248,0.4)]'
                   : 'text-[#8A92A6] hover:text-[#F0F3F8]'
               }`}
             >
@@ -123,7 +123,7 @@ export const VideoScopes: React.FC<VideoScopesProps> = ({
           <button
             onClick={() => setIsExpanded(!isExpanded)}
             title={isExpanded ? 'Minimize' : 'Maximize'}
-            className="w-6 h-6 flex items-center justify-center rounded hover:bg-[#1E2330] text-[#8A92A6] hover:text-[#00F0FF] transition-colors cursor-pointer"
+            className="w-6 h-6 flex items-center justify-center rounded hover:bg-[#1E2330] text-[#8A92A6] hover:text-[#38BDF8] transition-colors cursor-pointer"
           >
             {isExpanded ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
           </button>
@@ -145,7 +145,7 @@ export const VideoScopes: React.FC<VideoScopesProps> = ({
         {/* 1. Luma Waveform */}
         {(activeScope === 'all' || activeScope === 'waveform') && (
           <div className="relative rounded-lg bg-[#0C0E14] border border-[#1A1D27] overflow-hidden flex flex-col">
-            <div className="absolute top-1 left-1.5 px-1.5 py-0.5 rounded bg-black/70 border border-[#222630] text-[9px] font-mono font-bold text-[#00F0FF] pointer-events-none z-10">
+            <div className="absolute top-1 left-1.5 px-1.5 py-0.5 rounded bg-black/70 border border-[#222630] text-[9px] font-mono font-bold text-[#38BDF8] pointer-events-none z-10">
               WAVEFORM (0–100 IRE)
             </div>
             <canvas ref={waveformRef} className="w-full h-full block" />
@@ -219,7 +219,7 @@ function drawWaveform(
   });
 
   // Plot luminance points
-  ctx.fillStyle = 'rgba(0, 240, 255, 0.22)';
+  ctx.fillStyle = 'rgba(56, 189, 248, 0.22)';
   const xScale = width / srcW;
   const usableHeight = height - 16 * dpr;
 

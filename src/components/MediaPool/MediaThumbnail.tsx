@@ -221,7 +221,7 @@ export const MediaThumbnail: React.FC<MediaThumbnailProps> = ({
 
       {/* Fallback film gradient while video decodes first frame */}
       {!posterUrl && !isVideoReady && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-[#12141A] to-[#1E222D] text-[#00F0FF] z-0">
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-[#12141A] to-[#1E222D] text-[#38BDF8] z-0">
           <Film size={24} className="opacity-40 animate-pulse mb-1" />
           <span className="text-[8px] font-mono text-[#64748B]">Loading frame...</span>
         </div>
@@ -233,11 +233,11 @@ export const MediaThumbnail: React.FC<MediaThumbnailProps> = ({
           {/* Vertical scrubber line indicator */}
           <div
             style={{ left: `${hoverRatio * 100}%` }}
-            className="absolute top-0 bottom-0 w-[1.5px] bg-[#00F0FF] shadow-[0_0_8px_#00F0FF] pointer-events-none z-30"
+            className="absolute top-0 bottom-0 w-[1.5px] bg-[#38BDF8] shadow-xs pointer-events-none z-30"
           />
 
           {/* Hover Timecode Pill at top-center */}
-          <div className="absolute top-1 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded bg-black/80 border border-[#00F0FF]/40 text-[9px] font-mono font-bold text-[#00F0FF] shadow-lg pointer-events-none z-30 flex items-center gap-1">
+          <div className="absolute top-1 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded bg-black/80 border border-[#38BDF8]/40 text-[9px] font-mono font-bold text-[#38BDF8] shadow-lg pointer-events-none z-30 flex items-center gap-1">
             <span>{formatTimecode(hoverTime, 30)}</span>
           </div>
 
@@ -245,7 +245,7 @@ export const MediaThumbnail: React.FC<MediaThumbnailProps> = ({
           <div className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-black/50 z-30 pointer-events-none">
             <div
               style={{ width: `${hoverRatio * 100}%` }}
-              className="h-full bg-[#00F0FF] shadow-[0_0_6px_#00F0FF]"
+              className="h-full bg-[#38BDF8] shadow-xs"
             />
           </div>
         </>

@@ -188,7 +188,7 @@ const AdjustmentSliderRow: React.FC<{
             value={value}
             onChange={(e) => onChange(Number(e.target.value))}
             style={trackGradient ? { background: trackGradient } : undefined}
-            className={`w-full h-1.5 rounded-full appearance-none cursor-pointer accent-[#00F0FF] ${
+            className={`w-full h-1.5 rounded-full appearance-none cursor-pointer accent-[#38BDF8] ${
               trackGradient ? '' : 'bg-[#282B33]'
             }`}
           />
@@ -230,7 +230,7 @@ const AdjustmentSliderRow: React.FC<{
             type="button"
             onClick={onReset || (() => onChange(0))}
             title="Reset to 0"
-            className="p-0.5 text-[#6B7280] hover:text-[#00F0FF] transition-colors cursor-pointer"
+            className="p-0.5 text-[#6B7280] hover:text-[#38BDF8] transition-colors cursor-pointer"
           >
             <Diamond size={10} fill={value !== 0 ? 'currentColor' : 'none'} />
           </button>
@@ -399,9 +399,9 @@ export const ColorGradingInspector: React.FC<ColorGradingInspectorProps> = ({
         <div className="flex items-center justify-between">
           <button
             onClick={() => setShowScopesTarget(!showScopesTarget)}
-            className="flex items-center gap-1.5 text-[11px] font-bold text-[#8A92A6] hover:text-[#00F0FF] uppercase tracking-wider transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 text-[11px] font-bold text-[#8A92A6] hover:text-[#38BDF8] uppercase tracking-wider transition-colors cursor-pointer"
           >
-            <Layers size={13} className="text-[#00F0FF]" />
+            <Layers size={13} className="text-[#38BDF8]" />
             <span>Target Scope: {scope.toUpperCase()}</span>
             {showScopesTarget ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
           </button>
@@ -423,7 +423,7 @@ export const ColorGradingInspector: React.FC<ColorGradingInspectorProps> = ({
               onClick={() => onSelectScope('clip')}
               className={`py-1.5 px-2 rounded text-xs font-mono font-bold transition-all truncate cursor-pointer ${
                 scope === 'clip'
-                  ? 'bg-[#00F0FF] text-[#0D0E11] shadow-[0_0_10px_rgba(0,240,255,0.4)]'
+                  ? 'bg-[#38BDF8] text-[#0D0E11] shadow-[0_0_10px_rgba(56, 189, 248,0.4)]'
                   : 'text-[#8A92A6] hover:text-[#F0F3F8]'
               }`}
             >
@@ -433,7 +433,7 @@ export const ColorGradingInspector: React.FC<ColorGradingInspectorProps> = ({
               onClick={() => onSelectScope('track')}
               className={`py-1.5 px-2 rounded text-xs font-mono font-bold transition-all truncate cursor-pointer ${
                 scope === 'track'
-                  ? 'bg-[#00F0FF] text-[#0D0E11] shadow-[0_0_10px_rgba(0,240,255,0.4)]'
+                  ? 'bg-[#38BDF8] text-[#0D0E11] shadow-[0_0_10px_rgba(56, 189, 248,0.4)]'
                   : 'text-[#8A92A6] hover:text-[#F0F3F8]'
               }`}
             >
@@ -443,7 +443,7 @@ export const ColorGradingInspector: React.FC<ColorGradingInspectorProps> = ({
               onClick={() => onSelectScope('master')}
               className={`py-1.5 px-2 rounded text-xs font-mono font-bold transition-all truncate cursor-pointer ${
                 scope === 'master'
-                  ? 'bg-[#00F0FF] text-[#0D0E11] shadow-[0_0_10px_rgba(0,240,255,0.4)]'
+                  ? 'bg-[#38BDF8] text-[#0D0E11] shadow-[0_0_10px_rgba(56, 189, 248,0.4)]'
                   : 'text-[#8A92A6] hover:text-[#F0F3F8]'
               }`}
             >
@@ -462,7 +462,7 @@ export const ColorGradingInspector: React.FC<ColorGradingInspectorProps> = ({
           className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#14161F]/60 transition-colors select-none"
         >
           <span className="text-xs font-bold text-[#F0F3F8] flex items-center gap-1.5">
-            <Sun size={13} className="text-[#00F0FF]" />
+            <Sun size={13} className="text-[#38BDF8]" />
             <span>Lightness</span>
           </span>
           <div className="flex items-center gap-2">
@@ -480,7 +480,7 @@ export const ColorGradingInspector: React.FC<ColorGradingInspectorProps> = ({
                 });
               }}
               title="Reset Lightness"
-              className="text-[#64748B] hover:text-[#00F0FF] transition-colors cursor-pointer"
+              className="text-[#64748B] hover:text-[#38BDF8] transition-colors cursor-pointer"
             >
               <RotateCcw size={11} />
             </button>
@@ -567,7 +567,7 @@ export const ColorGradingInspector: React.FC<ColorGradingInspectorProps> = ({
           className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#14161F]/60 transition-colors select-none"
         >
           <span className="text-xs font-bold text-[#F0F3F8] flex items-center gap-1.5">
-            <Sparkles size={13} className="text-[#00F0FF]" />
+            <Sparkles size={13} className="text-[#38BDF8]" />
             <span>Effects</span>
           </span>
           <div className="flex items-center gap-2">
@@ -583,7 +583,7 @@ export const ColorGradingInspector: React.FC<ColorGradingInspectorProps> = ({
                 });
               }}
               title="Reset Effects"
-              className="text-[#64748B] hover:text-[#00F0FF] transition-colors cursor-pointer"
+              className="text-[#64748B] hover:text-[#38BDF8] transition-colors cursor-pointer"
             >
               <RotateCcw size={11} />
             </button>
@@ -661,11 +661,11 @@ export const ColorGradingInspector: React.FC<ColorGradingInspectorProps> = ({
                     placeholder="Preset Name (e.g. My Cinematic Look)..."
                     value={newPresetName}
                     onChange={(e) => setNewPresetName(e.target.value)}
-                    className="flex-1 bg-[#14161B] border border-[#00F0FF]/60 rounded px-2.5 py-1 text-xs text-[#F0F3F8] outline-none"
+                    className="flex-1 bg-[#14161B] border border-[#38BDF8]/60 rounded px-2.5 py-1 text-xs text-[#F0F3F8] outline-none"
                   />
                   <button
                     type="submit"
-                    className="px-3 py-1 bg-[#00F0FF] hover:bg-[#34f3ff] text-[#0D0E11] rounded text-xs font-bold transition-all cursor-pointer"
+                    className="px-3 py-1 bg-[#38BDF8] hover:bg-[#34f3ff] text-[#0D0E11] rounded text-xs font-bold transition-all cursor-pointer"
                   >
                     Save
                   </button>
@@ -701,7 +701,7 @@ export const ColorGradingInspector: React.FC<ColorGradingInspectorProps> = ({
         >
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-[#F0F3F8] flex items-center gap-1.5">
-              <Palette size={13} className="text-[#00F0FF]" />
+              <Palette size={13} className="text-[#38BDF8]" />
               <span>HSL (Color Band Tuning)</span>
             </span>
           </div>
@@ -732,7 +732,7 @@ export const ColorGradingInspector: React.FC<ColorGradingInspectorProps> = ({
                   type="checkbox"
                   checked={hslEnabled}
                   onChange={(e) => setHslEnabled(e.target.checked)}
-                  className="w-3.5 h-3.5 rounded border-[#2E3340] accent-[#00F0FF] cursor-pointer"
+                  className="w-3.5 h-3.5 rounded border-[#2E3340] accent-[#38BDF8] cursor-pointer"
                 />
                 <span className="text-xs font-medium text-[#D1D5DB]">Enable HSL Adjustments</span>
               </label>
@@ -815,7 +815,7 @@ export const ColorGradingInspector: React.FC<ColorGradingInspectorProps> = ({
           className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#14161F]/60 transition-colors select-none"
         >
           <span className="text-xs font-bold text-[#F0F3F8] flex items-center gap-1.5">
-            <Sparkles size={13} className="text-[#00F0FF]" />
+            <Sparkles size={13} className="text-[#38BDF8]" />
             <span>Preset Looks & .CUBE LUTs</span>
           </span>
           <div className="flex items-center gap-2">
@@ -829,7 +829,7 @@ export const ColorGradingInspector: React.FC<ColorGradingInspectorProps> = ({
                 );
               }}
               title="Export Current Adjustment as standard .cube 3D LUT"
-              className="flex items-center gap-1 px-2 py-0.5 rounded bg-[#1A1D24] hover:bg-[#222630] border border-[#222630] text-[#00F0FF] text-[10px] font-mono transition-colors cursor-pointer"
+              className="flex items-center gap-1 px-2 py-0.5 rounded bg-[#1A1D24] hover:bg-[#222630] border border-[#222630] text-[#38BDF8] text-[10px] font-mono transition-colors cursor-pointer"
             >
               <Download size={11} />
               <span>Export .CUBE</span>
@@ -852,7 +852,7 @@ export const ColorGradingInspector: React.FC<ColorGradingInspectorProps> = ({
                     applyColorGradingPreset(pid, scope);
                   }
                 }}
-                className="flex-1 bg-[#14161B] border border-[#222630] focus:border-[#00F0FF] rounded px-2.5 py-1.5 text-xs font-mono text-[#F0F3F8] outline-none cursor-pointer"
+                className="flex-1 bg-[#14161B] border border-[#222630] focus:border-[#38BDF8] rounded px-2.5 py-1.5 text-xs font-mono text-[#F0F3F8] outline-none cursor-pointer"
               >
                 <option value="">-- Apply a Saved Preset --</option>
                 <optgroup label="Built-in Looks">
@@ -904,7 +904,7 @@ export const ColorGradingInspector: React.FC<ColorGradingInspectorProps> = ({
           className="w-full p-3 flex items-center justify-between text-xs font-bold text-[#F0F3F8] hover:bg-[#14161F]/60 transition-colors cursor-pointer select-none"
         >
           <span className="flex items-center gap-1.5">
-            <SlidersHorizontal size={13} className="text-[#00F0FF]" />
+            <SlidersHorizontal size={13} className="text-[#38BDF8]" />
             <span>Spline Curves</span>
           </span>
           <span className="text-[#8A92A6]">
@@ -931,7 +931,7 @@ export const ColorGradingInspector: React.FC<ColorGradingInspectorProps> = ({
           className="w-full p-3 flex items-center justify-between text-xs font-bold text-[#F0F3F8] hover:bg-[#14161F]/60 transition-colors cursor-pointer select-none"
         >
           <span className="flex items-center gap-1.5">
-            <Palette size={13} className="text-[#00F0FF]" />
+            <Palette size={13} className="text-[#38BDF8]" />
             <span>3-Way Color Wheels & Tone Balance</span>
           </span>
           <span className="text-[#8A92A6]">

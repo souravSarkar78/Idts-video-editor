@@ -169,7 +169,7 @@ export const SettingsModal: React.FC = () => {
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#222630] bg-[#101217] shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="p-1.5 rounded-lg bg-[#00F0FF]/15 text-[#00F0FF] border border-[#00F0FF]/30">
+            <div className="p-1.5 rounded-lg bg-[#38BDF8]/15 text-[#38BDF8] border border-[#38BDF8]/30">
               <SettingsIcon size={18} />
             </div>
             <div>
@@ -196,7 +196,7 @@ export const SettingsModal: React.FC = () => {
             onClick={() => setActiveTab('shortcuts')}
             className={`flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-t border-t border-x transition-all cursor-pointer ${
               activeTab === 'shortcuts'
-                ? 'bg-[#14161B] text-[#00F0FF] border-[#222630] border-b-[#14161B] -mb-[1px]'
+                ? 'bg-[#14161B] text-[#38BDF8] border-[#222630] border-b-[#14161B] -mb-[1px]'
                 : 'text-[#8A92A6] border-transparent hover:text-[#F0F3F8]'
             }`}
           >
@@ -207,7 +207,7 @@ export const SettingsModal: React.FC = () => {
             onClick={() => setActiveTab('audio')}
             className={`flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-t border-t border-x transition-all cursor-pointer ${
               activeTab === 'audio'
-                ? 'bg-[#14161B] text-[#00F0FF] border-[#222630] border-b-[#14161B] -mb-[1px]'
+                ? 'bg-[#14161B] text-[#38BDF8] border-[#222630] border-b-[#14161B] -mb-[1px]'
                 : 'text-[#8A92A6] border-transparent hover:text-[#F0F3F8]'
             }`}
           >
@@ -218,7 +218,7 @@ export const SettingsModal: React.FC = () => {
             onClick={() => setActiveTab('general')}
             className={`flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-t border-t border-x transition-all cursor-pointer ${
               activeTab === 'general'
-                ? 'bg-[#14161B] text-[#00F0FF] border-[#222630] border-b-[#14161B] -mb-[1px]'
+                ? 'bg-[#14161B] text-[#38BDF8] border-[#222630] border-b-[#14161B] -mb-[1px]'
                 : 'text-[#8A92A6] border-transparent hover:text-[#F0F3F8]'
             }`}
           >
@@ -229,7 +229,7 @@ export const SettingsModal: React.FC = () => {
             onClick={() => setActiveTab('media')}
             className={`flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-t border-t border-x transition-all cursor-pointer ${
               activeTab === 'media'
-                ? 'bg-[#14161B] text-[#00F0FF] border-[#222630] border-b-[#14161B] -mb-[1px]'
+                ? 'bg-[#14161B] text-[#38BDF8] border-[#222630] border-b-[#14161B] -mb-[1px]'
                 : 'text-[#8A92A6] border-transparent hover:text-[#F0F3F8]'
             }`}
           >
@@ -253,7 +253,7 @@ export const SettingsModal: React.FC = () => {
                   placeholder="Search actions or keys..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-[#0D0E11] border border-[#222630] rounded-lg pl-9 pr-3 py-1.5 text-xs text-[#F0F3F8] placeholder-[#525D73] outline-none focus:border-[#00F0FF]/60"
+                  className="w-full bg-[#0D0E11] border border-[#222630] rounded-lg pl-9 pr-3 py-1.5 text-xs text-[#F0F3F8] placeholder-[#525D73] outline-none focus:border-[#38BDF8]/60"
                 />
               </div>
 
@@ -265,7 +265,7 @@ export const SettingsModal: React.FC = () => {
                     onClick={() => setSelectedCat(cat)}
                     className={`px-2.5 py-1 rounded text-[11px] font-medium transition-colors cursor-pointer ${
                       selectedCat === cat
-                        ? 'bg-[#1E222D] text-[#00F0FF] font-bold shadow-xs'
+                        ? 'bg-[#1E222D] text-[#38BDF8] font-bold shadow-xs'
                         : 'text-[#8A92A6] hover:text-[#F0F3F8]'
                     }`}
                   >
@@ -277,7 +277,7 @@ export const SettingsModal: React.FC = () => {
               {/* Reset to Defaults Button */}
               <button
                 onClick={resetDefaults}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#222630] bg-[#0D0E11] text-[11px] font-mono text-[#8A92A6] hover:text-[#00F0FF] hover:border-[#00F0FF]/40 cursor-pointer transition-colors shrink-0"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#222630] bg-[#0D0E11] text-[11px] font-mono text-[#8A92A6] hover:text-[#38BDF8] hover:border-[#38BDF8]/40 cursor-pointer transition-colors shrink-0"
                 title="Restore default shortcut keys"
               >
                 <RotateCcw size={12} />
@@ -329,7 +329,7 @@ export const SettingsModal: React.FC = () => {
                         </div>
                       ) : (
                         <div className="flex items-center gap-2">
-                          <kbd className="px-2.5 py-1 rounded-md bg-[#1B1E27] border border-[#2B3040] text-[#00F0FF] font-mono text-xs font-bold shadow-xs">
+                          <kbd className="px-2.5 py-1 rounded-md bg-[#1B1E27] border border-[#2B3040] text-[#38BDF8] font-mono text-xs font-bold shadow-xs">
                             {currentKey}
                           </kbd>
                           <button
@@ -353,7 +353,7 @@ export const SettingsModal: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="font-bold text-[#F0F3F8] flex items-center gap-2">
-                    <Mic size={14} className="text-[#00F0FF]" />
+                    <Mic size={14} className="text-[#38BDF8]" />
                     <span>Microphone Input Device</span>
                   </h3>
                   <p className="text-[11px] text-[#8A92A6] mt-0.5 leading-relaxed">
@@ -362,7 +362,7 @@ export const SettingsModal: React.FC = () => {
                 </div>
                 <button
                   onClick={() => fetchAudioInputDevices()}
-                  className="p-1.5 rounded bg-[#181B22] hover:bg-[#222630] text-[#8A92A6] hover:text-[#00F0FF] transition-colors cursor-pointer"
+                  className="p-1.5 rounded bg-[#181B22] hover:bg-[#222630] text-[#8A92A6] hover:text-[#38BDF8] transition-colors cursor-pointer"
                   title="Refresh Audio Device List"
                 >
                   <RefreshCw size={13} />
@@ -373,7 +373,7 @@ export const SettingsModal: React.FC = () => {
                 <select
                   value={voiceoverSelectedDeviceId || 'default'}
                   onChange={(e) => setVoiceoverSelectedDeviceId(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#14161B] border border-[#222630] rounded-md text-xs text-[#F0F3F8] focus:outline-none focus:border-[#00F0FF]/50"
+                  className="w-full px-3 py-2 bg-[#14161B] border border-[#222630] rounded-md text-xs text-[#F0F3F8] focus:outline-none focus:border-[#38BDF8]/50"
                 >
                   <option value="default">Default System Microphone</option>
                   {(availableAudioDevices || [])
@@ -429,7 +429,7 @@ export const SettingsModal: React.FC = () => {
                     onChange={(e) => setVoiceoverMuteTimeline(e.target.checked)}
                     className="sr-only peer"
                   />
-                  <div className="w-8 h-4 bg-[#222630] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3.5 after:transition-all peer-checked:bg-[#00F0FF]"></div>
+                  <div className="w-8 h-4 bg-[#222630] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3.5 after:transition-all peer-checked:bg-[#38BDF8]"></div>
                 </label>
               </div>
 
@@ -447,7 +447,7 @@ export const SettingsModal: React.FC = () => {
                     onChange={(e) => setVoiceoverUseCountdown(e.target.checked)}
                     className="sr-only peer"
                   />
-                  <div className="w-8 h-4 bg-[#222630] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3.5 after:transition-all peer-checked:bg-[#00F0FF]"></div>
+                  <div className="w-8 h-4 bg-[#222630] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3.5 after:transition-all peer-checked:bg-[#38BDF8]"></div>
                 </label>
               </div>
             </div>
@@ -470,7 +470,7 @@ export const SettingsModal: React.FC = () => {
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h3 className="font-bold text-[#F0F3F8] flex items-center gap-2">
-                    <Zap size={14} className="text-[#00F0FF]" />
+                    <Zap size={14} className="text-[#38BDF8]" />
                     <span>Automatic Proxy Generation</span>
                   </h3>
                   <p className="text-[11px] text-[#8A92A6] mt-1 leading-relaxed">
@@ -484,7 +484,7 @@ export const SettingsModal: React.FC = () => {
                     onChange={(e) => setAutoGenerateProxies(e.target.checked)}
                     className="sr-only peer"
                   />
-                  <div className="w-9 h-5 bg-[#222630] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#00F0FF]"></div>
+                  <div className="w-9 h-5 bg-[#222630] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#38BDF8]"></div>
                 </label>
               </div>
             </div>
@@ -502,7 +502,7 @@ export const SettingsModal: React.FC = () => {
                   <select
                     value={proxyResolution}
                     onChange={(e) => setProxyResolution(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#14161B] border border-[#222630] rounded-md text-xs text-[#F0F3F8] focus:outline-none focus:border-[#00F0FF]/50"
+                    className="w-full px-3 py-2 bg-[#14161B] border border-[#222630] rounded-md text-xs text-[#F0F3F8] focus:outline-none focus:border-[#38BDF8]/50"
                   >
                     <option value="720p">720p (1280x720) - Standard (Recommended)</option>
                     <option value="540p">540p (960x540) - Low Bitrate</option>
@@ -521,7 +521,7 @@ export const SettingsModal: React.FC = () => {
                   <select
                     value={proxyCodec}
                     onChange={(e) => setProxyCodec(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#14161B] border border-[#222630] rounded-md text-xs text-[#F0F3F8] focus:outline-none focus:border-[#00F0FF]/50"
+                    className="w-full px-3 py-2 bg-[#14161B] border border-[#222630] rounded-md text-xs text-[#F0F3F8] focus:outline-none focus:border-[#38BDF8]/50"
                   >
                     <option value="h264_nvenc">NVIDIA NVENC (GPU Hardware Accelerated)</option>
                     <option value="libx264">libx264 (CPU Ultrafast Fallback)</option>
@@ -549,11 +549,11 @@ export const SettingsModal: React.FC = () => {
           <div className="flex-1 p-5 space-y-4 overflow-y-auto text-xs min-h-0">
             <div className="p-3.5 rounded-lg bg-[#0D0E11] border border-[#222630] space-y-2">
               <span className="font-bold text-[#F0F3F8] flex items-center gap-1.5">
-                <Sparkles size={14} className="text-[#00F0FF]" />
+                <Sparkles size={14} className="text-[#38BDF8]" />
                 <span>idts Project File Association</span>
               </span>
               <p className="text-[11px] text-[#64748B] leading-relaxed">
-                Projects are saved in native <code className="text-[#00F0FF]">.idts</code> format, storing timeline tracks, synchronized camera offsets, clip trim boundaries, color adjustments, and media pool bins.
+                Projects are saved in native <code className="text-[#38BDF8]">.idts</code> format, storing timeline tracks, synchronized camera offsets, clip trim boundaries, color adjustments, and media pool bins.
               </p>
             </div>
 
@@ -572,12 +572,12 @@ export const SettingsModal: React.FC = () => {
         {/* Footer */}
         <div className="px-5 py-3 border-t border-[#222630] bg-[#101217] flex items-center justify-between text-xs text-[#64748B] shrink-0">
           <span className="flex items-center gap-1 font-mono text-[11px]">
-            <Info size={13} className="text-[#00F0FF]" />
+            <Info size={13} className="text-[#38BDF8]" />
             Changes are automatically saved to disk
           </span>
           <button
             onClick={closeSettingsModal}
-            className="px-4 py-1.5 rounded-md bg-[#00F0FF] hover:bg-[#3bf1ff] text-[#0D0E11] font-bold transition-all cursor-pointer shadow-[0_0_10px_rgba(0,240,255,0.3)]"
+            className="px-4 py-1.5 rounded-md bg-[#38BDF8] hover:bg-[#3bf1ff] text-[#0D0E11] font-bold transition-all cursor-pointer shadow-[0_0_10px_rgba(56, 189, 248,0.3)]"
           >
             Done
           </button>

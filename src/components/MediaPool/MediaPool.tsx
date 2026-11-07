@@ -686,9 +686,9 @@ export const MediaPool: React.FC = () => {
       {isSidebarOpen && (
         <div className="w-36 shrink-0 bg-[#0F1116] border-r border-[#222630] flex flex-col p-2">
           {/* Top category label & collapse button */}
-          <div className="flex items-center justify-between px-1.5 py-1 mb-1 text-[#00F0FF] text-xs font-semibold">
+          <div className="flex items-center justify-between px-1.5 py-1 mb-1 text-[#38BDF8] text-xs font-semibold">
             <div className="flex items-center gap-1.5 truncate">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#00F0FF] shadow-[0_0_6px_#00F0FF] shrink-0" />
+              <span className="w-1.5 h-1.5 rounded-full bg-[#38BDF8] shadow-xs shrink-0" />
               <span className="truncate">Local Media</span>
             </div>
             <button
@@ -706,7 +706,7 @@ export const MediaPool: React.FC = () => {
             <button
               onClick={() => setIsCreatingBin(true)}
               title="Create New Bin"
-              className="p-1 rounded hover:bg-[#222630] text-[#8A92A6] hover:text-[#00F0FF] transition-colors"
+              className="p-1 rounded hover:bg-[#222630] text-[#8A92A6] hover:text-[#38BDF8] transition-colors"
             >
               <FolderPlus size={13} />
             </button>
@@ -724,7 +724,7 @@ export const MediaPool: React.FC = () => {
               onBlur={() => {
                 if (!newBinName.trim()) setIsCreatingBin(false);
               }}
-              className="w-full px-2 py-1 text-xs bg-[#1A1D24] border border-[#00F0FF]/50 rounded text-[#F0F3F8] focus:outline-none"
+              className="w-full px-2 py-1 text-xs bg-[#1A1D24] border border-[#38BDF8]/50 rounded text-[#F0F3F8] focus:outline-none"
             />
           </form>
         )}
@@ -747,7 +747,7 @@ export const MediaPool: React.FC = () => {
                 onDrop={(e) => handleBinDrop(e, bin.id)}
                 className={`flex items-center justify-between px-2.5 py-1.5 rounded-md cursor-pointer text-xs font-medium transition-all group ${
                   isActive
-                    ? 'bg-[#1C212B] text-[#00F0FF] border-l-2 border-[#00F0FF]'
+                    ? 'bg-[#1C212B] text-[#38BDF8] border-l-2 border-[#38BDF8]'
                     : 'text-[#8A92A6] hover:bg-[#161920] hover:text-[#F0F3F8]'
                 }`}
                 title="Click to view bin, or drag media here to move"
@@ -755,7 +755,7 @@ export const MediaPool: React.FC = () => {
                 <div className="flex items-center gap-2 truncate flex-1 mr-1">
                   <Folder
                     size={14}
-                    className={isActive ? 'text-[#00F0FF]' : 'text-[#64748B] group-hover:text-[#F0F3F8]'}
+                    className={isActive ? 'text-[#38BDF8]' : 'text-[#64748B] group-hover:text-[#F0F3F8]'}
                   />
                   {isEditing ? (
                     <form
@@ -769,7 +769,7 @@ export const MediaPool: React.FC = () => {
                         value={editingBinName}
                         onChange={(e) => setEditingBinName(e.target.value)}
                         onBlur={() => setEditingBinId(null)}
-                        className="w-full px-1 py-0.5 text-xs bg-[#1A1D24] border border-[#00F0FF] rounded text-white"
+                        className="w-full px-1 py-0.5 text-xs bg-[#1A1D24] border border-[#38BDF8] rounded text-white"
                       />
                     </form>
                   ) : (
@@ -834,7 +834,7 @@ export const MediaPool: React.FC = () => {
               {!isSidebarOpen && (
                 <button
                   onClick={() => setIsSidebarOpen(true)}
-                  className="p-1.5 rounded bg-[#1A1D24] hover:bg-[#222630] border border-[#222630] text-[#8A92A6] hover:text-[#00F0FF] transition-colors"
+                  className="p-1.5 rounded bg-[#1A1D24] hover:bg-[#222630] border border-[#222630] text-[#8A92A6] hover:text-[#38BDF8] transition-colors"
                   title="Show Bins & Folders"
                 >
                   <ChevronRight size={13} />
@@ -844,7 +844,7 @@ export const MediaPool: React.FC = () => {
               <button
                 onClick={handleNativeImportFiles}
                 disabled={isImporting}
-                className="flex items-center gap-1 px-2.5 py-1 bg-[#00F0FF] hover:bg-[#34f3ff] text-[#0D0E11] rounded text-[11px] font-bold transition-all shadow-[0_0_8px_rgba(0,240,255,0.3)] cursor-pointer"
+                className="flex items-center gap-1 px-2.5 py-1 bg-[#38BDF8] hover:bg-[#34f3ff] text-[#0D0E11] rounded text-[11px] font-bold transition-all shadow-[0_0_8px_rgba(56, 189, 248,0.3)] cursor-pointer"
                 title="Import Media Files"
               >
                 <Plus size={13} strokeWidth={3} />
@@ -857,7 +857,7 @@ export const MediaPool: React.FC = () => {
                 className="flex items-center gap-1 px-2 py-1 bg-[#1A1D24] hover:bg-[#222630] border border-[#222630] text-[#F0F3F8] rounded text-[11px] font-medium transition-colors cursor-pointer"
                 title="Select folder to import and probe all clips"
               >
-                <Folder size={12} className="text-[#00F0FF]" />
+                <Folder size={12} className="text-[#38BDF8]" />
                 <span className="hidden sm:inline">Folder</span>
               </button>
 
@@ -873,7 +873,7 @@ export const MediaPool: React.FC = () => {
                     setCreateProxiesNow(e.target.checked);
                     (window as any).__IDTS_AUTO_GEN_PROXIES__ = e.target.checked;
                   }}
-                  className="rounded bg-[#0D0E11] border-[#222630] text-[#00F0FF] focus:ring-0 cursor-pointer w-3.5 h-3.5 accent-[#00F0FF] shrink-0"
+                  className="rounded bg-[#0D0E11] border-[#222630] text-[#38BDF8] focus:ring-0 cursor-pointer w-3.5 h-3.5 accent-[#38BDF8] shrink-0"
                 />
                 <span>Proxies</span>
               </label>
@@ -887,7 +887,7 @@ export const MediaPool: React.FC = () => {
                 placeholder="Search..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-7 pr-5 py-1 text-[11px] bg-[#0D0E11] border border-[#222630] rounded text-[#F0F3F8] placeholder-[#64748B] focus:outline-none focus:border-[#00F0FF]/50"
+                className="w-full pl-7 pr-5 py-1 text-[11px] bg-[#0D0E11] border border-[#222630] rounded text-[#F0F3F8] placeholder-[#64748B] focus:outline-none focus:border-[#38BDF8]/50"
               />
               {searchQuery && (
                 <button
@@ -908,7 +908,7 @@ export const MediaPool: React.FC = () => {
                 onClick={() => setFilterType('all')}
                 className={`px-2 py-0.5 rounded font-medium transition-colors ${
                   filterType === 'all'
-                    ? 'bg-[#222630] text-[#00F0FF] font-semibold'
+                    ? 'bg-[#222630] text-[#38BDF8] font-semibold'
                     : 'text-[#8A92A6] hover:text-[#F0F3F8]'
                 }`}
               >
@@ -918,7 +918,7 @@ export const MediaPool: React.FC = () => {
                 onClick={() => setFilterType('video')}
                 className={`px-2 py-0.5 rounded font-medium transition-colors ${
                   filterType === 'video'
-                    ? 'bg-[#222630] text-[#00F0FF] font-semibold'
+                    ? 'bg-[#222630] text-[#38BDF8] font-semibold'
                     : 'text-[#8A92A6] hover:text-[#F0F3F8]'
                 }`}
               >
@@ -928,7 +928,7 @@ export const MediaPool: React.FC = () => {
                 onClick={() => setFilterType('audio')}
                 className={`px-2 py-0.5 rounded font-medium transition-colors ${
                   filterType === 'audio'
-                    ? 'bg-[#222630] text-[#00F0FF] font-semibold'
+                    ? 'bg-[#222630] text-[#38BDF8] font-semibold'
                     : 'text-[#8A92A6] hover:text-[#F0F3F8]'
                 }`}
               >
@@ -944,7 +944,7 @@ export const MediaPool: React.FC = () => {
                     const assetsToAdd = filteredAssets.filter((a) => selectedMediaIds.has(a.id));
                     if (assetsToAdd.length > 0) addAssetsToTrack(assetsToAdd.map((a) => a.id));
                   }}
-                  className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded bg-[#00F0FF] hover:bg-[#34f3ff] text-[#0D0E11] transition-all shadow-[0_0_6px_rgba(0,240,255,0.3)] cursor-pointer"
+                  className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded bg-[#38BDF8] hover:bg-[#34f3ff] text-[#0D0E11] transition-all shadow-[0_0_6px_rgba(56, 189, 248,0.3)] cursor-pointer"
                   title={`Add ${selectedMediaIds.size} selected asset(s) to timeline`}
                 >
                   <Plus size={11} strokeWidth={3} />
@@ -987,17 +987,17 @@ export const MediaPool: React.FC = () => {
           {filteredAssets.length === 0 ? (
             <div
               onClick={handleNativeImportFiles}
-              className="flex-1 min-h-[220px] flex flex-col items-center justify-center text-center p-6 text-[#64748B] cursor-pointer hover:bg-[#161820]/70 rounded-xl transition-all group border-2 border-dashed border-transparent hover:border-[#00F0FF]/35 select-none"
+              className="flex-1 min-h-[220px] flex flex-col items-center justify-center text-center p-6 text-[#64748B] cursor-pointer hover:bg-[#161820]/70 rounded-xl transition-all group border-2 border-dashed border-transparent hover:border-[#38BDF8]/35 select-none"
               title="Click anywhere to import media files"
             >
-              <div className="w-14 h-14 rounded-full bg-[#181B22] border border-[#222630] group-hover:border-[#00F0FF]/60 group-hover:bg-[#00F0FF]/15 flex items-center justify-center mb-3 text-[#00F0FF] group-hover:scale-110 transition-all shadow-md">
+              <div className="w-14 h-14 rounded-full bg-[#181B22] border border-[#222630] group-hover:border-[#38BDF8]/60 group-hover:bg-[#38BDF8]/15 flex items-center justify-center mb-3 text-[#38BDF8] group-hover:scale-110 transition-all shadow-md">
                 <Upload size={24} className="group-hover:-translate-y-0.5 transition-transform" />
               </div>
               <div className="text-sm font-semibold text-[#8A92A6] group-hover:text-white transition-colors">
                 No media in this bin
               </div>
               <div className="text-xs text-[#525D73] group-hover:text-[#8A92A6] mt-1 max-w-[220px] transition-colors leading-relaxed">
-                Click <span className="text-[#00F0FF] font-semibold underline decoration-[#00F0FF]/40 underline-offset-2">Import</span> or drag video/audio files from your explorer
+                Click <span className="text-[#38BDF8] font-semibold underline decoration-[#38BDF8]/40 underline-offset-2">Import</span> or drag video/audio files from your explorer
               </div>
             </div>
           ) : viewMode === 'grid' ? (
@@ -1025,8 +1025,8 @@ export const MediaPool: React.FC = () => {
                         title={`Importing ${asset.name} (${asset.ingestStatus || 'Probing...'})...`}
                       >
                         <div className="relative aspect-video w-full bg-[#161820] flex flex-col items-center justify-center text-center p-2">
-                          <Loader2 size={20} className="text-[#00F0FF] animate-spin mb-1.5" />
-                          <span className="text-[10px] font-mono text-[#00F0FF] font-semibold uppercase tracking-wider">
+                          <Loader2 size={20} className="text-[#38BDF8] animate-spin mb-1.5" />
+                          <span className="text-[10px] font-mono text-[#38BDF8] font-semibold uppercase tracking-wider">
                             {asset.ingestStatus || 'Probing...'}
                           </span>
                           <span className="text-[9px] text-[#64748B] truncate max-w-full px-2 mt-0.5">
@@ -1035,7 +1035,7 @@ export const MediaPool: React.FC = () => {
                         </div>
                         <div className="px-2 py-1.5 flex items-center justify-between text-[10px] font-mono bg-[#0C0E12] border-t border-[#1C202B]">
                           <span className="text-[#64748B] truncate">{asset.name}</span>
-                          <span className="text-[#00F0FF] text-[9px]">Queued</span>
+                          <span className="text-[#38BDF8] text-[9px]">Queued</span>
                         </div>
                       </div>
                     );
@@ -1072,11 +1072,11 @@ export const MediaPool: React.FC = () => {
                         setAssetContextMenu({ x: e.clientX, y: e.clientY, asset });
                       }}
                       title={`File: ${asset.name}\nResolution: ${resBadge}\nFPS: ${fpsBadge}\nDuration: ${durationStr}\n(Right-click for Proxy options, double-click or drag to add to timeline)`}
-                      className={`group relative flex flex-col rounded-md overflow-hidden bg-[#0D0E11] border transition-all cursor-grab active:cursor-grabbing hover:border-[#00F0FF]/80 hover:shadow-[0_0_16px_rgba(0,240,255,0.2)] ${
+                      className={`group relative flex flex-col rounded-md overflow-hidden bg-[#0D0E11] border transition-all cursor-grab active:cursor-grabbing hover:border-[#38BDF8]/80 hover:shadow-[0_0_16px_rgba(56, 189, 248,0.2)] ${
                         isMultiSelected
-                          ? 'border-[#00F0FF] ring-2 ring-[#00F0FF] shadow-[0_0_12px_rgba(0,240,255,0.3)] bg-[#00F0FF]/10'
+                          ? 'border-[#38BDF8] ring-2 ring-[#38BDF8] shadow-[0_0_12px_rgba(56, 189, 248,0.3)] bg-[#38BDF8]/10'
                           : isSelected
-                          ? 'border-[#00F0FF] ring-1 ring-[#00F0FF]'
+                          ? 'border-[#38BDF8] ring-1 ring-[#38BDF8]'
                           : 'border-[#222630]'
                       }`}
                     >
@@ -1102,7 +1102,7 @@ export const MediaPool: React.FC = () => {
                           )}
                           {proxyStatus[asset.filePath] === 'transcoding' && (
                             <span
-                              className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-[#00F0FF] text-[#0D0E11] shadow-md animate-pulse flex items-center gap-1"
+                              className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-[#38BDF8] text-[#0D0E11] shadow-md animate-pulse flex items-center gap-1"
                               title="Transcoding proxy..."
                             >
                               <RefreshCw size={9} className="animate-spin" />
@@ -1125,7 +1125,7 @@ export const MediaPool: React.FC = () => {
                             e.stopPropagation();
                             handleQuickAdd(asset);
                           }}
-                          className="absolute bottom-1.5 right-1.5 p-1 rounded-full bg-[#00F0FF] text-[#0D0E11] hover:scale-110 transition-transform shadow-lg opacity-0 group-hover:opacity-100 z-30 cursor-pointer"
+                          className="absolute bottom-1.5 right-1.5 p-1 rounded-full bg-[#38BDF8] text-[#0D0E11] hover:scale-110 transition-transform shadow-lg opacity-0 group-hover:opacity-100 z-30 cursor-pointer"
                           title="Add to Timeline Track"
                         >
                           <Plus size={12} strokeWidth={3} />
@@ -1135,7 +1135,7 @@ export const MediaPool: React.FC = () => {
                       {/* Compact Footer: ONLY Resolution, FPS, and Duration */}
                       <div className="px-2 py-1.5 flex items-center justify-between text-[10px] font-mono bg-[#0C0E12] border-t border-[#1C202B]">
                         <div className="flex items-center gap-1.5 truncate">
-                          <span className="text-[#00F0FF] font-medium">{resBadge}</span>
+                          <span className="text-[#38BDF8] font-medium">{resBadge}</span>
                           <span className="text-[#64748B]">•</span>
                           <span className="text-[#94A3B8]">{fpsBadge}</span>
                         </div>
@@ -1166,13 +1166,13 @@ export const MediaPool: React.FC = () => {
                     >
                       <div className="flex items-center gap-3 truncate flex-1 min-w-0 pr-3">
                         <div className="w-12 h-8 rounded bg-[#161820] flex items-center justify-center shrink-0">
-                          <Loader2 size={14} className="text-[#00F0FF] animate-spin" />
+                          <Loader2 size={14} className="text-[#38BDF8] animate-spin" />
                         </div>
                         <div className="truncate flex-1 min-w-0">
                           <div className="text-xs font-semibold text-[#8A92A6] truncate">
                             {asset.name}
                           </div>
-                          <div className="text-[10px] text-[#00F0FF] font-mono">
+                          <div className="text-[10px] text-[#38BDF8] font-mono">
                             {asset.ingestStatus || 'Probing metadata...'}
                           </div>
                         </div>
@@ -1201,11 +1201,11 @@ export const MediaPool: React.FC = () => {
                       setAssetContextMenu({ x: e.clientX, y: e.clientY, asset });
                     }}
                     title={`File: ${asset.name}\nPath: ${asset.filePath}\nDuration: ${formatSeconds(asset.durationSeconds)} (${asset.durationSeconds}s)\nType: ${asset.mediaType.toUpperCase()}\n(Right-click for Proxy options, double-click or drag to add to timeline)`}
-                    className={`group relative flex items-center justify-between px-3 py-2 rounded-md bg-[#0D0E11] border transition-all cursor-grab active:cursor-grabbing hover:border-[#00F0FF]/60 hover:bg-[#161922] ${
+                    className={`group relative flex items-center justify-between px-3 py-2 rounded-md bg-[#0D0E11] border transition-all cursor-grab active:cursor-grabbing hover:border-[#38BDF8]/60 hover:bg-[#161922] ${
                       isMultiSelected
-                        ? 'border-[#00F0FF] ring-2 ring-[#00F0FF] bg-[#00F0FF]/15'
+                        ? 'border-[#38BDF8] ring-2 ring-[#38BDF8] bg-[#38BDF8]/15'
                         : isSelected
-                        ? 'border-[#00F0FF] bg-[#161922]'
+                        ? 'border-[#38BDF8] bg-[#161922]'
                         : 'border-[#222630]'
                     }`}
                   >
@@ -1225,7 +1225,7 @@ export const MediaPool: React.FC = () => {
                         )}
                       </div>
                       <div className="truncate flex-1 min-w-0">
-                        <div className="text-xs font-semibold text-[#F0F3F8] group-hover:text-[#00F0FF] truncate group-hover:whitespace-normal group-hover:break-all transition-colors flex items-center gap-1.5">
+                        <div className="text-xs font-semibold text-[#F0F3F8] group-hover:text-[#38BDF8] truncate group-hover:whitespace-normal group-hover:break-all transition-colors flex items-center gap-1.5">
                           <span>{asset.name}</span>
                           {asset.hasProxy && (
                             <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-[#10B981]/25 text-[#10B981] border border-[#10B981]/40">
@@ -1233,7 +1233,7 @@ export const MediaPool: React.FC = () => {
                             </span>
                           )}
                           {proxyStatus[asset.filePath] === 'transcoding' && (
-                            <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-[#00F0FF]/25 text-[#00F0FF] border border-[#00F0FF]/40 animate-pulse flex items-center gap-1">
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-[#38BDF8]/25 text-[#38BDF8] border border-[#38BDF8]/40 animate-pulse flex items-center gap-1">
                               <RefreshCw size={8} className="animate-spin" />
                               <span>PROX {Math.round(proxyProgress[asset.filePath] || 0)}%</span>
                             </span>
@@ -1252,7 +1252,7 @@ export const MediaPool: React.FC = () => {
                           e.stopPropagation();
                           handleQuickAdd(asset);
                         }}
-                        className="p-1 rounded bg-[#1A1D24] hover:bg-[#00F0FF] hover:text-[#0D0E11] text-[#00F0FF] transition-colors cursor-pointer"
+                        className="p-1 rounded bg-[#1A1D24] hover:bg-[#38BDF8] hover:text-[#0D0E11] text-[#38BDF8] transition-colors cursor-pointer"
                         title="Add to Timeline Track"
                       >
                         <Plus size={14} />
@@ -1274,7 +1274,7 @@ export const MediaPool: React.FC = () => {
               {filteredAssets.length} {filteredAssets.length === 1 ? 'item' : 'items'}
             </span>
             {selectedMediaIds.size > 0 && (
-              <span className="text-[#00F0FF] font-semibold">
+              <span className="text-[#38BDF8] font-semibold">
                 • {selectedMediaIds.size} selected
               </span>
             )}
@@ -1299,7 +1299,7 @@ export const MediaPool: React.FC = () => {
                   step={5}
                   value={gridCardSize}
                   onChange={(e) => handleZoomChange(Number(e.target.value))}
-                  className="w-16 sm:w-20 h-1 bg-[#222630] rounded appearance-none cursor-pointer accent-[#00F0FF]"
+                  className="w-16 sm:w-20 h-1 bg-[#222630] rounded appearance-none cursor-pointer accent-[#38BDF8]"
                 />
                 <ZoomIn
                   size={11}
@@ -1313,7 +1313,7 @@ export const MediaPool: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setViewMode('grid')}
-                className={`p-1 rounded transition-colors ${viewMode === 'grid' ? 'bg-[#222630] text-[#00F0FF]' : 'hover:text-[#F0F3F8]'}`}
+                className={`p-1 rounded transition-colors ${viewMode === 'grid' ? 'bg-[#222630] text-[#38BDF8]' : 'hover:text-[#F0F3F8]'}`}
                 title="Grid View"
               >
                 <Grid size={12} />
@@ -1321,7 +1321,7 @@ export const MediaPool: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setViewMode('list')}
-                className={`p-1 rounded transition-colors ${viewMode === 'list' ? 'bg-[#222630] text-[#00F0FF]' : 'hover:text-[#F0F3F8]'}`}
+                className={`p-1 rounded transition-colors ${viewMode === 'list' ? 'bg-[#222630] text-[#38BDF8]' : 'hover:text-[#F0F3F8]'}`}
                 title="List View"
               >
                 <List size={12} />
@@ -1364,9 +1364,9 @@ export const MediaPool: React.FC = () => {
                     generateClipProxy(assetContextMenu.asset.filePath);
                     setAssetContextMenu(null);
                   }}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-[#1C202B] text-[#00F0FF] hover:text-[#3bf1ff] transition-colors cursor-pointer text-left"
+                  className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-[#1C202B] text-[#38BDF8] hover:text-[#3bf1ff] transition-colors cursor-pointer text-left"
                 >
-                  <Zap size={13} className="text-[#00F0FF]" />
+                  <Zap size={13} className="text-[#38BDF8]" />
                   <span>Generate Proxy</span>
                 </button>
               )}
@@ -1413,7 +1413,7 @@ export const MediaPool: React.FC = () => {
       {/* Marquee Selection Drag-Box Rectangle Overlay */}
       {marquee && marquee.isActive && (
         <div
-          className="fixed pointer-events-none z-[9999] border-2 border-[#00F0FF] bg-[#00F0FF]/15 rounded shadow-[0_0_12px_rgba(0,240,255,0.3)] backdrop-blur-[1px]"
+          className="fixed pointer-events-none z-[9999] border-2 border-[#38BDF8] bg-[#38BDF8]/15 rounded shadow-[0_0_12px_rgba(56, 189, 248,0.3)] backdrop-blur-[1px]"
           style={{
             left: `${Math.min(marquee.startX, marquee.currentX)}px`,
             top: `${Math.min(marquee.startY, marquee.currentY)}px`,
@@ -1440,7 +1440,7 @@ export const MediaPool: React.FC = () => {
                 className={`p-2.5 rounded-lg shrink-0 ${
                   deletionModal.isInUse
                     ? 'bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse'
-                    : 'bg-[#00F0FF]/20 text-[#00F0FF] border border-[#00F0FF]/40'
+                    : 'bg-[#38BDF8]/20 text-[#38BDF8] border border-[#38BDF8]/40'
                 }`}
               >
                 {deletionModal.isInUse ? <AlertCircle size={24} /> : <Trash2 size={24} />}
@@ -1473,7 +1473,7 @@ export const MediaPool: React.FC = () => {
                     <div className="truncate flex-1 min-w-0 pr-2">
                       <span className="font-semibold text-white">{item.clip.name || 'Unnamed Clip'}</span>
                     </div>
-                    <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-[#1E222D] text-[#00F0FF] border border-[#2B3040] shrink-0">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-[#1E222D] text-[#38BDF8] border border-[#2B3040] shrink-0">
                       {item.trackName}
                     </span>
                   </div>
@@ -1506,10 +1506,10 @@ export const MediaPool: React.FC = () => {
 
       {/* Floating Overall Ingest Progress Toast */}
       {isIngesting && (
-        <div className="fixed bottom-4 left-4 z-[99999] bg-[#14161B]/95 border border-[#00F0FF]/40 rounded-lg shadow-2xl p-3 flex flex-col gap-2 min-w-[280px] max-w-[340px] backdrop-blur-md animate-in slide-in-from-bottom-2 duration-200">
+        <div className="fixed bottom-4 left-4 z-[99999] bg-[#14161B]/95 border border-[#38BDF8]/40 rounded-lg shadow-2xl p-3 flex flex-col gap-2 min-w-[280px] max-w-[340px] backdrop-blur-md animate-in slide-in-from-bottom-2 duration-200">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-xs font-semibold text-[#F0F3F8] truncate">
-              <Loader2 size={14} className="animate-spin text-[#00F0FF] shrink-0" />
+              <Loader2 size={14} className="animate-spin text-[#38BDF8] shrink-0" />
               <span className="truncate">
                 Importing: {ingestCurrent} of {ingestTotal} clips...
               </span>
@@ -1524,7 +1524,7 @@ export const MediaPool: React.FC = () => {
           </div>
           <div className="w-full bg-[#1C202B] rounded-full h-1.5 overflow-hidden">
             <div
-              className="bg-[#00F0FF] h-1.5 transition-all duration-200"
+              className="bg-[#38BDF8] h-1.5 transition-all duration-200"
               style={{
                 width: `${ingestTotal > 0 ? Math.min(100, Math.round((ingestCurrent / ingestTotal) * 100)) : 0}%`,
               }}

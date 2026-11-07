@@ -926,12 +926,12 @@ export interface TimelineState {
 }
 
 // Color palettes for dynamic track assignments
-const VIDEO_COLORS = ['#00F0FF', '#A855F7', '#EC4899', '#3B82F6', '#06B6D4', '#8B5CF6'];
+const VIDEO_COLORS = ['#38BDF8', '#A855F7', '#EC4899', '#3B82F6', '#06B6D4', '#8B5CF6'];
 const AUDIO_COLORS = ['#F59E0B', '#10B981', '#14B8A6', '#84CC16', '#EAB308'];
 
 // Initial clean bins (clean slate, custom bins can be added via +)
 const INITIAL_BINS: MediaBin[] = [
-  { id: 'all', name: 'All Media', color: '#00F0FF' },
+  { id: 'all', name: 'All Media', color: '#38BDF8' },
 ];
 
 // Initial clean media pool assets (empty on startup)
@@ -996,21 +996,7 @@ const INITIAL_TRACKS: MediaTrack[] = [
     id: 'track-v1',
     name: 'Track 1',
     trackType: 'video',
-    color: '#00F0FF',
-    muted: false,
-    solo: false,
-    locked: false,
-    visible: true,
-    volume: 1.0,
-    pan: 0,
-    timeOffsetSeconds: 0,
-    clips: [],
-  },
-  {
-    id: 'track-a1',
-    name: 'Audio 1',
-    trackType: 'audio',
-    color: '#F59E0B',
+    color: '#38BDF8',
     muted: false,
     solo: false,
     locked: false,
@@ -1934,7 +1920,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
       },
       defaultIntensity: 1.0,
       isCustom: true,
-      previewAccentColor: '#00F0FF',
+      previewAccentColor: '#38BDF8',
     };
 
     set((state) => {
@@ -2040,7 +2026,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
     const newBin: MediaBin = {
       id: `bin-${Date.now()}`,
       name: trimmed,
-      color: '#00F0FF',
+      color: '#38BDF8',
     };
     set((state) => ({
       bins: [...state.bins, newBin],
@@ -2916,7 +2902,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
           fontFamily: 'Impact',
           fontSize: 48,
           fontWeight: '800',
-          fontColor: '#00F0FF',
+          fontColor: '#38BDF8',
           strokeColor: '#000000',
           strokeWidth: 4,
           backgroundColor: 'rgba(13, 14, 17, 0.85)',

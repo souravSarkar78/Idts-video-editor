@@ -82,7 +82,7 @@ const TransitionCard: React.FC<TransitionCardProps> = ({
       onPointerDown={(e) => onPointerDown(item, e)}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      className="group relative flex flex-col bg-[#1A1D24] hover:bg-[#202530] border border-[#262B36] hover:border-[#00F0FF]/50 rounded-lg overflow-hidden transition-all duration-200 cursor-grab active:cursor-grabbing shadow-sm hover:shadow-[0_4px_16px_rgba(0,240,255,0.15)]"
+      className="group relative flex flex-col bg-[#1A1D24] hover:bg-[#202530] border border-[#262B36] hover:border-[#38BDF8]/50 rounded-lg overflow-hidden transition-all duration-200 cursor-grab active:cursor-grabbing shadow-sm hover:shadow-[0_4px_16px_rgba(56, 189, 248,0.15)]"
     >
       {/* Thumbnail Canvas */}
       <div className="relative aspect-video w-full bg-[#0D0F14] overflow-hidden border-b border-[#262B36]">
@@ -104,7 +104,7 @@ const TransitionCard: React.FC<TransitionCardProps> = ({
             e.stopPropagation();
             onApply(item);
           }}
-          className="absolute bottom-1.5 right-1.5 w-6 h-6 rounded-md flex items-center justify-center bg-[#00F0FF] text-[#0A0D14] opacity-0 group-hover:opacity-100 hover:scale-110 shadow-[0_0_8px_rgba(0,240,255,0.5)] transition-all"
+          className="absolute bottom-1.5 right-1.5 w-6 h-6 rounded-md flex items-center justify-center bg-[#38BDF8] text-[#0A0D14] opacity-0 group-hover:opacity-100 hover:scale-110 shadow-[0_0_8px_rgba(56, 189, 248,0.5)] transition-all"
           title="Apply Transition to Cut"
         >
           <Plus size={13} strokeWidth={3} />
@@ -114,7 +114,7 @@ const TransitionCard: React.FC<TransitionCardProps> = ({
       {/* Info Bar */}
       <div className="p-2 flex flex-col justify-between flex-1 min-h-[46px]">
         <div className="flex items-center justify-between gap-1">
-          <span className="text-[11px] font-semibold text-[#F0F3F8] truncate group-hover:text-[#00F0FF] transition-colors">
+          <span className="text-[11px] font-semibold text-[#F0F3F8] truncate group-hover:text-[#38BDF8] transition-colors">
             {item.name}
           </span>
           <span className="text-[9px] font-mono text-[#64748B] shrink-0">
@@ -367,7 +367,7 @@ export const TransitionsPanel: React.FC = () => {
       <div className="p-3 bg-[#101217] border-b border-[#222630] space-y-2.5 shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-md bg-[#00F0FF]/15 text-[#00F0FF] border border-[#00F0FF]/30">
+            <div className="p-1.5 rounded-md bg-[#38BDF8]/15 text-[#38BDF8] border border-[#38BDF8]/30">
               <Split size={15} />
             </div>
             <div>
@@ -393,7 +393,7 @@ export const TransitionsPanel: React.FC = () => {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search 50+ video transitions..."
-            className="w-full bg-[#1A1D24] text-[#F0F3F8] text-xs pl-8 pr-3 py-1.5 rounded-md border border-[#2B303C] focus:border-[#00F0FF] focus:outline-hidden transition-colors placeholder:text-[#525D73]"
+            className="w-full bg-[#1A1D24] text-[#F0F3F8] text-xs pl-8 pr-3 py-1.5 rounded-md border border-[#2B303C] focus:border-[#38BDF8] focus:outline-hidden transition-colors placeholder:text-[#525D73]"
           />
         </div>
 
@@ -407,7 +407,7 @@ export const TransitionsPanel: React.FC = () => {
                 onClick={() => setActiveCategory(cat)}
                 className={`px-2.5 py-1 rounded text-[11px] font-medium whitespace-nowrap transition-colors cursor-pointer ${
                   isSelected
-                    ? 'bg-[#00F0FF] text-[#0B0D13] font-bold shadow-[0_0_8px_rgba(0,240,255,0.3)]'
+                    ? 'bg-[#38BDF8] text-[#0B0D13] font-bold shadow-[0_0_8px_rgba(56, 189, 248,0.3)]'
                     : 'bg-[#181B22] text-[#8E9CAE] hover:text-[#F0F3F8] hover:bg-[#202530] border border-[#2B303C]'
                 }`}
               >
@@ -428,7 +428,7 @@ export const TransitionsPanel: React.FC = () => {
                   onClick={() => setAlignment(align)}
                   className={`px-1.5 py-0.5 rounded capitalize font-medium transition-colors cursor-pointer ${
                     alignment === align
-                      ? 'bg-[#00F0FF] text-[#0A0D14] font-bold'
+                      ? 'bg-[#38BDF8] text-[#0A0D14] font-bold'
                       : 'text-[#8E9CAE] hover:text-white'
                   }`}
                   title={`${align.toUpperCase()} on cut`}
@@ -448,9 +448,9 @@ export const TransitionsPanel: React.FC = () => {
               step={0.1}
               value={defaultDuration}
               onChange={(e) => setDefaultDuration(parseFloat(e.target.value))}
-              className="w-16 accent-[#00F0FF] cursor-pointer"
+              className="w-16 accent-[#38BDF8] cursor-pointer"
             />
-            <span className="font-mono text-[#00F0FF] w-7 text-right">
+            <span className="font-mono text-[#38BDF8] w-7 text-right">
               {defaultDuration.toFixed(1)}s
             </span>
           </div>

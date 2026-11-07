@@ -111,7 +111,7 @@ export const AutoCaptionModal: React.FC = () => {
               <div className="w-full max-w-xs space-y-1.5">
                 <div className="w-full h-2 rounded-full bg-[#1A1E27] overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-[#A855F7] to-[#00F0FF] transition-all duration-300"
+                    className="h-full bg-gradient-to-r from-[#A855F7] to-[#38BDF8] transition-all duration-300"
                     style={{ width: `${transcriptionProgress}%` }}
                   />
                 </div>

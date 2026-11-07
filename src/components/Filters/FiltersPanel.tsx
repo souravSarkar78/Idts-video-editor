@@ -190,16 +190,16 @@ export const FiltersPanel: React.FC = () => {
             <button
               type="button"
               onClick={() => setIsSidebarOpen(true)}
-              className="flex items-center gap-1 px-2 py-1 rounded bg-[#1B1E26] hover:bg-[#252A36] border border-[#2E3444] text-[#A0AEC0] hover:text-[#00F0FF] text-xs font-medium transition-all shadow-xs shrink-0"
+              className="flex items-center gap-1 px-2 py-1 rounded bg-[#1B1E26] hover:bg-[#252A36] border border-[#2E3444] text-[#A0AEC0] hover:text-[#38BDF8] text-xs font-medium transition-all shadow-xs shrink-0"
               title="Expand Folders & LUTs Sidebar"
             >
-              <ChevronRight size={13} className="text-[#00F0FF]" />
+              <ChevronRight size={13} className="text-[#38BDF8]" />
               <span className="hidden sm:inline">Folders</span>
             </button>
           )}
 
           <div className="flex items-center gap-1 text-white font-semibold text-xs tracking-wide whitespace-nowrap shrink-0">
-            <FilterIcon size={14} className="text-[#00F0FF]" />
+            <FilterIcon size={14} className="text-[#38BDF8]" />
             <span>Filters</span>
           </div>
 
@@ -211,7 +211,7 @@ export const FiltersPanel: React.FC = () => {
               placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-[#0D0F14] border border-[#262B36] rounded-md pl-7 pr-6 py-0.5 text-xs text-white placeholder-[#64748B] focus:outline-hidden focus:border-[#00F0FF]"
+              className="w-full bg-[#0D0F14] border border-[#262B36] rounded-md pl-7 pr-6 py-0.5 text-xs text-white placeholder-[#64748B] focus:outline-hidden focus:border-[#38BDF8]"
             />
             {searchQuery && (
               <button
@@ -248,7 +248,7 @@ export const FiltersPanel: React.FC = () => {
             }}
             className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium whitespace-nowrap transition-all ${
               samplePreviewMode === 'video_frame'
-                ? 'bg-[#00F0FF] text-black font-semibold shadow-xs'
+                ? 'bg-[#38BDF8] text-black font-semibold shadow-xs'
                 : 'text-[#8E9CAE] hover:text-white'
             }`}
             title="Current Timeline Frame"
@@ -262,7 +262,7 @@ export const FiltersPanel: React.FC = () => {
               type="button"
               onClick={() => refreshVideoFrameSnapshot()}
               disabled={isVideoFrameLoading}
-              className="p-1 hover:text-[#00F0FF] text-[#8E9CAE] disabled:opacity-50 transition-colors ml-0.5"
+              className="p-1 hover:text-[#38BDF8] text-[#8E9CAE] disabled:opacity-50 transition-colors ml-0.5"
               title="Refresh timeline frame"
             >
               <RotateCcw size={11} className={isVideoFrameLoading ? 'animate-spin' : ''} />
@@ -277,7 +277,7 @@ export const FiltersPanel: React.FC = () => {
           <div className="flex items-center gap-1.5 truncate">
             <span className="text-[10px] font-mono uppercase text-[#64748B] shrink-0">Active:</span>
             <span
-              className="text-xs font-semibold text-[#00F0FF] truncate max-w-[140px]"
+              className="text-xs font-semibold text-[#38BDF8] truncate max-w-[140px]"
               title={appliedFilterName || appliedFilterId}
             >
               {appliedFilterName || appliedFilterId}
@@ -300,7 +300,7 @@ export const FiltersPanel: React.FC = () => {
                   const val = parseInt(e.target.value, 10) / 100;
                   setClipFilterIntensity(val, activeClip.id);
                 }}
-                className="w-16 sm:w-20 h-1 bg-[#262B36] rounded-lg appearance-none cursor-pointer accent-[#00F0FF]"
+                className="w-16 sm:w-20 h-1 bg-[#262B36] rounded-lg appearance-none cursor-pointer accent-[#38BDF8]"
                 title="Filter Intensity"
               />
             </div>
@@ -333,7 +333,7 @@ export const FiltersPanel: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleImportLutClick}
-                  className="p-1 rounded hover:bg-[#1E222D] text-[#00F0FF] hover:text-white transition-colors"
+                  className="p-1 rounded hover:bg-[#1E222D] text-[#38BDF8] hover:text-white transition-colors"
                   title="Import 3D LUT (.cube) file"
                 >
                   <Upload size={11} />
@@ -368,19 +368,19 @@ export const FiltersPanel: React.FC = () => {
                     onClick={() => setActiveFilterCategory(cat.id)}
                     className={`w-full flex items-center justify-between px-2 py-1.5 rounded-md text-xs font-medium transition-colors ${
                       isSelected
-                        ? 'bg-[#00F0FF]/15 text-[#00F0FF] border border-[#00F0FF]/30'
+                        ? 'bg-[#38BDF8]/15 text-[#38BDF8] border border-[#38BDF8]/30'
                         : 'text-[#A0AEC0] hover:text-white hover:bg-[#1B1E26]'
                     }`}
                   >
                     <div className="flex items-center gap-1.5 truncate">
-                      <span className={isSelected ? 'text-[#00F0FF]' : 'text-[#64748B]'}>
+                      <span className={isSelected ? 'text-[#38BDF8]' : 'text-[#64748B]'}>
                         {renderCategoryIcon(cat.icon)}
                       </span>
                       <span className="truncate">{cat.name}</span>
                     </div>
                     <span
                       className={`text-[9px] font-mono px-1 py-0.2 rounded ${
-                        isSelected ? 'bg-[#00F0FF]/20 text-[#00F0FF]' : 'bg-[#1E222D] text-[#64748B]'
+                        isSelected ? 'bg-[#38BDF8]/20 text-[#38BDF8]' : 'bg-[#1E222D] text-[#64748B]'
                       }`}
                     >
                       {dynamicCount}
@@ -395,9 +395,9 @@ export const FiltersPanel: React.FC = () => {
               <button
                 type="button"
                 onClick={handleImportLutClick}
-                className="w-full flex items-center justify-center gap-1 py-1 px-2 rounded-md bg-[#1F2430] hover:bg-[#282F3E] text-white text-[11px] font-medium border border-[#2F374A] hover:border-[#00F0FF]/50 transition-all shadow-xs"
+                className="w-full flex items-center justify-center gap-1 py-1 px-2 rounded-md bg-[#1F2430] hover:bg-[#282F3E] text-white text-[11px] font-medium border border-[#2F374A] hover:border-[#38BDF8]/50 transition-all shadow-xs"
               >
-                <FolderPlus size={12} className="text-[#00F0FF]" />
+                <FolderPlus size={12} className="text-[#38BDF8]" />
                 <span>Import .cube</span>
               </button>
             </div>
@@ -424,7 +424,7 @@ export const FiltersPanel: React.FC = () => {
                 onClick={() => setCardScale('normal')}
                 className={`px-2.5 py-1 rounded transition-all cursor-pointer ${
                   cardScale === 'normal'
-                    ? 'bg-[#00F0FF] text-black font-bold shadow-xs'
+                    ? 'bg-[#38BDF8] text-black font-bold shadow-xs'
                     : 'text-[#8A92A6] hover:text-white'
                 }`}
                 title="Normal size"
@@ -436,7 +436,7 @@ export const FiltersPanel: React.FC = () => {
                 onClick={() => setCardScale('large')}
                 className={`px-2.5 py-1 rounded transition-all cursor-pointer ${
                   cardScale === 'large'
-                    ? 'bg-[#00F0FF] text-black font-bold shadow-xs'
+                    ? 'bg-[#38BDF8] text-black font-bold shadow-xs'
                     : 'text-[#8A92A6] hover:text-white'
                 }`}
                 title="Large size"
@@ -499,7 +499,7 @@ export const FiltersPanel: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleImportLutClick}
-                    className="mt-4 flex items-center gap-1.5 px-3 py-1.5 bg-[#00F0FF] text-black rounded text-xs font-semibold hover:bg-[#38BDF8]"
+                    className="mt-4 flex items-center gap-1.5 px-3 py-1.5 bg-[#38BDF8] text-black rounded text-xs font-semibold hover:bg-[#38BDF8]"
                   >
                     <Upload size={12} />
                     <span>Import .cube LUT</span>
